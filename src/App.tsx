@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Adventure, GameView, LobbyData, Party, Player, StoryEvent, World } from "./types";
+import { UNIVERSE_IDS, universeIdForWorld, universeTheme } from "../shared/universe-themes.mjs";
+import type { UniverseId, UniverseTheme } from "../shared/universe-themes.mjs";
 
 const CLASSES = ["Barbarian","Bard","Cleric","Druid","Fighter","Monk","Paladin","Ranger","Rogue","Sorcerer","Warlock","Wizard"];
 const SPECIES = ["Aasimar","Dragonborn","Dwarf","Elf","Gnome","Goliath","Halfling","Human","Orc","Tiefling"];
@@ -124,6 +126,41 @@ function CharacterAvatar({ player, size = "party" }: { player: Player; size?: "l
   return <span className={`character-avatar avatar-${size}`} role="img" aria-label={`${player.name} avatar`}><AvatarGlyph id={avatarFor(player)} /></span>;
 }
 
+function UniverseMark({ theme, compact = false }: { theme:UniverseTheme; compact?:boolean }) {
+  const icon = theme.icon;
+  return <span className={`universe-mark ${compact ? "compact" : ""}`} aria-hidden="true"><svg viewBox="0 0 48 48">
+    {icon === "shield" && <><path d="M8 7h32v16c0 10-5.8 16.8-16 21C13.8 39.8 8 33 8 23V7Z"/><path d="m9.5 27 14.5-10 14.5 10"/><path d="M12 10h7l-2.2 2.4 2.2 2.4h-2.6v5.7h-1.8v-5.7H12l2.2-2.4L12 10ZM29 10h7l-2.2 2.4 2.2 2.4h-2.6v5.7h-1.8v-5.7H29l2.2-2.4L29 10ZM20.5 27h7l-2.2 2.4 2.2 2.4h-2.6v6.2h-1.8v-6.2h-2.6l2.2-2.4-2.2-2.4Z"/></>}
+    {icon === "cross" && <><path d="M21 5h6l-1 9 9-1v7l-9-1v23h-4V19l-9 1v-7l9 1-1-9Z"/><path d="M18 16h12M24 10v27"/><path d="m19 8 5-3 5 3M19 39l5 3 5-3"/></>}
+    {icon === "magnifier" && <><circle cx="20" cy="20" r="11"/><path d="m28 28 12 12"/></>}
+    {icon === "pentacle" && <><circle cx="24" cy="24" r="17"/><path d="m24 9 9 28-23-17h28L15 37z"/><circle cx="24" cy="24" r="3"/></>}
+    {icon === "cthulhu-bust" && <image href="/art/universes/hysteria-monster.png" x="-1" y="1" width="50" height="46" preserveAspectRatio="xMidYMid meet"/>}
+    {icon === "dossier" && <><path d="M7 13h13l4 5h17v22H7z"/><path d="M10 10h13l4 5h11M13 25h12M13 31h8"/><circle cx="32" cy="29" r="5"/><path d="m36 33 5 5"/></>}
+  </svg></span>;
+}
+
+function BrandIdentity({ theme, detail }: { theme:UniverseTheme; detail:string }) {
+  return <div className="brand-identity"><UniverseMark theme={theme} compact/><span><strong>{theme.wordmark}</strong><small>{detail}</small></span></div>;
+}
+
+function MenuJourney({ theme, world, adventure, party, activeStep, onLibrary }: { theme:UniverseTheme; world?:string; adventure?:string; party?:string; activeStep:number; onLibrary?:()=>void }) {
+  const steps = [
+    { label:"Universe", value:theme.displayName },
+    { label:theme.terms.campaign, value:world || `Choose ${theme.terms.campaign.toLowerCase()}` },
+    { label:theme.terms.content, value:adventure || `Choose ${theme.terms.content.toLowerCase()}` },
+    { label:theme.terms.party, value:party || `Choose ${theme.terms.party.toLowerCase()}` },
+    { label:"Play", value:theme.terms.play },
+  ];
+  const currentIndex = Math.max(0, Math.min(steps.length - 1, activeStep - 1));
+  const current = steps[currentIndex];
+  const next = steps[currentIndex + 1];
+  return <nav className="menu-journey" aria-label={`Setup progress: step ${currentIndex + 1} of ${steps.length}`}>
+    {onLibrary&&<button type="button" className="journey-back" onClick={onLibrary}>← All universes</button>}
+    <div className="journey-current" aria-current="step"><span>Step {currentIndex + 1} of {steps.length}</span><strong>{current.label}</strong><small>{current.value}</small></div>
+    {next&&<div className="journey-next"><span>Next</span><strong>{next.label}</strong><small>{next.value}</small></div>}
+    <details className="journey-route"><summary>Full route</summary><ol>{steps.map((step,index)=><li className={index<currentIndex?"complete":index===currentIndex?"active":""} key={step.label}><span>{index+1}</span>{step.label}</li>)}</ol></details>
+  </nav>;
+}
+
 const api = async <T,>(url: string, options?: RequestInit): Promise<T> => {
   const token = localStorage.getItem("hearthbound.token");
   const response = await fetch(url, { ...options, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(options?.headers || {}) } });
@@ -134,12 +171,24 @@ const api = async <T,>(url: string, options?: RequestInit): Promise<T> => {
 
 function App() {
   const [lobby, setLobby] = useState<LobbyData>({ worlds: [] });
+  const [universeId, setUniverseId] = useState<UniverseId>(() => {
+    const saved = localStorage.getItem("storyman.universe") as UniverseId | null;
+    return saved && UNIVERSE_IDS.includes(saved) ? saved : "hearthbound";
+  });
   const [worldId, setWorldId] = useState(() => localStorage.getItem("hearthbound.world") || "");
   const [partyId, setPartyId] = useState(() => localStorage.getItem("hearthbound.party") || "");
   const [playerId, setPlayerId] = useState(() => localStorage.getItem("hearthbound.player") || "");
   const [view, setView] = useState<GameView | null>(null);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
+  const renderedUniverseId = view ? universeIdForWorld(view.world) : universeId;
+  const activeTheme = universeTheme(renderedUniverseId);
+
+  useEffect(() => {
+    document.documentElement.dataset.universe = activeTheme.id;
+    document.title = playerId && view ? `${view.campaign.title} · ${activeTheme.displayName}` : `${activeTheme.displayName} · Game Library`;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", activeTheme.palette.ink);
+  }, [activeTheme, playerId, view]);
 
   const loadLobby = useCallback(async () => {
     try {
@@ -154,6 +203,7 @@ function App() {
   }, [worldId, partyId]);
 
   useEffect(() => { void loadLobby(); }, [loadLobby]);
+  useEffect(() => { localStorage.setItem("storyman.universe", universeId); }, [universeId]);
   useEffect(() => { if (worldId) localStorage.setItem("hearthbound.world", worldId); }, [worldId]);
   useEffect(() => { if (partyId) localStorage.setItem("hearthbound.party", partyId); }, [partyId]);
 
@@ -178,12 +228,14 @@ function App() {
     void loadLobby();
   };
 
-  if (loading) return <main className="loading"><div className="sigil">H</div><p>Opening the campaign ledger…</p></main>;
-  if (playerId && view) return <GameScreen view={view} notice={notice} clearNotice={() => setNotice("")} leave={leaveGame} />;
+  if (loading) return <main className="loading"><UniverseMark theme={activeTheme}/><p>Opening the game library…</p></main>;
+  if (playerId && view) return <GameScreen view={view} theme={activeTheme} notice={notice} clearNotice={() => setNotice("")} leave={leaveGame} />;
 
   return (
     <LobbyScreen
       lobby={lobby}
+      universeId={universeId}
+      setUniverse={setUniverseId}
       worldId={worldId}
       partyId={partyId}
       notice={notice}
@@ -203,21 +255,42 @@ function App() {
   );
 }
 
-function LobbyScreen({ lobby, worldId, partyId, notice, setWorld, setParty, refresh, join, deleted }: {
+function UniverseLibrary({ universeId, setUniverse, open }: { universeId:UniverseId; setUniverse:(id:UniverseId)=>void; open:()=>void }) {
+  const selected = universeTheme(universeId);
+  return <main className="campaign-hub universe-library">
+    <header className="hub-header"><BrandIdentity theme={selected} detail="Game library · Six distinct universes"/><span className="library-status">Separate worlds · Shared controls</span></header>
+    <section className="hub-content">
+      <MenuJourney theme={selected} activeStep={1}/>
+      <div className="library-hero"><span className="eyebrow">Game library</span><h1>Choose your universe</h1><p>Choose a world. Each keeps its own rules, characters and atmosphere.</p></div>
+      <div className="universe-grid">{UNIVERSE_IDS.map((id) => {
+        const theme = universeTheme(id);
+        const selectedCard = id === universeId;
+        return <button type="button" data-universe={id} className={`universe-card ${selectedCard ? "active" : ""}`} aria-pressed={selectedCard} onClick={()=>setUniverse(id)} key={id}><img className="universe-card-art" src={theme.art} alt=""/><UniverseMark theme={theme}/><span className="universe-card-copy"><small>{theme.genre}</small><strong>{theme.displayName}</strong><em>{theme.tagline}</em></span><span className={`availability ${theme.availability}`}>{theme.availability === "playable" ? "Ready" : "Planned"}</span></button>;
+      })}</div>
+      <section className="universe-preview" data-universe={selected.id} aria-live="polite"><img className="preview-background" src={selected.art} alt=""/><div className="preview-summary"><UniverseMark theme={selected}/><div><span className="eyebrow">Selected · {selected.genre}</span><h2>{selected.displayName}</h2><p>{selected.description}</p></div><button type="button" disabled={selected.availability !== "playable"} onClick={open}>{selected.availability === "playable" ? `Open ${selected.displayName}` : "Content pack not installed"}</button></div><details className="preview-details"><summary>Identity and interface details</summary><div className="theme-facts"><div><span>Identity</span><strong>{selected.texture}</strong></div><div><span>Navigation language</span><strong>{selected.terms.campaign} · {selected.terms.content} · {selected.terms.character} · {selected.terms.map}</strong></div><div><span>Map treatment</span><strong>{selected.mapTreatment}</strong></div><div><span>Narration</span><strong>{selected.narrationMood}</strong></div></div></details><p className="preview-availability">{selected.availability === "playable" ? `${selected.displayName} is installed and ready to play.` : `${selected.displayName}'s interface identity is ready; its rules and content are not installed yet.`}</p></section>
+    </section>
+  </main>;
+}
+
+function LobbyScreen({ lobby, universeId, worldId, partyId, notice, setUniverse, setWorld, setParty, refresh, join, deleted }: {
   lobby: LobbyData; worldId: string; partyId: string; notice: string;
+  universeId:UniverseId; setUniverse:(id:UniverseId)=>void;
   setWorld: (id: string) => void; setParty: (id: string) => void; refresh: () => Promise<void>; join: (id: string) => Promise<void>; deleted: (id: string) => void;
 }) {
+  const theme = universeTheme(universeId);
   const world = lobby.worlds.find((item) => item.id === worldId) || lobby.worlds[0];
   const party = world?.parties.find((item) => item.id === partyId) || world?.parties[0];
   const activeAdventure = world?.adventures.find((item) => item.id === party?.activeAdventureId);
   const storyAdventures = world?.adventures.filter((item) => !item.title.includes("Combat Workshop")) || [];
   const combatWorkshop = world?.adventures.find((item) => item.title.includes("Combat Workshop"));
   const [form, setForm] = useState<"world" | "party" | "character" | null>(null);
-  const [screen, setScreen] = useState<"library" | "characters">("library");
+  const [screen, setScreen] = useState<"universes" | "library" | "characters">("universes");
   const [restartingApp, setRestartingApp] = useState(false);
 
+  if (screen === "universes") return <UniverseLibrary universeId={universeId} setUniverse={setUniverse} open={()=>setScreen("library")}/>;
+
   const restartApplication = async () => {
-    if (restartingApp || !window.confirm("Restart the Hearthbound application?\n\nThe game will be unavailable for a few seconds while the local service restarts. Campaigns, characters, progress, and settings will not be changed.")) return;
+    if (restartingApp || !window.confirm(`Restart the ${theme.displayName} application?\n\nThe game will be unavailable for a few seconds while the local service restarts. ${theme.terms.campaigns}, ${theme.terms.characters.toLowerCase()}, progress, and settings will not be changed.`)) return;
     setRestartingApp(true);
     try {
       await api("/api/system/restart", { method:"POST" });
@@ -229,9 +302,9 @@ function LobbyScreen({ lobby, worldId, partyId, notice, setWorld, setParty, refr
         } catch { /* The brief disconnect is expected during restart. */ }
         await new Promise((resolveWait) => window.setTimeout(resolveWait, 500));
       }
-      window.alert("Hearthbound has not come back online yet. Use the desktop Hearthbound icon to start it.");
+      window.alert(`${theme.displayName} has not come back online yet. Use its desktop icon to start it.`);
     } catch {
-      window.alert("The restart could not be started. Use the desktop Hearthbound icon instead.");
+      window.alert(`The restart could not be started. Use the desktop ${theme.displayName} icon instead.`);
     } finally { setRestartingApp(false); }
   };
 
@@ -266,18 +339,19 @@ function LobbyScreen({ lobby, worldId, partyId, notice, setWorld, setParty, refr
   };
 
   if (screen === "characters" && world && party) return (
-    <main className="campaign-hub roster-page">
-      <header className="hub-header"><div><span className="mini-mark">H</span><span><strong>Hearthbound</strong><small>{world.name} › {party.name} › Adventurers</small></span></div><button className="ghost-button" onClick={() => { setScreen("library"); setForm(null); }}>← Campaign library</button></header>
+    <main className="campaign-hub roster-page" data-universe={theme.id}>
+      <header className="hub-header"><BrandIdentity theme={theme} detail={`${world.name} › ${party.name} › ${theme.terms.characters}`}/><div className="hub-actions"><button className="ghost-button" onClick={() => { setScreen("universes"); setForm(null); }}>Game library</button><button className="ghost-button" onClick={() => { setScreen("library"); setForm(null); }}>← {theme.terms.campaign} library</button></div></header>
       <section className="hub-content roster-content">
         {notice && <div className="notice">{notice}</div>}
+        <MenuJourney theme={theme} world={world.name} adventure={activeAdventure?.title} party={party.name} activeStep={4} onLibrary={()=>setScreen("universes")}/>
         <div className="roster-hero">
-          <div><span className="eyebrow">Character selection</span><h1>Who enters the tale?</h1><p>Choose a family adventurer, or create someone new for {party.name}. Characters here belong only to this party and keep their progress between adventures.</p></div>
-          <div className="roster-context"><span>Current adventure</span><strong>{activeAdventure?.title || "No adventure selected"}</strong><small>{activeAdventure ? activeAdventure.title.includes("Combat Workshop") ? "Disposable testing · No milestones or story consequences" : `Levels ${activeAdventure.minLevel}–${activeAdventure.maxLevel} · Milestone ${activeAdventure.milestoneLevel}` : "Return to the library to choose one."}</small></div>
+          <div><span className="eyebrow">{theme.terms.character} selection</span><h1>Who enters the tale?</h1><p>Choose a family {theme.terms.character.toLowerCase()}, or create someone new for {party.name}. {theme.terms.characters} here belong only to this {theme.terms.party.toLowerCase()} and keep their progress between {theme.terms.contents.toLowerCase()}.</p></div>
+          <div className="roster-context"><span>Current {theme.terms.content.toLowerCase()}</span><strong>{activeAdventure?.title || `No ${theme.terms.content.toLowerCase()} selected`}</strong><small>{activeAdventure ? activeAdventure.title.includes("Combat Workshop") ? "Disposable testing · No milestones or story consequences" : `Levels ${activeAdventure.minLevel}–${activeAdventure.maxLevel} · Milestone ${activeAdventure.milestoneLevel}` : `Return to the library to choose one.`}</small></div>
         </div>
         {form !== "character" && <>
-          <div className="section-heading"><div><span className="eyebrow">{party.name}</span><h2>Your adventurers</h2></div><button className="ghost-button" onClick={() => setForm("character")}>＋ New character</button></div>
-          <div className="roster-grid">{party.characters.map((player) => <article className="roster-card" key={player.id}><button className="roster-enter" onClick={() => void join(player.id)}><CharacterAvatar player={player} size="lobby"/><span><strong>{player.name}</strong><small>Level {player.level} {player.species} {player.className} · {party.name}</small></span><span className="enter-label">Enter campaign →</span></button><div className="character-management">{world.parties.length > 1 && <label><span>Move to group</span><select value={party.id} onChange={async (event) => { const destination=event.target.value; if (destination !== party.id && window.confirm(`Move ${player.name} to ${world.parties.find((item)=>item.id===destination)?.name}? Their progress and items will move with them.`)) { await api(`/api/players/${encodeURIComponent(player.id)}/move`, { method:"POST", body:JSON.stringify({partyId:destination}) }); await refresh(); } }}><option value={party.id}>{party.name}</option>{world.parties.filter((item)=>item.id!==party.id).map((item)=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label>}<button className="delete-character" title={`Delete ${player.name}`} onClick={async () => { if (window.confirm(`Delete ${player.name}? This removes the character and their private messages permanently.`)) { await api(`/api/players/${encodeURIComponent(player.id)}`, { method: "DELETE" }); deleted(player.id); } }}>Delete character</button></div></article>)}</div>
-          {!party.characters.length && <div className="empty-party"><strong>No adventurers yet</strong><p>Create the first character for this party.</p></div>}
+          <div className="section-heading"><div><span className="eyebrow">{party.name}</span><h2>Your {theme.terms.characters.toLowerCase()}</h2></div><button className="ghost-button" onClick={() => setForm("character")}>＋ New {theme.terms.character.toLowerCase()}</button></div>
+          <div className="roster-grid">{party.characters.map((player) => <article className="roster-card" key={player.id}><button className="roster-enter" onClick={() => void join(player.id)}><CharacterAvatar player={player} size="lobby"/><span><strong>{player.name}</strong><small>Level {player.level} {player.species} {player.className} · {party.name}</small></span><span className="enter-label">{theme.terms.play} →</span></button><div className="character-management">{world.parties.length > 1 && <label><span>Move to {theme.terms.party.toLowerCase()}</span><select value={party.id} onChange={async (event) => { const destination=event.target.value; if (destination !== party.id && window.confirm(`Move ${player.name} to ${world.parties.find((item)=>item.id===destination)?.name}? Their progress and items will move with them.`)) { await api(`/api/players/${encodeURIComponent(player.id)}/move`, { method:"POST", body:JSON.stringify({partyId:destination}) }); await refresh(); } }}><option value={party.id}>{party.name}</option>{world.parties.filter((item)=>item.id!==party.id).map((item)=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label>}<button className="delete-character" title={`Delete ${player.name}`} onClick={async () => { if (window.confirm(`Delete ${player.name}? This removes the ${theme.terms.character.toLowerCase()} and their private messages permanently.`)) { await api(`/api/players/${encodeURIComponent(player.id)}`, { method: "DELETE" }); deleted(player.id); } }}>Delete {theme.terms.character.toLowerCase()}</button></div></article>)}</div>
+          {!party.characters.length && <div className="empty-party"><strong>No {theme.terms.characters.toLowerCase()} yet</strong><p>Create the first {theme.terms.character.toLowerCase()} for this {theme.terms.party.toLowerCase()}.</p></div>}
         </>}
         {form === "character" && <CharacterForm worldName={world.name} partyName={party.name} onSubmit={createCharacter} cancel={() => setForm(null)} />}
       </section>
@@ -285,35 +359,32 @@ function LobbyScreen({ lobby, worldId, partyId, notice, setWorld, setParty, refr
   );
 
   return (
-    <main className="campaign-hub">
-      <header className="hub-header"><div><span className="mini-mark">H</span><span><strong>Hearthbound</strong><small>Campaign library {world ? `› ${world.name}` : ""}{party ? ` › ${party.name}` : ""}</small></span></div><div className="hub-actions"><button className="restart-application" disabled={restartingApp} onClick={()=>void restartApplication()}>{restartingApp ? "Restarting…" : "Restart application"}</button><button className="ghost-button" onClick={() => setForm("world")}>＋ New world</button></div></header>
+    <main className="campaign-hub" data-universe={theme.id}>
+      <header className="hub-header"><BrandIdentity theme={theme} detail={`${theme.terms.campaign} library ${world ? `› ${world.name}` : ""}${party ? ` › ${party.name}` : ""}`}/><div className="hub-actions"><button className="ghost-button" onClick={()=>setScreen("universes")}>Game library</button><button className="restart-application" disabled={restartingApp} onClick={()=>void restartApplication()}>{restartingApp ? "Restarting…" : "Restart application"}</button><button className="ghost-button" onClick={() => setForm("world")}>＋ New {theme.terms.campaign.toLowerCase()}</button></div></header>
       <section className="hub-content">
         {notice && <div className="notice">{notice}</div>}
-        <div className="hub-title"><span className="eyebrow">Choose a world</span><h1>Where will you gather?</h1></div>
+        <MenuJourney theme={theme} world={world?.name} adventure={activeAdventure?.title} party={party?.name} activeStep={world ? activeAdventure ? party ? 4 : 3 : 2 : 1} onLibrary={()=>setScreen("universes")}/>
+        <div className="hub-title"><span className="stage-number">3</span><span className="eyebrow">Choose a {theme.terms.campaign.toLowerCase()}</span><h1>Where will you gather?</h1></div>
         <div className="world-grid">
-          {lobby.worlds.map((item) => <button key={item.id} className={`world-card ${item.id === world?.id ? "active" : ""}`} onClick={() => setWorld(item.id)}><span>{item.name.slice(0, 1)}</span><div><strong>{item.name}</strong><small>{item.description || "A world waiting to be explored."}</small></div></button>)}
+          {lobby.worlds.map((item) => <button key={item.id} className={`world-card ${item.id === world?.id ? "active" : ""}`} onClick={() => setWorld(item.id)}><UniverseMark theme={theme} compact/><div><strong>{item.name}</strong><small>{item.description || `A ${theme.terms.campaign.toLowerCase()} waiting to be explored.`}</small></div></button>)}
         </div>
 
-        {form === "world" && <NamedForm title="Create a new world" description onSubmit={(event) => void submitNamed(event, "world")} cancel={() => setForm(null)} />}
-        {world && <>
-          <div className="section-heading"><div><span className="eyebrow">Parties in {world.name}</span><h2>Choose your company</h2></div><button className="ghost-button" onClick={() => setForm("party")}>＋ New party</button></div>
-          <div className="party-tabs">{world.parties.map((item) => <button key={item.id} className={item.id === party?.id ? "active" : ""} onClick={() => setParty(item.id)}><strong>{item.name}</strong><small>{item.characters.length} adventurer{item.characters.length === 1 ? "" : "s"} · Average level {formatLevel(item.averageLevel)}</small></button>)}</div>
-          {form === "party" && <NamedForm title="Form a new party" onSubmit={(event) => void submitNamed(event, "party")} cancel={() => setForm(null)} />}
-          {world.series && <section className="campaign-series-banner"><div><span className="eyebrow">Overarching campaign</span><h2>{world.series.title}</h2></div><p>{world.series.premise}</p><small>{world.series.episodeCount} connected adventures · Local victories, one continuing mystery</small></section>}
-        </>}
+        {form === "world" && <NamedForm title={`Create a new ${theme.terms.campaign.toLowerCase()}`} description onSubmit={(event) => void submitNamed(event, "world")} cancel={() => setForm(null)} />}
+        {world?.series && <section className="campaign-series-banner"><div><span className="eyebrow">Overarching {theme.terms.campaign.toLowerCase()}</span><h2>{world.series.title}</h2></div><p>{world.series.premise}</p><small>{world.series.episodeCount} connected {theme.terms.contents.toLowerCase()} · Local victories, one continuing mystery</small></section>}
 
-        {world && party && <div className="hub-columns">
-          <section>
-            <div className="section-heading"><div><span className="eyebrow">Adventure shelf</span><h2>Choose the next tale</h2></div></div>
+        {world && party && <section className="menu-stage adventure-stage">
+            <div className="section-heading"><div><span className="stage-number">4</span><span className="eyebrow">{theme.terms.content} shelf</span><h2>Choose the next tale</h2></div></div>
             <div className="adventure-list">{storyAdventures.map((adventure) => {
               const active = party.activeAdventureId === adventure.id;
               const fit = party.averageLevel < adventure.minLevel ? "Above party level" : party.averageLevel > adventure.maxLevel ? "Below party level" : "Well matched";
               const workshop = adventure.title.includes("Combat Workshop");
-              return <article className={`adventure-card ${active ? "active" : ""} ${workshop ? "workshop-card" : ""}`} key={adventure.id}><div className="level-ribbon">{workshop ? <>TEST<br/><strong>ALL</strong></> : <>LEVELS<br/><strong>{adventure.minLevel}–{adventure.maxLevel}</strong></>}</div><div><span className={`fit ${fit === "Well matched" ? "good" : ""}`}>{active ? "Current adventure" : workshop ? "Disposable testing" : fit}</span>{adventure.episodeNumber && <span className="series-episode">{adventure.seriesTitle} · Episode {adventure.episodeNumber}</span>}<h3>{adventure.title}</h3><p>{adventure.synopsis}</p>{adventure.seriesHook && <p className="series-hook">{adventure.seriesHook}</p>}<small>{workshop ? `Uses ${party.name}'s roster. Create a separate group for separate test characters.` : `Milestone: reach level ${adventure.milestoneLevel}`}</small></div>{!active && <button onClick={() => void chooseAdventure(adventure)}>Select</button>}</article>;
+              return <article className={`adventure-card ${active ? "active" : ""} ${workshop ? "workshop-card" : ""}`} key={adventure.id}><div className="level-ribbon">{workshop ? <>TEST<br/><strong>ALL</strong></> : <>LEVELS<br/><strong>{adventure.minLevel}–{adventure.maxLevel}</strong></>}</div><div><span className={`fit ${fit === "Well matched" ? "good" : ""}`}>{active ? `Current ${theme.terms.content.toLowerCase()}` : workshop ? "Disposable testing" : fit}</span>{adventure.episodeNumber && <span className="series-episode">{adventure.seriesTitle} · {theme.terms.content} {adventure.episodeNumber}</span>}<h3>{adventure.title}</h3><p>{adventure.synopsis}</p>{adventure.seriesHook && <p className="series-hook">{adventure.seriesHook}</p>}<small>{workshop ? `Uses ${party.name}'s roster. Create a separate ${theme.terms.party.toLowerCase()} for separate test ${theme.terms.characters.toLowerCase()}.` : `Milestone: reach level ${adventure.milestoneLevel}`}</small></div>{!active && <button onClick={() => void chooseAdventure(adventure)}>Select</button>}</article>;
             })}</div>
-          </section>
-          <aside className="party-launch"><span className="eyebrow">Next step</span><h2>Choose an adventurer</h2><p>{party.characters.length ? `${party.characters.length} character${party.characters.length === 1 ? " is" : "s are"} ready in ${party.name}.` : `${party.name} needs its first character.`}</p><div className="party-launch-adventure"><small>Current adventure</small><strong>{activeAdventure?.title || "Not selected"}</strong></div><button onClick={() => { setForm(null); setScreen("characters"); }}>Open character selection →</button></aside>
-        </div>}
+        </section>}
+
+        {world && <section className="menu-stage party-stage"><div className="section-heading"><div><span className="stage-number">5</span><span className="eyebrow">{theme.terms.parties} in {world.name}</span><h2>Choose your {theme.terms.party.toLowerCase()}</h2></div><button className="ghost-button" onClick={() => setForm("party")}>＋ New {theme.terms.party.toLowerCase()}</button></div><div className="party-tabs">{world.parties.map((item) => <button key={item.id} className={item.id === party?.id ? "active" : ""} onClick={() => setParty(item.id)}><strong>{item.name}</strong><small>{item.characters.length} {theme.terms.character.toLowerCase()}{item.characters.length === 1 ? "" : "s"} · Average level {formatLevel(item.averageLevel)}</small></button>)}</div>{form === "party" && <NamedForm title={`Form a new ${theme.terms.party.toLowerCase()}`} onSubmit={(event) => void submitNamed(event, "party")} cancel={() => setForm(null)} />}</section>}
+
+        {world && party && <aside className="party-launch play-launch"><span className="stage-number">6</span><div><span className="eyebrow">Ready to play</span><h2>Choose a {theme.terms.character.toLowerCase()}</h2><p>{party.characters.length ? `${party.characters.length} ${theme.terms.character.toLowerCase()}${party.characters.length === 1 ? " is" : "s are"} ready in ${party.name}.` : `${party.name} needs its first ${theme.terms.character.toLowerCase()}.`}</p></div><div className="party-launch-adventure"><small>Current {theme.terms.content.toLowerCase()}</small><strong>{activeAdventure?.title || "Not selected"}</strong></div><button onClick={() => { setForm(null); setScreen("characters"); }}>Open {theme.terms.character.toLowerCase()} selection →</button></aside>}
         {world && party && combatWorkshop && <section className="testing-shelf"><div className="section-heading"><div><span className="eyebrow">Separate testing area</span><h2>Combat Workshop</h2></div><small>Outside the continuing story</small></div><article className={`adventure-card workshop-card ${party.activeAdventureId === combatWorkshop.id ? "active" : ""}`}><div className="level-ribbon">TEST<br/><strong>ALL</strong></div><div><span className="fit">{party.activeAdventureId === combatWorkshop.id ? "Current test" : "Disposable testing"}</span><h3>{combatWorkshop.title}</h3><p>{combatWorkshop.synopsis}</p><small>Uses {party.name}'s roster. Fights do not change story progress.</small></div>{party.activeAdventureId !== combatWorkshop.id && <button onClick={() => void chooseAdventure(combatWorkshop)}>Select</button>}</article></section>}
       </section>
     </main>
@@ -378,7 +449,7 @@ function CharacterForm({ worldName, partyName, onSubmit, cancel }: { worldName: 
   </form>;
 }
 
-function GameScreen({ view, notice, clearNotice, leave }: { view: GameView; notice: string; clearNotice: () => void; leave: () => void }) {
+function GameScreen({ view, theme, notice, clearNotice, leave }: { view: GameView; theme:UniverseTheme; notice: string; clearNotice: () => void; leave: () => void }) {
   const [activeTab, setActiveTab] = useState<"adventure"|"character"|"map">("adventure");
   const [mode, setMode] = useState<"act" | "speak" | "ask">("act");
   const [speechAudience, setSpeechAudience] = useState<"party" | "nearby">("party");
@@ -449,7 +520,7 @@ function GameScreen({ view, notice, clearNotice, leave }: { view: GameView; noti
   const partySpeech = mode === "speak" && speechAudience === "party";
   const combatBlocksInput = Boolean(view.combat?.active && mode !== "ask" && !partySpeech && (!view.combat.canAct || view.combat.pendingRoll));
   const restartAdventure = async () => {
-    if (resetting || !window.confirm(`Restart ${view.campaign.title} from the beginning?\n\nThis clears this adventure's narration, actions, rolls, private observations, discovered map locations, clue progress, and items gained during this adventure. Your characters, levels, starting equipment, world, and group are kept.`)) return;
+    if (resetting || !window.confirm(`Restart ${view.campaign.title} from the beginning?\n\nThis clears this ${theme.terms.content.toLowerCase()}'s narration, actions, rolls, private observations, discovered map locations, clue progress, and gained items. Your ${theme.terms.characters.toLowerCase()}, levels, starting equipment, ${theme.terms.campaign.toLowerCase()}, and ${theme.terms.party.toLowerCase()} are kept.`)) return;
     setResetting(true); clearNotice();
     try { await api("/api/adventure/restart", { method:"POST" }); setText(""); setActiveTab("adventure"); }
     finally { setResetting(false); }
@@ -466,9 +537,9 @@ function GameScreen({ view, notice, clearNotice, leave }: { view: GameView; noti
   };
   const stopRecording = () => { if (recording) { recorder.current?.stop(); setRecording(false); } };
 
-  return <main className={`game-shell ${view.party.length === 1 ? "solo-party" : ""} ${view.levelUp ? "level-up-available" : ""}`}>
-    <header className="topbar"><div className="campaign-identity"><span className="mini-mark">H</span><span><strong>{view.campaign.title}</strong><small>{view.world.name} · {view.group.name} · Levels {view.campaign.minLevel}–{view.campaign.maxLevel}</small></span></div><div className="topbar-center"><nav className="view-tabs" aria-label="Game views">{(["adventure","character","map"] as const).map((tab)=><button key={tab} className={activeTab===tab?"active":""} onClick={()=>setActiveTab(tab)}>{tab === "adventure" ? "Adventure" : tab === "character" ? "Character sheet" : "Known map"}</button>)}</nav></div><div className="top-actions"><button className="library-button" onClick={leave}>← Campaign library</button><div className="voice-control"><button className={`audio-button ${audioEnabled ? "active" : ""}`} onClick={toggleAudio}>{audioEnabled ? "Narration on" : "Narration off"}</button><button className="voice-settings-button" aria-label="Narration voice settings" title="Choose this device's narration voice" onClick={()=>setVoiceSettingsOpen((open)=>!open)}>Voice</button>{voiceSettingsOpen&&<div className="voice-settings"><label>Voice<select value={voiceName} onChange={(event)=>chooseVoice(event.target.value)}><option value="">Device default</option>{speechVoices.map((voice)=><option value={voice.name} key={`${voice.name}-${voice.lang}`}>{voice.name} ({voice.lang})</option>)}</select></label><label>Speed <strong>{speechRate.toFixed(2)}×</strong><input type="range" min="0.7" max="1.2" step="0.05" value={speechRate} onChange={(event)=>chooseRate(Number(event.target.value))}/></label><button onClick={()=>speakText("Beyond the old road, an adventure waits.")}>Test voice</button><small>This choice belongs to this iPad or computer.</small></div>}</div><button className="scene-art-button" disabled={sceneArtBusy} title={view.art.imageConfigured?"Illustrate the current known room":"Requires a local image generator on the PC"} onClick={()=>void generateSceneArt()}>{sceneArtBusy?"Drawing…":"Picture"}</button><button className="reset-story" aria-label="Restart adventure" title="Restart this adventure from the beginning" disabled={resetting} onClick={()=>void restartAdventure()}>{resetting ? "Restarting…" : <><span className="restart-long">Restart adventure</span><span className="restart-short">Restart</span></>}</button></div></header>
-    <section className="party-strip" aria-label="Party roster"><div className="active-character-summary"><CharacterAvatar player={view.player}/><div className="active-character-copy"><strong>{view.player.name}</strong><small>Lv {view.player.level} · {view.player.className}</small></div><div className="health-summary"><span><b>{view.player.hp}/{view.player.maxHp}</b> HP</span><div className="health-track" aria-label={`${view.player.hp} of ${view.player.maxHp} hit points`}><i style={{width:`${Math.max(0,Math.min(100,(view.player.hp/Math.max(1,view.player.maxHp))*100))}%`}}/></div></div></div><div className="party-roster">{view.party.map((member) => <div className={`party-member ${member.id === view.player.id ? "you" : ""} ${member.isCompanion ? "companion" : ""}`} title={member.isCompanion ? `${member.fullName}. An immortal god in cat form who automatically evades harm.` : `${member.name}, level ${member.level} ${member.className}, ${member.hp} of ${member.maxHp} hit points`} key={member.id}><CharacterAvatar player={member}/><span><strong>{member.name}</strong><small>{member.isCompanion ? `Lv ${member.level} · ∞ HP` : `Lv ${member.level} · ${member.hp}/${member.maxHp} HP`}</small></span></div>)}</div><div className="party-strip-balance" aria-hidden="true"/></section>
+  return <main data-universe={theme.id} className={`game-shell ${view.party.length === 1 ? "solo-party" : ""} ${view.levelUp ? "level-up-available" : ""}`}>
+    <header className="topbar"><div className="campaign-identity"><UniverseMark theme={theme} compact/><span><strong>{view.campaign.title}</strong><small>{theme.displayName} · {view.world.name} · {view.group.name} · Levels {view.campaign.minLevel}–{view.campaign.maxLevel}</small></span></div><div className="topbar-center"><nav className="view-tabs" aria-label="Game views">{(["adventure","character","map"] as const).map((tab)=><button key={tab} className={activeTab===tab?"active":""} onClick={()=>setActiveTab(tab)}>{tab === "adventure" ? theme.terms.content : tab === "character" ? theme.terms.characterSheet : theme.terms.map}</button>)}</nav></div><div className="top-actions"><button className="library-button" onClick={leave}>← Game library</button><div className="voice-control"><button className={`audio-button ${audioEnabled ? "active" : ""}`} onClick={toggleAudio}>{audioEnabled ? "Narration on" : "Narration off"}</button><button className="voice-settings-button" aria-label="Narration voice settings" title="Choose this device's narration voice" onClick={()=>setVoiceSettingsOpen((open)=>!open)}>Voice</button>{voiceSettingsOpen&&<div className="voice-settings"><label>Voice<select value={voiceName} onChange={(event)=>chooseVoice(event.target.value)}><option value="">Device default</option>{speechVoices.map((voice)=><option value={voice.name} key={`${voice.name}-${voice.lang}`}>{voice.name} ({voice.lang})</option>)}</select></label><label>Speed <strong>{speechRate.toFixed(2)}×</strong><input type="range" min="0.7" max="1.2" step="0.05" value={speechRate} onChange={(event)=>chooseRate(Number(event.target.value))}/></label><button onClick={()=>speakText(`This is ${theme.displayName}. The story is ready.`)}>Test voice</button><small>This choice belongs to this iPad or computer.</small></div>}</div><button className="scene-art-button" disabled={sceneArtBusy} title={view.art.imageConfigured?"Illustrate the current known room":"Requires a local image generator on the PC"} onClick={()=>void generateSceneArt()}>{sceneArtBusy?"Drawing…":"Picture"}</button><button className="reset-story" aria-label={`Restart ${theme.terms.content.toLowerCase()}`} title={`Restart this ${theme.terms.content.toLowerCase()} from the beginning`} disabled={resetting} onClick={()=>void restartAdventure()}>{resetting ? "Restarting…" : <><span className="restart-long">Restart {theme.terms.content.toLowerCase()}</span><span className="restart-short">Restart</span></>}</button></div></header>
+    <section className="party-strip" aria-label={`${theme.terms.party} roster`}><div className="active-character-summary"><CharacterAvatar player={view.player}/><div className="active-character-copy"><strong>{view.player.name}</strong><small>Lv {view.player.level} · {view.player.className}</small></div><div className="health-summary"><span><b>{view.player.hp}/{view.player.maxHp}</b> HP</span><div className="health-track" aria-label={`${view.player.hp} of ${view.player.maxHp} hit points`}><i style={{width:`${Math.max(0,Math.min(100,(view.player.hp/Math.max(1,view.player.maxHp))*100))}%`}}/></div></div></div><div className="party-roster">{view.party.map((member) => <div className={`party-member ${member.id === view.player.id ? "you" : ""} ${member.isCompanion ? "companion" : ""}`} title={member.isCompanion ? `${member.fullName}. An immortal god in cat form who automatically evades harm.` : `${member.name}, level ${member.level} ${member.className}, ${member.hp} of ${member.maxHp} hit points`} key={member.id}><CharacterAvatar player={member}/><span><strong>{member.name}</strong><small>{member.isCompanion ? `Lv ${member.level} · ∞ HP` : `Lv ${member.level} · ${member.hp}/${member.maxHp} HP`}</small></span></div>)}</div><div className="party-strip-balance" aria-hidden="true"/></section>
     {activeTab === "adventure" && <>
       <div className="game-grid"><section className="story-panel">
         <div className="scene-heading"><span>{view.campaign.chapter}</span><h1>{view.campaign.scene}</h1></div>
@@ -486,16 +557,16 @@ function GameScreen({ view, notice, clearNotice, leave }: { view: GameView; noti
           <textarea disabled={combatBlocksInput} value={text} onChange={(event) => setText(event.target.value)} placeholder={combatBlocksInput ? "Waiting for your combat turn or roll…" : mode === "speak" ? speechAudience === "party" ? "What do you say to the other player characters?" : "What do you say aloud in the scene?" : mode === "ask" ? "Ask about a rule, a visible detail, or which check might apply…" : "What does your character do?"} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(); } }}/>
         </div>
       </section></div></>}
-    {activeTab === "character" && <div className="character-page"><CharacterSheet player={view.player}/><ClassFeaturesPanel player={view.player}/><SpellcastingPanel player={view.player}/>{view.levelUp&&<LevelUpPanel key={`${view.player.id}-${view.levelUp.nextLevel}`} player={view.player} options={view.levelUp} combatActive={Boolean(view.combat?.active)} clearNotice={clearNotice} open={levelUpOpen} setOpen={setLevelUpOpen} workshop={Boolean(view.workshop)}/>}</div>} 
-    {activeTab === "map" && <><WorldMap world={view.world.name} campaign={view.campaign.title}/><FoundMaps inventory={view.party.flatMap((member)=>member.inventory.map((item)=>({owner:member.name,item})))}/><KnownMap campaign={view.campaign.title} locations={view.knownLocations}/></>} 
+    {activeTab === "character" && <div className="character-page"><CharacterSheet player={view.player} label={theme.terms.characterSheet}/><ClassFeaturesPanel player={view.player}/><SpellcastingPanel player={view.player}/>{view.levelUp&&<LevelUpPanel key={`${view.player.id}-${view.levelUp.nextLevel}`} player={view.player} options={view.levelUp} combatActive={Boolean(view.combat?.active)} clearNotice={clearNotice} open={levelUpOpen} setOpen={setLevelUpOpen} workshop={Boolean(view.workshop)}/>}</div>}
+    {activeTab === "map" && <><WorldMap world={view.world.name} campaign={view.campaign.title} theme={theme}/><FoundMaps theme={theme} inventory={view.party.flatMap((member)=>member.inventory.map((item)=>({owner:member.name,item})))}/><KnownMap campaign={view.campaign.title} locations={view.knownLocations} theme={theme}/></>}
   </main>;
 }
 
-function CharacterSheet({ player }: { player: Player }) {
+function CharacterSheet({ player, label }: { player: Player; label:string }) {
   const abilityOrder = ["strength","dexterity","constitution","intelligence","wisdom","charisma"];
   const modifier = (score:number) => Math.floor((score-10)/2);
   const equipment = CLASS_EQUIPMENT[player.className];
-  return <section className="sheet-view"><header className="sheet-hero"><CharacterAvatar player={player} size="sheet"/><div><span className="eyebrow">Character sheet</span><h1>{player.name}</h1><p>Level {player.level} · {player.species} {player.className}{player.subclass?` · ${player.subclass}`:""} · {player.background} · {player.alignment}</p></div><div className="sheet-vitals"><span><small>Hit points</small><strong>{player.hp}/{player.maxHp}</strong></span><span><small>Armor class</small><strong>{player.armorClass}</strong></span><span><small>Level</small><strong>{player.level}</strong></span></div></header><div className="sheet-columns"><div><section className="sheet-card"><span className="eyebrow">Ability scores</span><div className="sheet-abilities">{abilityOrder.map((ability)=>{const score=Number(player.abilities[ability]||10);const mod=modifier(score);return <div key={ability}><span>{ability.slice(0,3).toUpperCase()}</span><strong>{score}</strong><small>{mod>=0?"+":""}{mod}</small></div>})}</div></section><section className="sheet-card"><span className="eyebrow">Proficient skills</span><div className="sheet-skills">{player.skills.map((skill)=><div key={skill}><strong>{skill}</strong><small>{SKILL_INFO[skill]?.description}</small></div>)}</div>{!player.skills.length&&<p className="empty-copy">No skill proficiencies were recorded.</p>}</section></div><div><section className="sheet-card"><span className="eyebrow">Appearance</span><p>{player.appearance||"No appearance has been written yet."}</p></section><section className="sheet-card"><span className="eyebrow">Backstory</span><p>{player.backstory||"No backstory has been written yet."}</p></section><section className="sheet-card inventory-card"><div className="inventory-heading"><span className="eyebrow">Items and equipment</span><small>{player.inventory.length} item type{player.inventory.length===1?"":"s"}</small></div>{equipment&&<p>{equipment.summary}</p>}<div className="inventory-list">{player.inventory.map((item)=><div className="inventory-item" key={item.id}><div><strong>{item.name}</strong>{item.notes&&<small>{item.notes}</small>}</div><span className={`item-status ${item.status}`}>{item.status}</span>{item.quantity>1&&<b>×{item.quantity}</b>}</div>)}</div>{!player.inventory.length&&<p className="empty-copy">This character is not carrying any recorded items yet.</p>}</section></div></div></section>;
+  return <section className="sheet-view"><header className="sheet-hero"><CharacterAvatar player={player} size="sheet"/><div><span className="eyebrow">{label}</span><h1>{player.name}</h1><p>Level {player.level} · {player.species} {player.className}{player.subclass?` · ${player.subclass}`:""} · {player.background} · {player.alignment}</p></div><div className="sheet-vitals"><span><small>Hit points</small><strong>{player.hp}/{player.maxHp}</strong></span><span><small>Armor class</small><strong>{player.armorClass}</strong></span><span><small>Level</small><strong>{player.level}</strong></span></div></header><div className="sheet-columns"><div><section className="sheet-card"><span className="eyebrow">Ability scores</span><div className="sheet-abilities">{abilityOrder.map((ability)=>{const score=Number(player.abilities[ability]||10);const mod=modifier(score);return <div key={ability}><span>{ability.slice(0,3).toUpperCase()}</span><strong>{score}</strong><small>{mod>=0?"+":""}{mod}</small></div>})}</div></section><section className="sheet-card"><span className="eyebrow">Proficient skills</span><div className="sheet-skills">{player.skills.map((skill)=><div key={skill}><strong>{skill}</strong><small>{SKILL_INFO[skill]?.description}</small></div>)}</div>{!player.skills.length&&<p className="empty-copy">No skill proficiencies were recorded.</p>}</section></div><div><section className="sheet-card"><span className="eyebrow">Appearance</span><p>{player.appearance||"No appearance has been written yet."}</p></section><section className="sheet-card"><span className="eyebrow">Backstory</span><p>{player.backstory||"No backstory has been written yet."}</p></section><section className="sheet-card inventory-card"><div className="inventory-heading"><span className="eyebrow">Items and equipment</span><small>{player.inventory.length} item type{player.inventory.length===1?"":"s"}</small></div>{equipment&&<p>{equipment.summary}</p>}<div className="inventory-list">{player.inventory.map((item)=><div className="inventory-item" key={item.id}><div><strong>{item.name}</strong>{item.notes&&<small>{item.notes}</small>}</div><span className={`item-status ${item.status}`}>{item.status}</span>{item.quantity>1&&<b>×{item.quantity}</b>}</div>)}</div>{!player.inventory.length&&<p className="empty-copy">Nothing is currently recorded here.</p>}</section></div></div></section>;
 }
 
 function ClassFeaturesPanel({ player }: { player: Player }) {
@@ -548,7 +619,7 @@ function LevelUpPanel({ player, options, combatActive, clearNotice, open, setOpe
   </section>;
 }
 
-function WorldMap({ world, campaign }: { world:string; campaign:string }) {
+function WorldMap({ world, campaign, theme }: { world:string; campaign:string; theme:UniverseTheme }) {
   const stage=campaign.includes("Hollow Star")?2:campaign.includes("Briarwatch")?1:0;
   const places=[
     {name:"Eldervale City",detail:"The Crooked Lantern",x:268,y:322},
@@ -556,7 +627,7 @@ function WorldMap({ world, campaign }: { world:string; campaign:string }) {
     {name:"Astronomer's Court",detail:"The capital heights",x:405,y:108},
   ].slice(0,stage+1);
   const current=places[places.length-1];
-  return <section className="world-map-view"><header><div><span className="eyebrow">World atlas</span><h1>{world}</h1><p>The wider country as the company currently knows it. New regions and routes appear only when the adventure reaches them.</p></div><div className="world-location"><span>You are here</span><strong>{current.name}</strong><small>{current.detail}</small></div></header><div className="world-map-frame"><svg viewBox="0 0 900 470" role="img" aria-label={`Map of ${world}, with the party at ${current.name}`}>
+  return <section className="world-map-view"><header><div><span className="eyebrow">{theme.terms.map}</span><h1>{world}</h1><p>{theme.mapTreatment}. New regions and routes appear only when this {theme.terms.content.toLowerCase()} establishes them.</p></div><div className="world-location"><span>You are here</span><strong>{current.name}</strong><small>{current.detail}</small></div></header><div className="world-map-frame"><svg viewBox="0 0 900 470" role="img" aria-label={`${theme.terms.map} of ${world}, with the ${theme.terms.party.toLowerCase()} at ${current.name}`}>
     <defs><linearGradient id="atlas-land" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#5b4628"/><stop offset="1" stopColor="#2a2318"/></linearGradient><pattern id="atlas-paper" width="18" height="18" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1"/></pattern><filter id="atlas-shadow"><feDropShadow dx="0" dy="7" stdDeviation="8" floodOpacity=".55"/></filter></defs>
     <rect className="atlas-paper" x="1" y="1" width="898" height="468" rx="4"/><path className="atlas-land" filter="url(#atlas-shadow)" d="M86 254 C105 139 215 58 350 66 C440 15 588 52 625 126 C739 131 828 204 811 307 C793 405 681 437 578 407 C492 456 346 441 294 389 C198 407 103 354 86 254Z"/>
     <path className="atlas-river" d="M353 74 C335 133 402 167 383 219 C365 269 279 283 298 332 C312 370 381 383 402 428"/><path className="atlas-road" d="M268 322 C330 280 397 265 474 264 C548 262 592 244 650 220"/><path className="atlas-road faint" d="M268 322 C315 252 352 180 405 108"/>
@@ -566,10 +637,10 @@ function WorldMap({ world, campaign }: { world:string; campaign:string }) {
   </svg><div className="atlas-legend"><span><i className="current"/>Current region</span><span><i/>Known place</span><span><b/>Known route</span></div></div></section>;
 }
 
-function FoundMaps({ inventory }: { inventory:Array<{owner:string;item:Player["inventory"][number]}> }) {
+function FoundMaps({ inventory, theme }: { inventory:Array<{owner:string;item:Player["inventory"][number]}>; theme:UniverseTheme }) {
   const maps=inventory.filter(({item})=>/\b(map|chart|floor ?plan|plans)\b/i.test(item.name));
   if (!maps.length) return null;
-  return <section className="found-map-shelf"><div className="found-map-heading"><div><span className="eyebrow">Found handouts</span><h2>Maps carried by the party</h2></div><small>{maps.length} found map{maps.length===1?"":"s"}</small></div><div className="found-map-list">{maps.map(({owner,item})=><article className="found-map-card" key={`${owner}-${item.id}`}><svg viewBox="0 0 280 160" role="img" aria-label={`${item.name}, carried by ${owner}`}><rect x="4" y="4" width="272" height="152"/><path d="M24 34 H112 V72 H158 V126 H246 M112 72 V126 H55"/><circle cx="24" cy="34" r="5"/><circle cx="112" cy="72" r="5"/><circle cx="158" cy="126" r="5"/><circle cx="246" cy="126" r="5"/><text x="20" y="24">INN</text><text x="58" y="145">PANTRY</text><text x="190" y="145">MARKED ROUTE</text></svg><div><span className="eyebrow">Carried by {owner}</span><h3>{item.name}</h3><p>{item.notes||"A map recovered during the adventure. It records only the markings the party has actually seen."}</p></div></article>)}</div></section>;
+  return <section className="found-map-shelf"><div className="found-map-heading"><div><span className="eyebrow">Found handouts</span><h2>Maps carried by the {theme.terms.party.toLowerCase()}</h2></div><small>{maps.length} found map{maps.length===1?"":"s"}</small></div><div className="found-map-list">{maps.map(({owner,item})=><article className="found-map-card" key={`${owner}-${item.id}`}><svg viewBox="0 0 280 160" role="img" aria-label={`${item.name}, carried by ${owner}`}><rect x="4" y="4" width="272" height="152"/><path d="M24 34 H112 V72 H158 V126 H246 M112 72 V126 H55"/><circle cx="24" cy="34" r="5"/><circle cx="112" cy="72" r="5"/><circle cx="158" cy="126" r="5"/><circle cx="246" cy="126" r="5"/><text x="20" y="24">INN</text><text x="58" y="145">PANTRY</text><text x="190" y="145">MARKED ROUTE</text></svg><div><span className="eyebrow">Carried by {owner}</span><h3>{item.name}</h3><p>{item.notes||`A map recovered during the ${theme.terms.content.toLowerCase()}. It records only established markings.`}</p></div></article>)}</div></section>;
 }
 
 type MapArea = { key:string; index:number; x:number; y:number; w:number; h:number; label:string; kind:string; connectsTo:string[] };
@@ -584,7 +655,7 @@ function MapTileObjects({ area, bespoke }: { area:MapArea; bespoke:boolean }) {
   return null;
 }
 
-function KnownMap({ campaign, locations }: { campaign:string; locations:GameView["knownLocations"] }) {
+function KnownMap({ campaign, locations, theme }: { campaign:string; locations:GameView["knownLocations"]; theme:UniverseTheme }) {
   const [selected,setSelected]=useState(Math.max(0,locations.length-1));
   const [zoom,setZoom]=useState(1);
   useEffect(()=>setSelected(Math.max(0,locations.length-1)),[locations.length]);
@@ -600,7 +671,7 @@ function KnownMap({ campaign, locations }: { campaign:string; locations:GameView
   const byKey=new Map(discovered.map((area)=>[area.key,area]));
   const selectArea=(index:number)=>setSelected(index);
   const mapHeight=Math.max(locations[0]?.map?.height||0,540,Math.ceil(locations.length/3)*235+90);
-  return <section className="map-view"><header><span className="eyebrow">Party knowledge</span><h1>Known map</h1><p>A floor plan of places the party has explored or clearly seen. Hidden rooms, secret routes, and unrevealed locations are never drawn.</p></header><div className="map-canvas"><div className="map-caption"><span>{campaign}</span><div className="map-tools"><strong>{locations.length} mapped place{locations.length===1?"":"s"}</strong><button type="button" aria-label="Zoom map out" onClick={()=>setZoom((value)=>Math.max(.75,value-.25))}>−</button><button type="button" onClick={()=>setZoom(1)}>{Math.round(zoom*100)}%</button><button type="button" aria-label="Zoom map in" onClick={()=>setZoom((value)=>Math.min(1.75,value+.25))}>+</button></div></div>{locations.length ? <><div className="floor-map-scroll"><svg className="floor-map" style={{width:`${zoom*100}%`}} viewBox={`0 0 1100 ${mapHeight}`} role="img" aria-label={`Known floor plan for ${campaign}`}>
+  return <section className="map-view"><header><span className="eyebrow">{theme.terms.party} knowledge</span><h1>{theme.terms.map}</h1><p>A record of places the {theme.terms.party.toLowerCase()} has explored or clearly seen. Hidden rooms, secret routes, and unrevealed locations are never drawn.</p></header><div className="map-canvas"><div className="map-caption"><span>{campaign}</span><div className="map-tools"><strong>{locations.length} mapped place{locations.length===1?"":"s"}</strong><button type="button" aria-label="Zoom map out" onClick={()=>setZoom((value)=>Math.max(.75,value-.25))}>−</button><button type="button" onClick={()=>setZoom(1)}>{Math.round(zoom*100)}%</button><button type="button" aria-label="Zoom map in" onClick={()=>setZoom((value)=>Math.min(1.75,value+.25))}>+</button></div></div>{locations.length ? <><div className="floor-map-scroll"><svg className="floor-map" style={{width:`${zoom*100}%`}} viewBox={`0 0 1100 ${mapHeight}`} role="img" aria-label={`${theme.terms.map} for ${campaign}`}>
     <defs><pattern id="floor-grid" width="25" height="25" patternUnits="userSpaceOnUse"><path d="M 25 0 L 0 0 0 25"/></pattern><pattern id="tile-wood" width="38" height="14" patternUnits="userSpaceOnUse"><rect width="38" height="14"/><path d="M0 1H38 M0 13H38 M11 1V13 M30 1V13"/></pattern><pattern id="tile-stone" width="42" height="28" patternUnits="userSpaceOnUse"><rect width="42" height="28"/><path d="M0 1H42 M0 27H42 M21 1V14 M8 14V27 M36 14V27 M0 14H42"/></pattern><pattern id="tile-earth" width="34" height="34" patternUnits="userSpaceOnUse"><rect width="34" height="34"/><circle cx="7" cy="10" r="1.5"/><circle cx="25" cy="22" r="2"/><path d="M12 29l6-3"/></pattern><filter id="map-shadow"><feDropShadow dx="0" dy="5" stdDeviation="5" floodOpacity=".55"/></filter></defs>
     <rect className="map-paper" x="1" y="1" width="1098" height={mapHeight-2}/><rect className="map-grid" x="1" y="1" width="1098" height={mapHeight-2}/>
     {discovered.flatMap((area)=>area.connectsTo.map((key)=>{const prior=byKey.get(key);return prior?<path className="map-corridor wide" key={`${key}-${area.key}`} d={`M ${prior.x+prior.w/2} ${prior.y+prior.h/2} L ${area.x+area.w/2} ${area.y+area.h/2}`}/>:null}))}

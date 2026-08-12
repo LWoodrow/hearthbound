@@ -36,7 +36,7 @@ Each universe gets its own campaign continuity, characters, rules profile, termi
 - Cosmic horror - **Hysteria**
 - Murder mystery - **Unmasked**
 - Gothic horror - **Forsaken**
-- Modern supernatural - **Wayward Sons**
+- Modern supernatural - **Hunters** (stable internal identifier: `supernatural`)
 - Espionage - **Classified**
 
 ## Hysteria research and purchased Cthulhu reference audit

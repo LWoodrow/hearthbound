@@ -1,9 +1,9 @@
 {
-  "name": "Hearthbound Family Adventure",
-  "short_name": "Hearthbound",
+  "name": "Storyman Game Library",
+  "short_name": "Storyman",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#17130f",
   "theme_color": "#17130f",
-  "description": "A private family D&D campaign hosted at home."
+  "description": "A private library of persistent tabletop adventures across distinct game universes."
 }

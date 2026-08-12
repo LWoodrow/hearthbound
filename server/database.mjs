@@ -725,7 +725,7 @@ export function levelUpPlayer(db, playerId, input) {
     const maxHp=player.maxHp+options.hpIncrease;db.prepare("UPDATE players SET level=?,max_hp=?,hp=?,abilities_json=?,spellcasting_json=?,subclass=? WHERE id=?").run(options.nextLevel,maxHp,maxHp,JSON.stringify(abilities),JSON.stringify(spellcasting),subclass,player.id);
     finishPendingLevelUp(db,player,options.nextLevel);addEvent(db,{partyId:player.partyId,visibility:"public",playerId:player.id,kind:"system",speaker:"Level Up",text:`${player.name} advances to Sorcerer level ${options.nextLevel}.`});return getPlayer(db,player.id);
   }
-  if (!options || !player) throw new Error("Level-up testing is currently available for Wizards of levels 1â€“4 in the Combat Workshop.");
+  if (!options || !player) throw new Error("Level-up testing is currently available for Wizards of levels 1–4 in the Combat Workshop.");
   if (player.className === "Warlock" && options.nextLevel <= 5) {
     const chosenSpells=[...new Set((Array.isArray(input.newSpells)?input.newSpells:[]).map(String))];
     if(chosenSpells.length!==1||chosenSpells.some((name)=>!options.availableSpells.some((spell)=>spell.name===name))) throw new Error("Choose exactly one eligible new Warlock spell.");

@@ -837,7 +837,7 @@ async function resolveDmQuestion(db, player, action, preparedContext, playerSafe
       const prepared = (magic.prepared || []).join(", ") || "none";
       const cantrips = (magic.cantrips || []).join(", ") || "none";
       const book = (magic.spellbook || []).length ? ` The spellbook contains: ${magic.spellbook.join(", ")}.` : "";
-      answer = `${player.name}'s cantrips are ${cantrips}. Prepared levelled spells: ${prepared}. Remaining spell slotsâ€”${slots}.${book} Cantrips do not spend spell slots.`;
+      answer = `${player.name}'s cantrips are ${cantrips}. Prepared levelled spells: ${prepared}. Remaining spell slots—${slots}.${book} Cantrips do not spend spell slots.`;
     }
   } else if (/\b(dexterity|dex|sleight|thieves|thief)\b/.test(lower)) {
     answer = "Dexterity applies when the approach depends on speed, balance, stealth, or delicate physical manipulation—for example, a Dexterity check using thieves’ tools. Working out how a mechanism functions is normally Intelligence (Investigation), while noticing its visible details is Wisdom (Perception). Describe the approach under Act, and the DM will call for a roll if failure is meaningful.";
