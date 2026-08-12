@@ -1,0 +1,250 @@
+import { assertValidAdventure } from "../adventure-schema.mjs";
+
+const feature = (id, label, kind = "scenery") => ({ id, label, kind });
+const exit = (to, via, options = {}) => ({ to, via, ...options });
+
+export const lanternBelowAdventure = assertValidAdventure({
+  schemaVersion: 1,
+  id: "lantern-below",
+  title: "The Lantern Below",
+  series: "The Hollow Road",
+  episode: 1,
+  stateKey: "clueStage",
+  startLocation: "outside-inn",
+  mapHeight: 760,
+  premise: "A silver-moth letter leads the company beneath an old Eldervale inn without revealing the forgotten road beyond it too early.",
+  principles: [
+    "The physical layout is authoritative; observing a neighbouring room never moves the party.",
+    "A room can only be entered through a listed exit after its requirements are satisfied.",
+    "Clues reveal one actionable step at a time and never disclose an unreached room.",
+    "Doors, containers, collected items, hazards, and completed scenes retain their state.",
+    "A failed search describes uncertainty, never proof that an unseen danger is absent.",
+  ],
+  locations: {
+    "outside-inn": {
+      name: "Outside the Crooked Lantern",
+      description: "A rain-dark street beneath the inn's creaking silver-lantern sign.",
+      stage: 0,
+      arrivalStage: 0,
+      map: { x: 4, y: 24, w: 18, h: 26, kind: "road" },
+      features: [
+        feature("inn-sign", "creaking inn sign"),
+        feature("front-door", "public front door", "door"),
+        feature("taproom-windows", "lit taproom windows", "window"),
+      ],
+      exits: [exit("inn", "public front door", { object: "front-door" })],
+    },
+    inn: {
+      name: "The Crooked Lantern Taproom",
+      description: "A busy public room with a bar, hearth, scattered tables, patrons, and doors to the inn's private areas.",
+      stage: 0,
+      arrivalStage: 1,
+      map: { x: 25, y: 12, w: 27, h: 30, kind: "taproom" },
+      features: [
+        feature("front-door", "public entrance", "door"),
+        feature("taproom-bar", "bar"),
+        feature("taproom-hearth", "hearth"),
+        feature("taproom-tables", "public tables"),
+        feature("private-room-door", "private-room door", "door"),
+        feature("kitchen-door", "staff kitchen door", "door"),
+      ],
+      exits: [
+        exit("outside-inn", "public front door", { object: "front-door" }),
+        exit("back-room", "private-room door", { object: "private-room-door" }),
+        exit("kitchen", "staff kitchen door", { object: "kitchen-door" }),
+      ],
+    },
+    "back-room": {
+      name: "Private Back Room",
+      description: "A small private room with a writing desk, lamp, inkwell, and the table on which the sealed letter appears.",
+      stage: 0,
+      arrivalStage: 2,
+      map: { x: 56, y: 10, w: 18, h: 21, kind: "private-room" },
+      features: [
+        feature("private-room-door", "door to the taproom", "door"),
+        feature("private-table", "private table"),
+        feature("writing-desk", "writing desk"),
+        feature("room-lamp", "oil lamp"),
+        feature("fresh-inkwell", "fresh inkwell"),
+        feature("silver-moth-letter", "sealed silver-moth letter", "clue"),
+      ],
+      exits: [exit("inn", "private-room door", { object: "private-room-door" })],
+    },
+    kitchen: {
+      name: "The Crooked Lantern Kitchen",
+      description: "A working kitchen behind the taproom. Cupboards, a preparation table, and a separate pantry door are visible here.",
+      stage: 2,
+      arrivalStage: 2,
+      map: { x: 25, y: 47, w: 23, h: 22, kind: "kitchen" },
+      features: [
+        feature("kitchen-door", "door to the taproom", "door"),
+        feature("kitchen-table", "preparation table"),
+        feature("kitchen-cupboards", "cupboards"),
+        feature("kitchen-hearth", "cooking hearth"),
+        feature("pantry-door", "pantry door", "door"),
+      ],
+      exits: [
+        exit("inn", "staff kitchen door", { object: "kitchen-door" }),
+        exit("pantry", "pantry door", { object: "pantry-door" }),
+      ],
+    },
+    pantry: {
+      name: "Pantry",
+      description: "A cramped store room lined with shelves and jars; the ink-mite's route ends at one particular shelving section.",
+      stage: 2,
+      arrivalStage: 2,
+      map: { x: 51, y: 46, w: 19, h: 20, kind: "pantry" },
+      features: [
+        feature("pantry-door", "door to the kitchen", "door"),
+        feature("pantry-shelves", "pantry shelves", "clue"),
+        feature("pantry-jars", "dusty jars"),
+        feature("cellar-hatch", "concealed cellar hatch", "door"),
+      ],
+      exits: [
+        exit("kitchen", "pantry door", { object: "pantry-door" }),
+        exit("cellar", "concealed cellar hatch", {
+          object: "cellar-hatch",
+          requires: [{ path: "objects.cellar-hatch.open", equals: true }],
+        }),
+      ],
+    },
+    cellar: {
+      name: "Cellar",
+      description: "Stone steps descend to barrels, old survey marks, and a locked stone door at the rear of the cellar.",
+      stage: 3,
+      arrivalStage: 2,
+      map: { x: 51, y: 71, w: 22, h: 23, kind: "cellar" },
+      features: [
+        feature("cellar-hatch", "stairs up to the pantry", "door"),
+        feature("cellar-barrels", "barrels"),
+        feature("survey-marks", "old survey marks", "clue"),
+        feature("keyed-stone-door", "locked stone door", "door"),
+      ],
+      exits: [
+        exit("pantry", "cellar stairs", { object: "cellar-hatch" }),
+        exit("cellar-passage", "stone door", {
+          object: "keyed-stone-door",
+          requires: [{ path: "objects.keyed-stone-door.open", equals: true }],
+        }),
+      ],
+    },
+    "cellar-passage": {
+        name: "The Cellar Passage",
+      description: "A narrow passage beyond the opened stone door bearing Mara Vey's abandoned survey mark.",
+      stage: 4,
+      arrivalStage: 2,
+      map: { x: 76, y: 73, w: 14, h: 18, kind: "passage" },
+      features: [
+        feature("keyed-stone-door", "open stone door", "door"),
+        feature("passage-marks", "survey marks"),
+        feature("survey-box", "rusted survey box", "container"),
+        feature("mothglass-entry", "mothglass chamber entrance", "door"),
+      ],
+      exits: [
+        exit("cellar", "stone door", { object: "keyed-stone-door" }),
+        exit("mothglass", "mothglass chamber entrance", { object: "mothglass-entry" }),
+      ],
+    },
+    mothglass: {
+      name: "Mothglass Chamber",
+      description: "An old chamber dominated by a brass lantern mounted on a counterweighted spindle and a visible seam in the wall.",
+      stage: 5,
+      arrivalStage: 2,
+      map: { x: 74, y: 46, w: 20, h: 21, kind: "chamber" },
+      features: [
+        feature("mothglass-entry", "entrance from the cellar passage", "door"),
+        feature("spindle-lantern", "counterweighted brass lantern", "mechanism"),
+        feature("wall-seam", "vertical wall seam", "clue"),
+        feature("spindle-door", "concealed passage", "door"),
+      ],
+      exits: [
+        exit("cellar-passage", "mothglass chamber entrance", { object: "mothglass-entry" }),
+        exit("passage", "concealed passage", {
+          object: "spindle-door",
+          requires: [{ path: "objects.spindle-door.open", equals: true }],
+        }),
+      ],
+    },
+    passage: {
+      name: "Concealed Survey Passage",
+      description: "A cramped survey passage where recent boot prints and a streak of dried black ink lead toward a collapse.",
+      stage: 7,
+      arrivalStage: 2,
+      map: { x: 52, y: 98, w: 38, h: 14, kind: "passage" },
+      features: [
+        feature("spindle-door", "concealed door", "door"),
+        feature("recent-bootprints", "recent boot prints", "clue"),
+        feature("dried-black-ink", "dried black ink", "clue"),
+        feature("alcove-opening", "collapsed survey alcove", "door"),
+      ],
+      exits: [
+        exit("mothglass", "concealed door", { object: "spindle-door" }),
+        exit("alcove", "collapsed survey alcove", { object: "alcove-opening" }),
+      ],
+    },
+    alcove: {
+      name: "Collapsed Survey Alcove",
+      description: "Loose stones block Mara Vey in a damaged survey alcove while an ink-dark guardian bars a safe rescue.",
+      stage: 8,
+      arrivalStage: 2,
+      map: { x: 35, y: 98, w: 14, h: 16, kind: "alcove" },
+      features: [
+        feature("alcove-opening", "opening to the passage", "door"),
+        feature("loose-stones", "unstable loose stones", "hazard"),
+        feature("mara-vey", "Mara Vey", "npc"),
+        feature("ink-guardian", "ink-dark guardian", "creature"),
+      ],
+      exits: [exit("passage", "survey passage", { object: "alcove-opening" })],
+    },
+  },
+  objects: {
+    "front-door": { name: "Crooked Lantern front door", type: "door", locations: ["outside-inn", "inn"], initial: { locked: false, open: false } },
+    "private-room-door": { name: "private-room door", type: "door", locations: ["inn", "back-room"], initial: { locked: false, open: false } },
+    "kitchen-door": { name: "kitchen door", type: "door", locations: ["inn", "kitchen"], initial: { locked: false, open: false } },
+    "pantry-door": { name: "pantry door", type: "door", locations: ["kitchen", "pantry"], initial: { locked: false, open: false } },
+    "cellar-hatch": { name: "concealed cellar hatch", type: "door", locations: ["pantry", "cellar"], initial: { discovered: false, locked: false, open: false } },
+    "keyed-stone-door": { name: "keyed stone door", type: "door", locations: ["cellar", "cellar-passage"], key: "cellar-key", initial: { locked: true, open: false } },
+    "mothglass-entry": { name: "mothglass chamber entrance", type: "door", locations: ["cellar-passage", "mothglass"], initial: { locked: false, open: true } },
+    "spindle-door": { name: "concealed spindle door", type: "door", locations: ["mothglass", "passage"], initial: { discovered: false, locked: false, open: false } },
+    "alcove-opening": { name: "collapsed survey alcove opening", type: "door", locations: ["passage", "alcove"], initial: { locked: false, open: true } },
+  },
+  containers: {
+    "survey-box": {
+      name: "rusted survey box",
+      location: "cellar-passage",
+      key: "cellar-key",
+      initial: { discovered: false, locked: true, open: false },
+      items: ["glowing-key"],
+      oneShot: true,
+    },
+  },
+  items: {
+    "silver-moth-letter": { name: "Silver-moth letter", location: "back-room", portable: true, unique: true },
+    "room-lantern": { name: "Lantern", location: "back-room", portable: true, unique: false },
+    torch: { name: "Torch", location: "back-room", portable: true, unique: false },
+    map: { name: "Map", location: "cellar-passage", portable: true, unique: true },
+    "cellar-key": { name: "Cellar key", location: "cellar", portable: true, unique: true },
+    "glowing-key": { name: "Glowing survey key", location: "cellar-passage", container: "survey-box", portable: true, unique: true },
+  },
+  scenes: {
+    arrival: { location: "outside-inn", summary: "The company arrives outside in the rain; the inn interior is only visible through windows." },
+    taproom: { location: "inn", requires: [{ path: "visited", includes: "inn" }], summary: "The company enters the public taproom and can interact before seeking privacy." },
+    letter: { location: "back-room", requires: [{ path: "visited", includes: "back-room" }], summary: "The sealed letter appears only after the party deliberately reaches the private room." },
+    pantry: { location: "pantry", requires: [{ path: "flags.mapDrawn", equals: true }], summary: "The drawn line identifies the pantry shelves, not the cellar itself." },
+    cellar: { location: "cellar", requires: [{ path: "objects.cellar-hatch.open", equals: true }], summary: "The party descends only after discovering and opening the cellar hatch." },
+    mothglass: { location: "mothglass", requires: [{ path: "objects.keyed-stone-door.open", equals: true }], summary: "The spindle mechanism is inspected before it can reveal the next passage." },
+    rescue: { location: "alcove", requires: [{ path: "visited", includes: "alcove" }], summary: "The guardian and unstable stones must be resolved before Mara is freed." },
+  },
+  milestones: {
+    complete: {
+      name: "Mara Vey rescued",
+      requires: [
+        { path: "flags.guardianDefeated", equals: true },
+        { path: "flags.maraRescued", equals: true },
+      ],
+      nextAdventure: "ashes-of-briarwatch",
+    },
+  },
+});
+
+export default lanternBelowAdventure;

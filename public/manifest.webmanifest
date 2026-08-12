@@ -1,0 +1,9 @@
+{
+  "name": "Hearthbound Family Adventure",
+  "short_name": "Hearthbound",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#17130f",
+  "theme_color": "#17130f",
+  "description": "A private family D&D campaign hosted at home."
+}
