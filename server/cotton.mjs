@@ -1,10 +1,9 @@
 import { addEvent, getPartyState, listPlayers, setPartyState } from "./database.mjs";
+import { currentModelProfile } from "./model-runtime.mjs";
+import { parseModelJson } from "./model-output.mjs";
 
 export const COTTON_ID = "divine-companion-cotton";
 export const COTTON_FULL_NAME = "Sir Cotton Woltanade Floof the 67th";
-
-const OLLAMA_URL = process.env.OLLAMA_URL || "http://127.0.0.1:11434";
-const MODEL = process.env.DND_MODEL || "qwen3:14b-q4_K_M";
 
 export function cottonLevel(db, partyId) {
   const party = listPlayers(db, partyId);
@@ -69,11 +68,13 @@ function cottonTrigger(mode, audience, action, state) {
 }
 
 async function aiCottonLine(trigger, action) {
+  if (trigger === "environment") return "";
   try {
+    const profile = currentModelProfile();
     const prompt = `Write one sentence, 8-28 words, describing Cotton's reaction. Cotton is ${COTTON_FULL_NAME}, an immortal god disguised as a miserable blue-eyed Ragdoll cat. He hates being picked up, stroked, cuddled, or treated as a lap cat. He behaves playfully like a real cat but never solves puzzles, reveals secrets, leads exploration, speaks human language, or changes the scene. Use no dialogue and no quoted words: only observable cat behaviour. His roster name is Cotton. Trigger: ${trigger}. Family player's latest words/action: ${String(action).slice(0,300)}`;
-    const response = await fetch(`${OLLAMA_URL}/api/chat`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ model:MODEL, messages:[{role:"system",content:"Return strict JSON with one field named line. No markdown."},{role:"user",content:prompt}], stream:false, think:false, format:{type:"object",properties:{line:{type:"string"}},required:["line"]}, options:{temperature:.78,num_predict:70} }), signal:AbortSignal.timeout(12000) });
+    const response = await fetch(`${profile.ollamaUrl}/api/chat`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ model:profile.model, messages:[{role:"system",content:"Return strict JSON with one field named line. No markdown."},{role:"user",content:prompt}], stream:false, think:profile.think, format:{type:"object",properties:{line:{type:"string"}},required:["line"]}, options:{temperature:.78,num_ctx:profile.contextTokens,num_predict:70} }), signal:AbortSignal.timeout(12000) });
     if (!response.ok) return "";
-    const line = String(JSON.parse((await response.json()).message.content)?.line || "").trim().slice(0,260);
+    const line = String(parseModelJson((await response.json()).message.content)?.line || "").trim().slice(0,260);
     if (/[\"“”]|'\s*(?:what|i|you|we|no|yes|feed|leave)\b/i.test(line) || /\b(?:says?|asks?|replies?|whispers?)\b/i.test(line)) return "";
     return line;
   } catch { return ""; }

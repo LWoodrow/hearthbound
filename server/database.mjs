@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { createHash, randomBytes, randomUUID, scryptSync } from "node:crypto";
 import { enrichKnownLocations, locationIsRevealed } from "./adventure-rules.mjs";
+import { adventureDefinition } from "./adventure-registry.mjs";
 
 const DEFAULT_WORLD = "world-hearthbound";
 const DEFAULT_PARTY = "party-first-company";
@@ -224,7 +225,7 @@ const SPELL_SUMMARIES = {
 function defaultSpellcasting(className) {
   return SPELLCASTING_DEFAULTS[className] ? structuredClone(SPELLCASTING_DEFAULTS[className]) : null;
 }
-const opening = "Rain silvers the lamps of Eldervale as the company reaches the Crooked Lantern. Warm light, conversation, and supper-smoke spill from its public taproom whenever the front door opens. The party is still outside beneath the inn's creaking sign; no private room has been taken and no mysterious letter has appeared. What do you do?";
+const opening = "Rain silvers the lamps of Eldervale as the company reaches the Crooked Lantern. Its painted sign creaks above the public front door, and warm light, conversation, and supper-smoke spill through the taproom windows into the wet street. What do you do?";
 const CAMPAIGN_SERIES = {
   id: "the-hollow-road",
   title: "The Hollow Road",
@@ -960,7 +961,7 @@ export function addEvent(db, event) {
 
 export function listVisibleEvents(db, player) {
   const adventureId = db.prepare("SELECT active_adventure_id FROM parties WHERE id = ?").get(player.partyId)?.active_adventure_id;
-  return db.prepare("SELECT id, visibility, player_id, kind, speaker, text, created_at FROM events WHERE party_id = ? AND adventure_id = ? AND (visibility = 'public' OR (visibility = 'player' AND player_id = ?)) ORDER BY id ASC LIMIT 250").all(player.partyId, adventureId, player.id).map((row) => ({ id: row.id, visibility: row.visibility, playerId: row.player_id, kind: row.kind, speaker: row.speaker, text: row.text, createdAt: row.created_at }));
+  return db.prepare("SELECT id, visibility, player_id, kind, speaker, text, payload_json, created_at FROM events WHERE party_id = ? AND adventure_id = ? AND (visibility = 'public' OR (visibility = 'player' AND player_id = ?)) ORDER BY id ASC LIMIT 250").all(player.partyId, adventureId, player.id).map((row) => ({ id: row.id, visibility: row.visibility, playerId: row.player_id, kind: row.kind, speaker: row.speaker, text: row.text, payload:JSON.parse(row.payload_json || "{}"), createdAt: row.created_at }));
 }
 
 export function listRecentEventsForDm(db, partyId, limit = 36) {
@@ -1059,7 +1060,9 @@ export function resetPartyStory(db, partyId) {
   db.exec("BEGIN IMMEDIATE");
   try {
     db.prepare("DELETE FROM events WHERE party_id = ? AND adventure_id = ?").run(partyId, party.active_adventure_id);
-    db.prepare("DELETE FROM party_state WHERE party_id = ? AND (key IN ('dm', 'knownLocations', 'combat', 'pendingLevelUps') OR key LIKE 'pendingCheck:%' OR key LIKE 'guidance:%')").run(partyId);
+    db.prepare("DELETE FROM party_state WHERE party_id = ? AND (key IN ('dm', 'knownLocations', 'combat', 'pendingLevelUps', 'cotton') OR key LIKE 'pendingCheck:%' OR key LIKE 'guidance:%' OR key LIKE 'turnTraces:%' OR key LIKE 'turnRevision:%' OR key LIKE 'npcConversation:%' OR key LIKE 'sceneEntry:%')").run(partyId);
+    const structuredAdventureId = adventureDefinition(party.active_adventure_id)?.id || String(party.active_adventure_id || "");
+    db.prepare("DELETE FROM party_state WHERE party_id = ? AND key IN (?, ?)").run(partyId, `world:${structuredAdventureId}`, `interactions:${party.active_adventure_id}`);
     if(adventure)db.prepare("UPDATE party_adventures SET status='active',completed_at=NULL WHERE party_id=? AND adventure_id=?").run(partyId,adventure.id);
     db.prepare("UPDATE players SET hp = max_hp WHERE party_id = ?").run(partyId);
     if (adventure) db.prepare("DELETE FROM inventory_items WHERE source_adventure_id = ? AND player_id IN (SELECT id FROM players WHERE party_id = ?)").run(adventure.id, partyId);

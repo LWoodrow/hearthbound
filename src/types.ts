@@ -91,6 +91,7 @@ export type StoryEvent = {
   kind: "narration" | "action" | "roll" | "system";
   speaker: string;
   text: string;
+  payload?: { authoritativeFacts?: string[]; [key:string]: unknown };
   createdAt: string;
 };
 
@@ -109,6 +110,17 @@ export type GameView = {
   player: Player;
   party: Player[];
   events: StoryEvent[];
+  recap: {
+    version:number; title:string; currentLocation:string; visibleFeatures:string[]; establishedFacts:string[];
+    recentActions:string[]; recentRolls:string[]; campaignUpdates:string[]; carriedItems:string[];
+    knownLocations:Array<{name:string;summary:string}>; pendingCheck:string;
+  };
+  playtest:null | {
+    version:number; adventureId:string; completed:number; total:number; currentLocation:string; clueStage:number;
+    pendingCheck:string; nextGate:string; gates:Array<{id:string;label:string;passed:boolean}>;
+    recent:Array<{kind:string;speaker:string;text:string}>;
+    turnTraces:Array<Record<string, unknown>>;
+  };
   knownLocations: KnownLocation[];
   spotlight: { playerId: string | null; name: string; position: number; total: number };
   pendingCheck: null | { ability: string; skill: string; modifier: number; dc: number; reason: string };
@@ -142,7 +154,12 @@ export type GameView = {
   };
   guidanceMode: "guided" | "standard" | "classic";
   guidance: Array<{ label: string; text: string; mode: "act" | "speak" | "ask"; reason: string }>;
-  ai: { connected: boolean; model: string };
+  ai: {
+    connected:boolean; model:string; profile:string; displayName:string; promptInspectorEnabled:boolean;
+    status:"checking"|"available"|"ready"|"loading"|"unavailable"|"offline"|"error";
+    pendingModel:string; loadProgress:number|null; loaded:boolean; error:string; loadDurationMs:number|null;
+    models:Array<{name:string;size:number;parameterSize:string;quantization:string;family:string;modifiedAt:string;loaded:boolean;selected:boolean}>;
+  };
   speech: { transcriptionConfigured: boolean };
   art: { imageConfigured: boolean };
 };

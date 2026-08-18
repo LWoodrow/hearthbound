@@ -1,32 +1,53 @@
 import { addEvent, addInventoryItem, completeActiveAdventure, getActiveAdventure, getGuidanceMode, getKnownLocations, getPartyState, listInventory, listPlayers, listRecentEventsForDm, rememberKnownLocation, removeInventoryItem, setPartyState, setPlayerGuidance } from "./database.mjs";
 import { cottonForParty } from "./cotton.mjs";
-import { applyAdventureEvent, adventureRules, authoredRouteContext, featureLocationRule, locationRule, locationTransitionIsAllowed } from "./adventure-rules.mjs";
+import { applyAdventureEvent, adventureRules, authoredRouteContext, featureLocationRule, locationIsRevealed, locationRule, locationTransitionIsAllowed } from "./adventure-rules.mjs";
 import { handleCombatAction } from "./combat.mjs";
 import { adventureDefinition } from "./adventure-registry.mjs";
 import { createInitialWorldState, resolveWorldAction } from "./world-state.mjs";
-
-const OLLAMA_URL = process.env.OLLAMA_URL || "http://127.0.0.1:11434";
-const MODEL = process.env.DND_MODEL || "qwen3:14b-q4_K_M";
+import { currentModelProfile, isCurrentModelReady } from "./model-runtime.mjs";
+import { buildPromptPacket, recordPromptPacket } from "./prompt-packets.mjs";
+import { narrationStylePrompt } from "./narration-styles.mjs";
+import { buildStoryAuthority } from "./story-authority.mjs";
+import { canonicalProjection, canonicalStage, createCanonicalState, resolveAuthoredInteractionSequence } from "./interaction-engine.mjs";
+import { parseModelJson } from "./model-output.mjs";
 
 export async function isOllamaReady() {
-  try {
-    const response = await fetch(`${OLLAMA_URL}/api/tags`, { signal: AbortSignal.timeout(900) });
-    if (!response.ok) return false;
-    const body = await response.json();
-    return Array.isArray(body.models) && body.models.some((item) => item.name === MODEL || item.model === MODEL);
-  } catch { return false; }
+  return isCurrentModelReady();
 }
 
 async function ollamaChat(messages, schema, generation = {}) {
-  const response = await fetch(`${OLLAMA_URL}/api/chat`, {
+  const profile = currentModelProfile();
+  const response = await fetch(`${profile.ollamaUrl}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: MODEL, messages, stream: false, think: false, format: schema, options: { temperature: generation.temperature ?? 0.62, num_ctx: 8192, num_predict: generation.numPredict ?? 520 } }),
+    body: JSON.stringify({ model: profile.model, messages, stream: false, think: profile.think, format: schema, options: { temperature: generation.temperature ?? 0.62, num_ctx: profile.contextTokens, num_predict: generation.numPredict ?? 520 } }),
     signal: AbortSignal.timeout(150000),
   });
   if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
   const body = await response.json();
-  return JSON.parse(body.message.content);
+  return parseModelJson(body.message.content);
+}
+
+async function promptChat({ kind, sections, messages, sectionIds = [], sectionVisibility = [], optionalSections = [], schema, generation = {}, metadata = {} }) {
+  const profile = currentModelProfile();
+  const namedSections = sections || (messages || []).map((message, index) => ({
+    id:sectionIds[index] || `message-${index + 1}`,
+    role:message.role,
+    content:message.content,
+    visibility:sectionVisibility[index] || "secret",
+    required:!optionalSections.includes(index),
+    priority:80 - index,
+  }));
+  const packet = buildPromptPacket({
+    kind,
+    profile,
+    sections:namedSections,
+    responseTokens:generation.numPredict ?? 520,
+    metadata,
+  });
+  recordPromptPacket(packet);
+  if (packet.overBudget) throw new Error(`Required ${kind} prompt sections exceed the ${packet.inputBudget}-token input budget.`);
+  return { output:await ollamaChat(packet.messages, schema, generation), packetId:packet.id };
 }
 
 const directorSchema = {
@@ -48,7 +69,132 @@ const directorSchema = {
 
 const narrationSchema = { type: "object", properties: { narration: { type: "string" }, suggestions:{ type:"array", items:{ type:"object", properties:{ label:{type:"string"}, text:{type:"string"}, mode:{type:"string",enum:["act","speak","ask"]}, reason:{type:"string"} }, required:["label","text","mode","reason"] } } }, required: ["narration","suggestions"] };
 const questionSchema = { type: "object", properties: { answer: { type: "string" }, suggestions:{ type:"array", items:{ type:"object", properties:{ label:{type:"string"}, text:{type:"string"}, mode:{type:"string",enum:["act","speak","ask"]}, reason:{type:"string"} }, required:["label","text","mode","reason"] } } }, required: ["answer","suggestions"] };
+const npcReplySchema = { type:"object", properties:{ reply:{type:"string"}, usedFacts:{type:"array",items:{type:"string"}} }, required:["reply","usedFacts"] };
 const characterDetailSchema = { type: "object", properties: { text: { type: "string" } }, required: ["text"] };
+
+const DIRECTOR_SKILLS = {
+  Acrobatics:"Dexterity", "Animal Handling":"Wisdom", Arcana:"Intelligence", Athletics:"Strength",
+  Deception:"Charisma", History:"Intelligence", Insight:"Wisdom", Intimidation:"Charisma",
+  Investigation:"Intelligence", Medicine:"Wisdom", Nature:"Intelligence", Perception:"Wisdom",
+  Performance:"Charisma", Persuasion:"Charisma", Religion:"Intelligence", "Sleight of Hand":"Dexterity",
+  Stealth:"Dexterity", Survival:"Wisdom",
+};
+
+const cleanDirectorText = (value, limit) => String(value || "").replace(/\s+/g, " ").trim().slice(0, limit);
+const directorItemTerms = (value) => cleanDirectorText(value, 80).toLowerCase().replace(/\blamp\b/g, "lantern").split(/[^a-z0-9]+/).filter((word) => word.length > 2 && !["the","and","with","from"].includes(word));
+
+function requestedInventoryQuantity(action, itemName) {
+  const words = String(action || "").toLowerCase().replace(/\blamp\b/g, "lantern");
+  const terms = directorItemTerms(itemName);
+  const firstTerm = terms.find((term) => words.includes(term));
+  if (!firstTerm) return 0;
+  const beforeItem = words.slice(Math.max(0, words.indexOf(firstTerm) - 18), words.indexOf(firstTerm));
+  const numeric = beforeItem.match(/\b(\d{1,3})\s*(?:x|×)?\s*$/);
+  const numberWords = { one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10 };
+  const written = beforeItem.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\s*$/);
+  return Math.max(1, Math.min(99, numeric ? Number(numeric[1]) : written ? numberWords[written[1]] : 1));
+}
+
+export function sanitizeDirectorConsequences(director, action, options = {}) {
+  const source = director && typeof director === "object" ? director : {};
+  const rejected = [];
+  const suppliedFacts = Array.isArray(source.publicFacts) ? source.publicFacts : [];
+  let publicFacts = suppliedFacts
+    .filter((fact) => typeof fact === "string")
+    .map((fact) => cleanDirectorText(fact, 420))
+    .filter(Boolean)
+    .slice(0, 3);
+  if (!publicFacts.length) publicFacts.push("The declared action produces no new established change.");
+  if (!Array.isArray(source.publicFacts) || source.publicFacts.length > 3 || suppliedFacts.some((fact) => typeof fact !== "string")) rejected.push("malformed public facts");
+  if (options.authoritativeFact) {
+    publicFacts = [cleanDirectorText(options.authoritativeFact, 420) || "The established check result leaves the scene unchanged."];
+    if (suppliedFacts.length) rejected.push("model-authored check outcome replaced by rules result");
+  }
+
+  const normalizedAction = String(action || "").toLowerCase().replace(/\blamp\b/g, "lantern");
+  const factText = publicFacts.join(" ").toLowerCase().replace(/\blamp\b/g, "lantern");
+  const adding = /\b(pick|pickup|take|grab|collect|retrieve|accept|receive)\w*\b/.test(normalizedAction);
+  const removing = /\b(drop|discard|give|hand|leave|lose|destroy|throw away)\w*\b/.test(normalizedAction);
+  const seenItems = new Set();
+  const inventoryChanges = [];
+  for (const change of (Array.isArray(source.inventoryChanges) ? source.inventoryChanges : []).slice(0, 6)) {
+    const itemName = cleanDirectorText(change?.itemName, 80);
+    const terms = directorItemTerms(itemName);
+    const operation = change?.operation === "remove" ? "remove" : change?.operation === "add" ? "add" : "";
+    const namedInAction = terms.some((term) => normalizedAction.includes(term));
+    const confirmedInFacts = terms.some((term) => factText.includes(term));
+    const companion = /\b(cotton|woltanade|floof|ragdoll cat|god in cat form)\b/i.test(itemName);
+    const key = `${operation}:${itemName.toLowerCase()}`;
+    if (!itemName || !terms.length || !operation || !namedInAction || !confirmedInFacts || companion || seenItems.has(key) || (operation === "add" && !adding) || (operation === "remove" && !removing)) {
+      rejected.push(`inventory change ${itemName || "without an item"}`);
+      continue;
+    }
+    seenItems.add(key);
+    const proposedQuantity = Number(change.quantity);
+    inventoryChanges.push({
+      operation,
+      itemName,
+      quantity:Math.min(Number.isFinite(proposedQuantity) ? Math.max(1, proposedQuantity) : 1, requestedInventoryQuantity(action, itemName)),
+      status:operation === "add" && /\b(equip|wear|wield)\w*\b/.test(normalizedAction) ? "equipped" : "carried",
+      note:cleanDirectorText(change.note, 180),
+    });
+  }
+  if (!Array.isArray(source.inventoryChanges)) rejected.push("malformed inventory changes");
+
+  const dangerChange = Number(source.dangerChange || 0);
+  if (dangerChange !== 0) rejected.push("model-authored danger change");
+  if (source.adventureComplete) rejected.push("model-authored adventure completion");
+
+  const proposedLocation = cleanDirectorText(source.locationName, 80);
+  const locationNamedByPlayer = !proposedLocation || actionPhrase(action, proposedLocation);
+  const locationAllowed = options.allowLocation !== false && locationNamedByPlayer;
+  const sanitized = {
+    publicFacts,
+    privateFact:"",
+    hiddenNote:cleanDirectorText(source.hiddenNote, 600),
+    dangerChange:0,
+    adventureComplete:false,
+    locationName:locationAllowed ? proposedLocation : "",
+    locationNote:locationAllowed ? cleanDirectorText(source.locationNote, 240) : "",
+    requiredCheck:options.checkResolved ? "" : cleanDirectorText(source.requiredCheck, 120),
+    checkReason:options.checkResolved ? "" : cleanDirectorText(source.checkReason, 260),
+    inventoryChanges:options.allowInventory === false ? [] : inventoryChanges,
+  };
+  if (options.checkResolved && (source.requiredCheck || source.checkReason)) rejected.push("repeat check after resolved roll");
+  if (source.privateFact) rejected.push("model-authored private revelation");
+  if (options.allowInventory === false && inventoryChanges.length) rejected.push("inventory change outside a completed transfer");
+  if (options.allowLocation === false && (source.locationName || source.locationNote)) rejected.push("location change without successful movement");
+  else if (!locationNamedByPlayer) rejected.push("model-authored unnamed location");
+  return { director:sanitized, rejected:[...new Set(rejected)] };
+}
+
+export function directorCheckRequest(player, action, director) {
+  const request = cleanDirectorText(director?.requiredCheck, 120);
+  if (!request) return null;
+  const match = request.match(/\b(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\b(?:\s*\(([A-Za-z ]+)\))?[^0-9]{0,24}\bDC\s*(\d{1,2})\b/i);
+  if (!match) return null;
+  const ability = match[1][0].toUpperCase() + match[1].slice(1).toLowerCase();
+  const skillKey = String(match[2] || "").replace(/[^a-z]/gi, "").toLowerCase();
+  const skillEntry = Object.entries(DIRECTOR_SKILLS).find(([skill]) => skill.replace(/[^a-z]/gi, "").toLowerCase() === skillKey);
+  if (match[2] && !skillEntry) return null;
+  const skill = skillEntry?.[0] || ability;
+  if (skillEntry && skillEntry[1] !== ability) return null;
+  const dc = Number(match[3]);
+  if (dc < 5 || dc > 25) return null;
+  const reason = cleanDirectorText(director?.checkReason, 260);
+  if (!reason) return null;
+  return {
+    ability,
+    skill,
+    modifier:skillModifier(player, ability, skill),
+    dc,
+    reason,
+    successText:`${player.name} succeeds at the declared approach without extending it beyond the attempted action.`,
+    failureText:`${player.name} cannot complete the declared approach and the established scene remains unchanged.`,
+    generalRule:"director-check",
+    action:String(action || ""),
+  };
+}
 
 const LANTERN_GUIDANCE = [
   [{label:"Examine the seal",text:"Examine the silver-moth seal without opening the letter.",mode:"act",reason:"Careful inspection may establish what is visible without disturbing it."},{label:"Open the letter",text:"Deliberately break the seal and open the letter.",mode:"act",reason:"Opening it is a clear choice, but may have consequences."}],
@@ -66,6 +212,11 @@ const LANTERN_GUIDANCE = [
 const LANTERN_ARRIVAL_GUIDANCE = [
   [{label:"Enter the inn",text:"Enter the Crooked Lantern through the public front door.",mode:"act",reason:"The company is still outside beneath the inn sign."},{label:"Look inside",text:"Look through the taproom windows before going in.",mode:"act",reason:"This establishes what is publicly visible without entering."}],
   [{label:"Ask for privacy",text:"Ask the innkeeper whether the company can have a quiet private room.",mode:"speak",reason:"The party is in the public taproom and has not yet taken a private room."},{label:"Settle in",text:"Find a quiet table where the company can talk privately.",mode:"act",reason:"This moves the party out of the busy public taproom."}],
+];
+
+const TAMSIN_PANTRY_GUIDANCE = [
+  {label:"Ask for pantry access",text:"Ask Tamsin to let the company inspect the pantry shelves Mara studied.",mode:"speak",reason:"Tamsin has connected Mara's investigation to a specific part of the inn."},
+  {label:"Go to the pantry",text:"Go through the kitchen to the pantry with Tamsin's permission.",mode:"act",reason:"The pantry is now an established, accessible destination."},
 ];
 
 function lanternArrivalStage(dmState) {
@@ -97,6 +248,7 @@ export function refreshPlayerGuidance(db, player) {
   if (!String(adventure?.id || "").endsWith("lantern-below")) return setPlayerGuidance(db, player.id, player.partyId, []);
   const arrivalStage=lanternArrivalStage(state);
   if(arrivalStage<2) return updateGuidance(db,player,0,LANTERN_ARRIVAL_GUIDANCE[arrivalStage]);
+  if(Number(state.clueStage || 0)===2 && state.pantryLeadSource==="tamsin") return setPlayerGuidance(db,player.id,player.partyId,TAMSIN_PANTRY_GUIDANCE);
   return updateGuidance(db, player, Number(state.clueStage || 0));
 }
 
@@ -114,6 +266,19 @@ function safeNarratorSuggestions(suggestions) {
     ask:"This checks whether a character skill or rule applies without assuming success.",
   };
   return (Array.isArray(suggestions) ? suggestions : []).map((item) => ({ ...item, reason:safeReason[item?.mode] || safeReason.act }));
+}
+
+export function safeNarrationText(value, publicFacts = []) {
+  const narration = String(value || "").trim();
+  const leaksStructuredOutput = /\b(?:guidance|suggestions)\s*"?\s*:/i.test(narration)
+    || /[\[{]\s*"(?:label|text|mode|type|reason)"\s*:/i.test(narration);
+  if (narration && !leaksStructuredOutput) return narration;
+  const fallback = (Array.isArray(publicFacts) ? publicFacts : [])
+    .map((fact) => String(fact || "").trim())
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(" ");
+  return fallback || "The established scene remains unchanged.";
 }
 
 export function prepareCampaignContext(adventure, dmState, action) {
@@ -166,14 +331,14 @@ export function prepareCampaignContext(adventure, dmState, action) {
     || /\bink\b[^.]{0,30}\b(?:on|onto|to|into)\b/.test(words);
   let nextClueStage = currentStage;
   if (currentStage === 0 && /\b(open|unseal|break|cut|peel|remove)\b/.test(words) && /\b(letter|envelope|seal|wax)\b/.test(words)) nextClueStage = 1;
-  else if (currentStage === 1 && appliesHeat && appliesInk) nextClueStage = 2;
-  else if (currentStage === 2 && dmState.currentLocationKey === "pantry" && /\b(search|inspect|investigate|examine|move|look)\w*\b/.test(words) && /\b(pantry|shel(?:f|ves))\b/.test(words)) nextClueStage = 3;
+  else if (currentStage === 1 && ((appliesHeat && appliesInk) || (dmState.miteAwake && appliesInk))) nextClueStage = 2;
+  else if (currentStage === 2 && dmState.currentLocationKey === "pantry" && /\b(search|inspect|investigate|examine|move|look|track|follow|test)\w*\b/.test(words) && /\b(pantry|shel(?:f|ves)|floor|draught|draft|scrape|scrapes|marks)\b/.test(words)) nextClueStage = 3;
   else if (currentStage === 3 && dmState.currentLocationKey === "pantry" && /\b(open|enter|descend|explore|follow|go|push)\w*\b/.test(words) && /\b(door|cellar|stair|below|passage)\b/.test(words)) nextClueStage = 4;
   else if (currentStage === 4 && /\b(follow|explore|continue|search|open|enter|advance|run|sprint|proceed)\w*\b/.test(words) && /\b(mark|trail|footprint|footprints|path|passage|door|chamber|route|forward|end)\b/.test(words)) nextClueStage = 5;
   else if (currentStage === 6 && /\b(turn|rotate|pull|push|move|twist|lower)\w*\b/.test(words) && /\b(lantern|fixture|counterweight|spindle)\b/.test(words)) nextClueStage = 7;
   else if (currentStage === 7 && /\b(follow|enter|explore|continue|go)\w*\b/.test(words) && /\b(hidden|passage|opening|route|way)\b/.test(words)) nextClueStage = 8;
 
-  const unlocked = [
+  let unlocked = [
     {
       situation: "An unexplained sealed letter bearing a silver-moth wax seal rests on the party's table in the Crooked Lantern.",
       availableFacts: ["The seal is unbroken.", "The paper is dry despite the rain outside.", "Something beneath the wax made one faint scratch and then became still."],
@@ -226,6 +391,14 @@ export function prepareCampaignContext(adventure, dmState, action) {
     },
   ][nextClueStage];
 
+  if (nextClueStage === 2 && dmState.pantryLeadSource === "tamsin") {
+    unlocked = {
+      situation: "Tamsin has recognised Mara's signed note and explained that Mara repeatedly measured one section of the pantry shelves.",
+      availableFacts: ["The pantry shelves are now an established lead.", "Tamsin can grant access through the working kitchen.", "The ink-mite has not drawn a route unless the party separately woke it with warmth and fresh ink."],
+      boundary: "No concealed hatch, cellar, passage, danger, or explanation of Mara's fate has yet been discovered.",
+    };
+  }
+
   return {
     nextClueStage,
     state: {
@@ -239,6 +412,25 @@ export function prepareCampaignContext(adventure, dmState, action) {
   };
 }
 
+function persistLanternWorldProgress(db, partyId, adventure, dmState, stage) {
+  const definition = adventureDefinition(adventure);
+  if (!definition) return;
+  const worldKey = `world:${definition.id}`;
+  const savedWorld = getPartyState(db, partyId, worldKey);
+  const world = createInitialWorldState(definition, savedWorld || {
+    currentLocation: definition.locations?.[dmState?.currentLocationKey]
+      ? dmState.currentLocationKey
+      : definition.startLocation,
+  });
+  if (stage >= 3 && world.objects["cellar-hatch"]) {
+    world.objects["cellar-hatch"].discovered = true;
+  }
+  if (stage >= 7 && world.objects["spindle-door"]) {
+    Object.assign(world.objects["spindle-door"], { discovered:true, locked:false, open:true });
+  }
+  setPartyState(db, partyId, worldKey, world);
+}
+
 function resolveAuthoritativeClueAction(db, player, adventure, dmState, action, preparedContext) {
   if (!String(adventure?.id || "").endsWith("lantern-below")) return false;
   if (lanternArrivalStage(dmState) < 2) return false;
@@ -246,6 +438,19 @@ function resolveAuthoritativeClueAction(db, player, adventure, dmState, action, 
   const currentStage = Math.max(0, Math.min(9, Number(dmState.clueStage || 0)));
   const nextStage = preparedContext.nextClueStage;
   const mentionsLetter = /\b(letter|envelope|seal|wax)\b/.test(words);
+  const operatesMothglass = /\b(turn|rotate|pull|push|move|twist|lower)\w*\b/.test(words)
+    && /\b(lantern|fixture|counterweight|spindle)\b/.test(words);
+  if (currentStage === 7 && dmState.currentLocationKey === "mothglass" && operatesMothglass) {
+    persistLanternWorldProgress(db, player.partyId, adventure, dmState, currentStage);
+    addEvent(db, {
+      partyId: player.partyId,
+      visibility: "public",
+      kind: "narration",
+      speaker: "Dungeon Master",
+      text: "The counterweighted lantern is already in its operated position. The concealed passage remains open in the mothglass wall.",
+    });
+    return true;
+  }
   const relevant = nextStage > currentStage || (currentStage === 0 && mentionsLetter) || (currentStage === 1 && mentionsLetter && /\b(read|inspect|examine|study|check)\w*\b/.test(words));
   if (!relevant) return false;
 
@@ -261,10 +466,15 @@ function resolveAuthoritativeClueAction(db, player, adventure, dmState, action, 
     `${player.name} follows the concealed passage to a collapsed survey alcove. Mara's voice answers from beyond the loose stones, but an ink-dark, flattened creature slides across the floor between you and the collapse, recoiling whenever the lantern light falls directly upon it. The unstable stones cannot be cleared safely while it blocks the approach.`,
     `With the ink-dark guardian overcome or bypassed, ${player.name} reaches the collapse. Mara is conscious behind the loose stones, but the remaining rubble must be shifted carefully before the damaged passage moves again.`,
   ];
-  addEvent(db, { partyId: player.partyId, visibility: "public", kind: "narration", speaker: "Dungeon Master", text: narrationByStage[nextStage] });
-  addEvent(db, { partyId: player.partyId, visibility: "dm", kind: "system", speaker: "DM Ledger", text: `Rules engine advanced The Lantern Below clue stage from ${currentStage} to ${nextStage}.` });
   const stageLocations={3:"pantry",4:"cellar-passage",5:"mothglass",6:"mothglass",7:"mothglass",8:"alcove",9:"alcove"};
-  setPartyState(db, player.partyId, "dm", { ...dmState, clueStage: nextStage, currentLocationKey:stageLocations[nextStage] || dmState.currentLocationKey || "back-room" });
+  const nextDmState = { ...dmState, clueStage: nextStage, currentLocationKey:stageLocations[nextStage] || dmState.currentLocationKey || "back-room" };
+  setPartyState(db, player.partyId, "dm", nextDmState);
+  if (nextStage === 3 || nextStage === 7) persistLanternWorldProgress(db, player.partyId, adventure, nextDmState, nextStage);
+  const narration = nextStage === 3 && dmState.pantryLeadSource === "tamsin"
+    ? `${player.name} examines the pantry section Tamsin identified. Scrapes beneath the shelving and a cold draught at floor level lead to a concealed cellar hatch behind it; subtle marks around its edge show that someone used it recently. The closed hatch reveals nothing about what lies below.`
+    : narrationByStage[nextStage];
+  addEvent(db, { partyId: player.partyId, visibility: "public", kind: "narration", speaker: "Dungeon Master", text: narration });
+  addEvent(db, { partyId: player.partyId, visibility: "dm", kind: "system", speaker: "DM Ledger", text: `Rules engine advanced The Lantern Below clue stage from ${currentStage} to ${nextStage}.` });
   updateGuidance(db, player, nextStage);
   if (currentStage === 0 && mentionsLetter && /\b(pick|pickup|take|grab|collect)\w*\b/.test(words)) addInventoryItem(db, player.id, { name:"Silver-moth letter", quantity:1, status:"carried", notes:"A sealed letter found at the Crooked Lantern.", sourceAdventureId:adventure.id });
   if (nextStage === 3) rememberKnownLocation(db, player.partyId, { name: "The Crooked Lantern cellar", summary: "A concealed cellar door lies behind the pantry shelves." });
@@ -280,7 +490,7 @@ function resolveLanternArrivalAction(db,player,adventure,dmState,mode,action,pre
   const currentStage=lanternArrivalStage(dmState);
   if(currentStage>=2) return false;
   const normalized=String(action || "").trim().toLowerCase();
-  const entersInn=/\b(?:enter|go|walk|step|head|move)\b[^.]{0,35}\b(?:inn|taproom|inside|front door)\b|\bopen\b[^.]{0,25}\bfront door\b/i.test(normalized);
+  const entersInn=/\b(?:enter|go|walk|step|head|move)\b[^.]{0,60}\b(?:inn|crooked lantern|taproom|inside|front door)\b|\bopen\b[^.]{0,35}\bfront door\b/i.test(normalized);
   const takesPrivateRoom=/\b(?:ask|request|take|find|enter|go|move|walk|follow)\b[^.]{0,45}\b(?:private|back|quiet)\b[^.]{0,20}\b(?:room|table|place|space)\b|\b(?:private|back) room\b/i.test(normalized);
   const spokenRoomRequest=mode==="speak" && currentStage===1 && takesPrivateRoom;
   if(mode!=="act" && !spokenRoomRequest) return false;
@@ -289,11 +499,12 @@ function resolveLanternArrivalAction(db,player,adventure,dmState,mode,action,pre
   if(nextStage<=currentStage && !mentionsLetter) return false;
   let text;
   if(mentionsLetter && nextStage<=currentStage){
-    text=currentStage===0
+    const current=currentAuthoredLocation(adventure,dmState);
+    text=current?.key==="outside-inn"
       ? `There is no letter here outside the inn. ${player.name} can see the Crooked Lantern's public front door and warm taproom windows through the rain.`
-      : `No mysterious letter is visible in the public taproom. The company is still among the innkeeper and patrons and has not taken a private room.`;
+      : `No letter matching that description is visible in ${current?.label || "the current room"}. The established people and features here remain available to investigate.`;
   } else if(nextStage===1){
-    text=`${player.name} opens the Crooked Lantern's front door and the company enters its busy public taproom. Firelight catches rain on their cloaks while patrons talk over supper; the innkeeper looks up and asks whether they want food, drink, or a place to sit. No private room has been taken and no mysterious letter is present.`;
+    text=`${player.name} opens the Crooked Lantern's front door and the company enters its busy public taproom. Firelight catches rain on their cloaks while patrons talk over supper; behind the bar, the innkeeper looks up and asks whether they want food, drink, or a place to sit.`;
     rememberKnownLocation(db,player.partyId,{name:"The Crooked Lantern taproom",summary:"The inn's warm, busy public room, entered from the rain-soaked street."});
   } else {
     text=`The innkeeper leads the company away from the public taproom to a small private back room and closes the door behind them. Only after the party settles in do they notice a sealed letter resting alone on the table, its wax impressed with a silver moth; none of them saw anyone place it there. Beneath the wax, something scratches once—and becomes still.`;
@@ -305,6 +516,51 @@ function resolveLanternArrivalAction(db,player,adventure,dmState,mode,action,pre
   addEvent(db,{partyId:player.partyId,visibility:"dm",kind:"system",speaker:"DM Ledger",text:`Rules engine advanced The Lantern Below arrival from stage ${currentStage} to ${nextStage}.`});
   if(nextStage<2) updateGuidance(db,player,0,LANTERN_ARRIVAL_GUIDANCE[nextStage]);
   else updateGuidance(db,player,0);
+  return true;
+}
+
+function resolveLanternTamsinConversation(db, player, adventure, dmState, mode, action) {
+  if (mode !== "speak" || !String(adventure?.id || "").endsWith("lantern-below")) return false;
+  const location = dmState.currentLocationKey;
+  if (!['inn', 'kitchen'].includes(location)) return false;
+  const words = String(action || "").toLowerCase();
+  const asksAboutMara = /\b(mara|surveyor|vey)\b/.test(words) && /\b(ask|tell|know|remember|saw|seen|expect|visitor|message|stay|stayed)\w*\b/.test(words);
+  const presentsEvidence = Number(dmState.clueStage || 0) >= 1
+    && /\b(mara|note|letter|message|seal)\b/.test(words)
+    && /\b(show|read|signed|investigat|search|look|doing|interested|pantry|shelves)\w*\b/.test(words);
+  const requestsAccess = Number(dmState.clueStage || 0) >= 2
+    && /\b(pantry|shelves|kitchen)\b/.test(words)
+    && /\b(access|permission|inspect|search|enter|help|show|take|lead|escort|allow|let)\w*\b/.test(words);
+  if (!asksAboutMara && !presentsEvidence && !requestsAccess) return false;
+
+  let text;
+  let nextState = { ...dmState };
+  if (presentsEvidence) {
+    nextState = {
+      ...nextState,
+      clueStage:Math.max(2, Number(dmState.clueStage || 0)),
+      pantryLeadSource:"tamsin",
+      storyDiscoveries:[...new Set([...(dmState.storyDiscoveries || []), "pantry-destination:tamsin"])],
+    };
+    text = `Tamsin reads Mara's signature twice before answering. "Eleven days ago. She kept measuring the same pantry shelves and asking whether I felt a draught there. I thought she was chasing an old builder's tale." Tamsin agrees that the company may inspect them, but claims no knowledge of what—if anything—lies behind them.`;
+    setPlayerGuidance(db, player.id, player.partyId, TAMSIN_PANTRY_GUIDANCE);
+  } else if (requestsAccess) {
+    nextState = {
+      ...nextState,
+      pantryPermission:true,
+      storyDiscoveries:[...new Set([...(dmState.storyDiscoveries || []), "pantry-access:tamsin"])],
+    };
+    text = `Tamsin gives a guarded nod. "Through the kitchen, then. Touch the shelves, not the supper, and tell me before you prise up anything structural." The kitchen and its pantry are available by their ordinary connected doors; Tamsin has not revealed a cellar or hidden route.`;
+  } else {
+    nextState = {
+      ...nextState,
+      storyDiscoveries:[...new Set([...(dmState.storyDiscoveries || []), "mara-stayed-at-inn:tamsin"])],
+    };
+    text = `Tamsin remembers Mara Vey as a precise, rain-soaked surveyor who stayed eleven days ago and asked for privacy. "She said someone who still honoured the old road might come asking. If that is you, take the private back room; I left it as she requested." Tamsin offers no claim about where Mara went afterward.`;
+  }
+  setPartyState(db, player.partyId, "dm", nextState);
+  addEvent(db, { partyId:player.partyId, adventureId:adventure.id, visibility:"public", playerId:player.id, kind:"narration", speaker:"Tamsin Reed", text });
+  addEvent(db, { partyId:player.partyId, adventureId:adventure.id, visibility:"dm", kind:"system", speaker:"DM Ledger", text:"Applied an authored Tamsin Reed conversation route from the canonical story package." });
   return true;
 }
 
@@ -330,10 +586,20 @@ function resolveBriarwatchClueAction(db, player, adventure, dmState, action, pre
   return true;
 }
 
-function validateAuthoredDestination(db, player, adventure, dmState, director) {
+function validateAuthoredDestination(db, player, adventure, dmState, director, action = "") {
   const rules=adventureRules(adventure?.id);
   const proposed=String(director?.locationName || "").trim();
-  if(!proposed || !rules.locations.length) return true;
+  if(!proposed) return true;
+  if(!rules.locations.length) {
+    const known=getKnownLocations(db,player.partyId);
+    const alreadyKnown=known.some((location)=>String(location.name).toLowerCase()===proposed.toLowerCase());
+    const explicitMovement=/\b(?:advance|continue|enter|follow|go|walk|run|head|proceed|descend|ascend|travel|approach|venture|move)\w*\b/i.test(String(action || ""));
+    if(alreadyKnown || (explicitMovement && actionPhrase(action,proposed))) return true;
+    director.locationName="";
+    director.locationNote="";
+    director.hiddenNote=`Rejected model-authored map location ${proposed} because the player did not explicitly name that destination.`;
+    return false;
+  }
   const currentRule=locationRule(adventure.id,dmState.currentLocationKey);
   const known=getKnownLocations(db,player.partyId);
   const current=currentRule?.label || known.at(-1)?.name || rules.locations[0]?.label;
@@ -345,21 +611,6 @@ function validateAuthoredDestination(db, player, adventure, dmState, director) {
   director.adventureComplete=false;
   director.hiddenNote=`Rejected an unknown or non-adjacent location transition from ${current} to ${proposed}.`;
   return false;
-}
-
-function resolveLanternSourceSearch(db, player, adventure, dmState, mode, action) {
-  if (mode !== "act" || !String(adventure?.id || "").endsWith("lantern-below") || Number(dmState.clueStage || 0) !== 1) return false;
-  const words = String(action || "").toLowerCase();
-  const searches = /\b(?:find|look|search|locate|check)\w*\b/.test(words);
-  const seeksSupplies = /\bink\b/.test(words) && /\b(?:light|heat|flame|fire|hearth|torch|lantern)\b/.test(words);
-  if (!searches || !seeksSupplies) return false;
-  if((dmState.currentLocationKey || "back-room") !== "back-room") return false;
-  addEvent(db, { partyId:player.partyId, visibility:"public", kind:"narration", speaker:"Dungeon Master", text:`${player.name} finds a small inkwell on the back-room writing desk and a small oil lamp beside it. Both supplies are within reach in this room, but ${player.name} has only located them; the silver-moth letter and its dormant ink-mite remain unchanged.` });
-  setPlayerGuidance(db, player.id, player.partyId, [
-    { label:"Use the instructions", text:"Warm the silver-moth seal over the oil-lamp flame and offer the ink-mite one drop of fresh ink.", mode:"act", reason:"This deliberately applies the two supplies exactly as the opened note instructs." },
-    { label:"Inspect the supplies", text:"Examine the inkwell and hearth without using either on the letter.", mode:"act", reason:"This checks the visible supplies while leaving the letter unchanged." },
-  ]);
-  return true;
 }
 
 function skillModifier(player, ability, skill) {
@@ -393,6 +644,15 @@ function offerGeneralAbilityCheck(db, player, mode, action) {
   if (mode !== "act") return false;
   const words = String(action || "").trim().toLowerCase();
   if (!words) return false;
+
+  const namedCheck=words.match(/\b(strength|dexterity|constitution|intelligence|wisdom|charisma|athletics|acrobatics|sleight of hand|stealth|arcana|history|investigation|nature|religion|animal handling|insight|medicine|perception|survival|deception|intimidation|performance|persuasion)\s+check\b/);
+  if(namedCheck){
+    const requested=namedCheck[1].replace(/\b\w/g,(letter)=>letter.toUpperCase());
+    const skillAbilities={"Athletics":"Strength","Acrobatics":"Dexterity","Sleight Of Hand":"Dexterity","Stealth":"Dexterity","Arcana":"Intelligence","History":"Intelligence","Investigation":"Intelligence","Nature":"Intelligence","Religion":"Intelligence","Animal Handling":"Wisdom","Insight":"Wisdom","Medicine":"Wisdom","Perception":"Wisdom","Survival":"Wisdom","Deception":"Charisma","Intimidation":"Charisma","Performance":"Charisma","Persuasion":"Charisma"};
+    const skill=Object.keys(skillAbilities).find((name)=>name.toLowerCase()===requested.toLowerCase());
+    const ability=skill?skillAbilities[skill]:requested;
+    return queueAbilityCheck(db,player,{ability,skill:skill||ability,modifier:skillModifier(player,ability,skill||ability),dc:12,reason:`Resolve the requested ${skill||ability} check against the current visible situation.`,successText:`${player.name}'s ${skill||ability} check succeeds.`,failureText:`${player.name}'s ${skill||ability} check does not establish anything further.`,generalRule:"requested-check",action:String(action||"")});
+  }
 
   const searches = /\b(check|search|look|inspect|examine|scan|sweep)\w*\b/.test(words);
   const trapSearch = searches && /\b(trap|traps|hazard|hazards|tripwire|pressure plate|pressure plates|ambush|danger|dangers)\b/.test(words);
@@ -600,7 +860,7 @@ function currentAuthoredLocation(adventure,dmState){
 function resolveAuthoredRoomMovement(db,player,adventure,dmState,mode,action){
   if(mode!=="act")return false;
   const words=String(action||"");
-  if(!/\b(?:go|walk|move|enter|leave|return|head|step|cross|travel|proceed|follow|climb|descend|ascend)\w*\b/i.test(words))return false;
+  if(!/\b(?:go|walk|move|enter|leave|return|head|step|cross|travel|proceed|follow|climb|descend|ascend|sneak|slip|creep|crawl)\w*\b/i.test(words))return false;
   const target=mentionedAuthoredLocation(adventure,words);
   if(!target)return false;
   const rules=adventureRules(adventure?.id);
@@ -652,6 +912,119 @@ function resolveLocationQuestion(db,player,adventure,dmState,mode,action){
     : `The party has not recorded a named location yet. The Known map will identify places once the party reaches or clearly discovers them.`;
   addEvent(db,{partyId:player.partyId,visibility:"public",playerId:player.id,kind:"narration",speaker:"Dungeon Master",text});
   return true;
+}
+
+function resolveVisibleNpcQuestion(db, player, adventure, dmState, mode, action) {
+  if (!['act', 'ask'].includes(mode)) return false;
+  const words = String(action || '').toLowerCase();
+  if (!/\b(wear|wearing|look|looks|appearance|hair|clothes|clothing|dressed|describe)\b/.test(words)) return false;
+  const definition = adventureDefinition(adventure);
+  if (!definition) return false;
+  const saved = getPartyState(db, player.partyId, `world:${definition.id}`);
+  const locationId = saved?.currentLocation || dmState.currentLocationKey || definition.startLocation;
+  const npc = Object.values(definition.story?.npcs || {}).find((entry) =>
+    (entry.locations || []).includes(locationId)
+    && words.includes(String(entry.name || '').toLowerCase().split(' ')[0]));
+  if (!npc) return false;
+  const text = npc.appearance || `No further visible description is authored for ${npc.name}.`;
+  addEvent(db,{partyId:player.partyId,adventureId:adventure?.id,visibility:'public',playerId:player.id,kind:'narration',speaker:'Dungeon Master',text});
+  return true;
+}
+
+function addressedNpc(definition, world, action) {
+  const words=String(action || "").toLowerCase();
+  const present=Object.entries(definition?.story?.npcs || {}).filter(([,npc])=>(npc.locations || []).includes(world.currentLocation));
+  const explicit=present.find(([,npc])=>{
+    const first=String(npc.name || "").toLowerCase().split(/\s+/)[0];
+    const role=String(npc.role || "").toLowerCase();
+    return (first && new RegExp(`\\b${first}\\b`).test(words)) || (role && words.includes(role));
+  });
+  if (explicit) return explicit;
+  if (present.length !== 1) return null;
+  // With one important NPC present, natural second-person requests can reach
+  // them without repeating their name. Authored state changes have already had
+  // first refusal; this branch remains state-neutral conversation.
+  return /\b(hello|hi|thanks|thank you|please|you|your|yourself|who are|how are|what do|what is|why|where|when|tell me|ask|say|speak|talk|could|can|would|may|bring|get|have|serve|order|work|job|jobs|problem|problems|trouble|troubles|adventurer|adventurers)\b|\b(?:looking for|we(?:'d| would) like)\b/.test(words) ? present[0] : null;
+}
+
+function npcConversationFacts(npc, world) {
+  const facts=[...(npc.conversation?.publicFacts || [])];
+  for (const disclosure of npc.conversation?.conditionalFacts || []) {
+    const requirements=disclosure.requires || [];
+    const allowed=requirements.every((requirement)=>{
+      const parts=String(requirement.path || "").split(".");
+      const value=parts.reduce((current,key)=>current?.[key],world);
+      if (Object.hasOwn(requirement,"equals")) return value === requirement.equals;
+      if (Object.hasOwn(requirement,"includes")) return Array.isArray(value) && value.includes(requirement.includes);
+      return Boolean(value);
+    });
+    if (allowed) facts.push(disclosure.fact);
+  }
+  return facts;
+}
+
+function fallbackNpcReply(npc, action, facts) {
+  const words=String(action || "").toLowerCase();
+  if (/\b(hello|hi|good (?:morning|evening)|greetings)\b/.test(words)) return `“Evening,” ${npc.name} says. “What can I do for you?”`;
+  if (/\b(who are you|your name|yourself)\b/.test(words)) return `“${npc.name}. ${npc.role},” comes the reply. “That usually covers what strangers need first.”`;
+  if (/\b(work|job|jobs|problem|problems|trouble|troubles|adventurer|adventurers)\b/.test(words)) {
+    const workFact=facts.find((fact)=>/contract|unusual local trouble|somewhere quieter/i.test(fact));
+    if (workFact) return `“${workFact},” ${npc.name} says.`;
+  }
+  if (/\b(food|eat|drink|drinks|menu|stew|ale|ales|beer|cider|room|rooms|inn)\b/.test(words) && facts.length) return `“${facts[0]},” ${npc.name} says.`;
+  if (/\b(thank|thanks)\b/.test(words)) return `“You’re welcome,” ${npc.name} replies with a brief nod.`;
+  return `${npc.name} considers the question. “I can only tell you what I know, and I don’t know enough to give you a useful answer to that.”`;
+}
+
+async function resolveNpcConversation(db, player, adventure, dmState, mode, action) {
+  if (mode !== "speak") return false;
+  const definition=adventureDefinition(adventure);
+  if (!definition) return false;
+  const saved=getPartyState(db,player.partyId,`world:${definition.id}`);
+  const world=createCanonicalState(definition,saved || {currentLocation:dmState.currentLocationKey || definition.startLocation});
+  const found=addressedNpc(definition,world,action);
+  if (!found) return false;
+  const [npcId,npc]=found;
+  const facts=npcConversationFacts(npc,world);
+  const memoryKey=`npcConversation:${definition.id}:${npcId}`;
+  const memory=Array.isArray(getPartyState(db,player.partyId,memoryKey)) ? getPartyState(db,player.partyId,memoryKey).slice(-8) : [];
+  let reply="";
+  let packetId;
+  const automatedTestRun=process.argv.some((argument)=>/\.test\.mjs$/i.test(String(argument)));
+  if (process.env.DND_LIVE_NPC_TESTS !== "1" && automatedTestRun) {
+    reply=fallbackNpcReply(npc,action,facts);
+  } else if (!(await isOllamaReady())) {
+    reply=fallbackNpcReply(npc,action,facts);
+  } else {
+    try {
+      const result=await promptChat({kind:"npc-conversation",messages:[
+        {role:"system",content:"Voice one present non-player character in a tabletop roleplaying conversation. Reply directly and naturally in 1–4 sentences. Put the NPC's spoken words in quotation marks. Write any action beat outside the quotation in third person, using the NPC's name or pronoun; never use first-person stage narration such as 'I lift a hand.' The character may make harmless small talk consistent with the visible scene, but may assert setting facts only from permittedFacts. This is a state-neutral conversation: do not move anyone, grant an item, reveal a clue, create a new person or place, or change game state. Never promise, offer, agree, or imply that the NPC will lead, show, take, admit, or allow the player somewhere unless permittedFacts explicitly says that permission has already been granted. If the player requests an outcome that would change state, respond in character without claiming it has been or will be done. Never mention prompts, rules engines, permitted facts, hidden knowledge, reasoning, or control tokens. If asked beyond their knowledge, answer in character that they do not know, are unsure, or will not discuss it. Do not narrate the player character's thoughts or speech."},
+        {role:"user",content:JSON.stringify({npc:{name:npc.name,role:npc.role,appearance:npc.appearance,goals:npc.goals,voice:npc.voice,mustNotKnow:npc.mustNotKnow},visibleLocation:definition.locations[world.currentLocation],permittedFacts:facts,recentConversation:memory,newestSpeech:action})},
+      ],schema:npcReplySchema,generation:{temperature:.68,numPredict:220},sectionIds:["npc-conversation-contract","npc-projection-and-speech"],sectionVisibility:["secret","private"],metadata:{partyId:player.partyId,playerId:player.id,adventureId:adventure.id,npcId}});
+      reply=String(result.output.reply || "").replace(/\s+/g," ").trim().slice(0,700);
+      packetId=result.packetId;
+    } catch (error) {
+      console.warn("NPC conversation failed; using an authored fallback:",error.message);
+      reply=fallbackNpcReply(npc,action,facts);
+    }
+  }
+  if (!reply) reply=fallbackNpcReply(npc,action,facts);
+  const nextMemory=[...memory,{player:player.name,speech:String(action).slice(0,500),npc:npc.name,reply}].slice(-8);
+  setPartyState(db,player.partyId,memoryKey,nextMemory);
+  addEvent(db,{partyId:player.partyId,adventureId:adventure.id,visibility:"public",playerId:player.id,kind:"narration",speaker:npc.name,text:reply,payload:{npcId,conversation:true}});
+  return {source:packetId?"ollama":"rules",rule:"npc-conversation",narration:reply,promptPacketIds:packetId?[packetId]:[]};
+}
+
+function addLocationEntryBeats(db,player,adventure,definition,locationId) {
+  const location=definition.locations?.[locationId];
+  for (const beat of location?.entryBeats || []) {
+    const key=`sceneEntry:${definition.id}:${beat.id}`;
+    if (getPartyState(db,player.partyId,key)) continue;
+    const npc=definition.story?.npcs?.[beat.npc];
+    if (!npc || !(npc.locations || []).includes(locationId)) continue;
+    setPartyState(db,player.partyId,key,{seen:true,locationId});
+    addEvent(db,{partyId:player.partyId,adventureId:adventure.id,visibility:"public",playerId:player.id,kind:"narration",speaker:npc.name,text:beat.text,payload:{npcId:beat.npc,entryBeat:beat.id}});
+  }
 }
 
 function resolveRepeatedPickup(db,player,mode,action,recentHistory){
@@ -709,7 +1082,9 @@ function resolveLanternBoundaryAction(db, player, adventure, dmState, mode, acti
     ? `No underground route has been discovered. ${player.name} is still at the Crooked Lantern with the sealed silver-moth letter; opening or examining what is actually present must come before travelling into an unknown passage.`
     : stage === 1
       ? `No passage has been revealed. ${player.name} has the opened letter, its dormant ink-mite, and Mara Vey's instructions; the silver moth must be warmed and the ink-mite offered fresh ink before it can draw a route.`
-      : `The ink-mite's drawn route ends at the pantry shelves. No stair or passage is visible yet; ${player.name} must search the shelves where the route ends before travelling below the inn.`;
+      : dmState.pantryLeadSource === "tamsin"
+        ? `Tamsin's account leads to the pantry shelves, but no stair or passage is visible yet. ${player.name} must investigate the shelves, their scrape marks, or the cold floor-level draught before travelling below the inn.`
+        : `The ink-mite's drawn route ends at the pantry shelves. No stair or passage is visible yet; ${player.name} must search the shelves where the route ends before travelling below the inn.`;
   addEvent(db, { partyId:player.partyId, visibility:"public", kind:"narration", speaker:"Dungeon Master", text });
   addEvent(db, { partyId:player.partyId, visibility:"dm", kind:"system", speaker:"DM Ledger", text:`Authoritative clue stage ${stage} rejected movement into a route that has not been discovered.` });
   setPlayerGuidance(db, player.id, player.partyId, []);
@@ -730,6 +1105,23 @@ export function ensureConcreteMovementResult(playerName, action, director, narra
   const hasDefiniteStop = /\b(?:blocked|dead end|ends here|ends at|cannot continue|cannot pass|no farther|no further|impassable|locked|sealed|collapsed|obstruction)\b/.test(resultText);
   if (hasDefiniteArrival || hasDefiniteStop) return narration;
   return `${playerName} follows the accessible route until it reaches a definite stopping point. No doorway, junction, new chamber, or farther accessible section is currently established here; ${playerName} must examine a visible feature, choose another route, or turn back rather than continue through undefined darkness.`;
+}
+
+export function unresolvedAuthoredMovementResult(playerName, adventure, dmState, mode, action) {
+  if (mode !== "act") return null;
+  const words = String(action || "").toLowerCase();
+  const isMovement = /\b(?:advance|continue|enter|follow|go|walk|run|sprint|head|proceed|descend|ascend|travel|approach|venture)\w*\b/.test(words)
+    || /\bmove\w*\b[^.]{0,35}\b(?:forward|back|ahead|onward|toward|towards|into|through|past|along|deeper|farther|further)\b/.test(words);
+  if (!isMovement) return null;
+
+  const route = authoredRouteContext(adventure?.id, dmState);
+  if (!route?.currentLocation) return null;
+  const rules = adventureRules(adventure?.id);
+  const exitNames = route.currentLocation.exits
+    .map((key) => rules.locations.find((location) => location.key === key)?.label)
+    .filter(Boolean);
+  const exits = exitNames.length ? exitNames.join(", ") : "no farther revealed destination";
+  return `${playerName} remains in ${route.currentLocation.name}. That movement does not identify a revealed connected destination, so the party does not advance into an undefined place. Revealed exits from here lead to ${exits}.`;
 }
 
 function offerLanternChamberCheck(db, player, adventure, dmState, mode, action, preparedContext) {
@@ -873,15 +1265,30 @@ async function resolveGeneralCheckNarration(db, player, pending, rollResult) {
 
   try {
     const visibleHistory = recentHistory.filter((event) => event.visibility !== "dm").slice(-20);
-    const director = await ollamaChat([
-      { role:"system", content:"You resolve a D&D ability check that has already been rolled. Give a concrete outcome, not a description of the checking procedure. Use only established visible history and the supplied campaign context. On success, explicitly state what the character actually discovers or accomplishes; if there is nothing discoverable in the searched area, explicitly state that no relevant sign or mechanism is found there. On failure, state what remains unresolved without inventing a new hazard. Never request another roll, repeat the check instructions, reveal a later gated secret, invent a new object or route, or move the character beyond the declared action. Respect the precise action: Investigation examines evidence but does not operate a mechanism; Perception notices but does not disarm; Athletics moves only the declared obstacle. publicFacts must contain 1-3 concrete outcome facts. requiredCheck and checkReason must be empty because the roll is complete. inventoryChanges must be empty unless the check itself explicitly completed a transfer. Set adventureComplete only if the supplied campaign context expressly makes this exact successful check the final condition." },
-      { role:"user", content:JSON.stringify({ adventure, campaignContext:preparedContext.state, character:{name:player.name,className:player.className,level:player.level,abilities:player.abilities,skills:player.skills,inventory:player.inventory}, declaredAction:action, check:{ability:pending.ability,skill:pending.skill,dc:pending.dc,rawRoll:rollResult.raw,total:rollResult.total,success:rollResult.success}, recentVisibleHistory:visibleHistory }) },
-    ], directorSchema, { temperature:0.28, numPredict:420 });
-    const narrator = await ollamaChat([
+    const directorPrompt = await promptChat({ kind:"resolved-check-director", messages:[
+      { role:"system", content:"You resolve a D&D ability check that has already been rolled. Give a concrete outcome, not a description of the checking procedure. Use only established visible history and the supplied campaign context. On success, explicitly state what the character actually discovers or accomplishes; if there is nothing discoverable in the searched area, explicitly state that no relevant sign or mechanism is found there. On failure, state what remains unresolved without inventing a new hazard. Never request another roll, repeat the check instructions, reveal a later gated secret, invent a new object or route, or move the character beyond the declared action. Respect the precise action: Investigation examines evidence but does not operate a mechanism; Perception notices but does not disarm; Athletics moves only the declared obstacle. publicFacts must contain 1-3 concrete outcome facts. requiredCheck and checkReason must be empty because the roll is complete. inventoryChanges must be empty unless this successful check explicitly completed a transfer requested by the player. privateFact must be empty, dangerChange must be 0, and adventureComplete must be false; only the rules engine changes clocks or completes adventures." },
+      { role:"user", content:JSON.stringify({ adventure, campaignContext:preparedContext.state }) },
+      { role:"user", content:JSON.stringify({ character:{name:player.name,className:player.className,level:player.level,abilities:player.abilities,skills:player.skills,inventory:player.inventory}, declaredAction:action, check:{ability:pending.ability,skill:pending.skill,dc:pending.dc,rawRoll:rollResult.raw,total:rollResult.total,success:rollResult.success} }) },
+      { role:"user", content:JSON.stringify({ recentVisibleHistory:visibleHistory }) },
+    ], schema:directorSchema, generation:{ temperature:0.28, numPredict:420 }, sectionIds:["engine-contract","adventure-and-authority","resolved-check","recent-visible-history"], sectionVisibility:["secret","secret","private","private"], optionalSections:[3], metadata:{ partyId:player.partyId, playerId:player.id, adventureId:adventure?.id } });
+    const rawDirector = directorPrompt.output;
+    const modelMayAdjudicate = rollResult.success && pending.generalRule === "director-check";
+    const sanitized = sanitizeDirectorConsequences(rawDirector, action, {
+      checkResolved:true,
+      allowInventory:modelMayAdjudicate,
+      allowLocation:modelMayAdjudicate,
+      authoritativeFact:modelMayAdjudicate ? "" : rollResult.success ? pending.successText : pending.failureText,
+    });
+    const director = sanitized.director;
+    validateAuthoredDestination(db, player, adventure, dmState, director, action);
+    const narratorPrompt = await promptChat({ kind:"resolved-check-narrator", messages:[
       { role:"system", content:"Narrate the concrete result of an already-resolved D&D check in 1-3 clear sentences. The first sentence must say what was actually found, learned, moved, or failed—not how carefully the character searched. Use only the supplied public facts. Do not ask for another roll, add atmosphere that implies an unlisted secret, repeat earlier narration, or advance beyond the declared action. If the facts establish that nothing relevant was found, say so plainly. Return no suggestions." },
-      { role:"user", content:JSON.stringify({ characterName:player.name, declaredAction:action, checkResult:rollResult.success ? "success" : "failure", publicFacts:director.publicFacts, recentVisibleHistory:visibleHistory.slice(-10) }) },
-    ], narrationSchema, { temperature:0.32, numPredict:240 });
-    return { text:String(narrator.narration || "").trim() || (rollResult.success ? pending.successText : pending.failureText), preparedContext, director };
+      { role:"user", content:JSON.stringify({ characterName:player.name, declaredAction:action, checkResult:rollResult.success ? "success" : "failure", publicFacts:director.publicFacts }) },
+      { role:"system", content:narrationStylePrompt("hearthbound") },
+      { role:"user", content:JSON.stringify({ recentVisibleHistory:visibleHistory.slice(-10) }) },
+    ], schema:narrationSchema, generation:{ temperature:0.32, numPredict:240 }, sectionIds:["narration-contract","validated-public-facts","narration-style","recent-visible-history"], sectionVisibility:["secret","private","secret","private"], optionalSections:[2,3], metadata:{ partyId:player.partyId, playerId:player.id, adventureId:adventure?.id } });
+    const narrator = narratorPrompt.output;
+    return { text:String(narrator.narration || "").trim() || (rollResult.success ? pending.successText : pending.failureText), preparedContext, director, rejected:sanitized.rejected, promptPacketIds:[directorPrompt.packetId,narratorPrompt.packetId] };
   } catch (error) {
     console.warn("General check resolution failed; using the rules fallback:", error.message);
     return { text:rollResult.success ? pending.successText : pending.failureText, preparedContext, director:null };
@@ -900,14 +1307,15 @@ export async function resolvePendingCheck(db, player, roll) {
   addEvent(db, { partyId:player.partyId, visibility:"public", playerId:player.id, kind:"roll", speaker:"Dice", text:`${player.name} rolled ${raw} ${sign}${modifier} = ${total} for ${pending.skill} against DC ${pending.dc}: ${success ? "success" : "failure"}.`, payload:{ sides:20, result:raw, modifier, total, dc:pending.dc, skill:pending.skill, success } });
   setPartyState(db, player.partyId, key, null);
   const generalResult = pending.generalRule ? await resolveGeneralCheckNarration(db, player, pending, { raw, modifier, total, success }) : null;
-  addEvent(db, { partyId:player.partyId, visibility:"public", kind:"narration", speaker:"Dungeon Master", text:generalResult?.text || (success ? pending.successText : pending.failureText) });
+  addEvent(db, { partyId:player.partyId, visibility:"public", kind:"narration", speaker:"Dungeon Master", text:generalResult?.text || (success ? pending.successText : pending.failureText), payload:{ authoritativeFacts:generalResult?.director?.publicFacts || [success ? pending.successText : pending.failureText] } });
   if (pending.generalRule && success && Number.isFinite(Number(generalResult?.preparedContext?.nextClueStage))) {
     const currentState = getPartyState(db, player.partyId, "dm") || {};
     const director = generalResult?.director;
-    setPartyState(db, player.partyId, "dm", { ...currentState, clueStage:Math.max(Number(currentState.clueStage || 0), Number(generalResult.preparedContext.nextClueStage)), dangerClock:Math.max(0, Number(currentState.dangerClock || 0) + Number(director?.dangerChange || 0)) });
+    setPartyState(db, player.partyId, "dm", { ...currentState, clueStage:Math.max(Number(currentState.clueStage || 0), Number(generalResult.preparedContext.nextClueStage)) });
+    if (generalResult?.rejected?.length) addEvent(db, { partyId:player.partyId, visibility:"dm", kind:"system", speaker:"DM Ledger", text:`Rejected AI check consequences: ${generalResult.rejected.join(", ")}.` });
     if (director?.hiddenNote) addEvent(db, { partyId:player.partyId, visibility:"dm", kind:"system", speaker:"DM Ledger", text:director.hiddenNote });
     if (director?.locationName) rememberKnownLocation(db, player.partyId, { name:director.locationName, summary:director.locationNote });
-    if (director?.adventureComplete) completeActiveAdventure(db, player.partyId);
+    applyResolvedInventoryChanges(db, player, getActiveAdventure(db, player.partyId), pending.action || "", director?.publicFacts, director?.inventoryChanges);
   }
   if (success && Number.isFinite(Number(pending.successStage))) {
     const dmState = getPartyState(db, player.partyId, "dm") || {};
@@ -917,7 +1325,13 @@ export async function resolvePendingCheck(db, player, roll) {
     completeActiveAdventure(db, player.partyId);
     setPlayerGuidance(db, player.id, player.partyId, []);
   } else updateGuidance(db, player, success ? pending.successStage : Number(getPartyState(db, player.partyId, "dm")?.clueStage || 0), null, !success);
-  return { ability:pending.ability, skill:pending.skill, modifier, total, dc:Number(pending.dc), success };
+  return {
+    ability:pending.ability, skill:pending.skill, modifier, total, dc:Number(pending.dc), success,
+    source:generalResult?.director ? "ollama" : "rules", rule:"pending-check-resolution",
+    publicFacts:generalResult?.director?.publicFacts || [success ? pending.successText : pending.failureText],
+    promptPacketIds:generalResult?.promptPacketIds || [], rejectedProposals:generalResult?.rejected || [],
+    diagnostic:{ selectedAffordance:`check:${pending.ability}:${pending.skill}`, candidateAffordances:[{ id:`check:${pending.ability}:${pending.skill}`, kind:"ability-check", target:pending.skill, failedPrerequisites:[] }], rejectedAlternatives:[] },
+  };
 }
 
 function applyResolvedInventoryChanges(db, player, adventure, action, publicFacts, changes) {
@@ -1035,22 +1449,63 @@ function fallbackCharacterDetail(kind, details) {
 
 function resolveStructuredWorldAction(db, player, adventure, dmState, mode, action) {
   const definition = adventureDefinition(adventure);
-  if (!definition) return false;
+  if (!definition || mode === "ask") return false;
 
   const worldKey = `world:${definition.id}`;
   const savedWorld = getPartyState(db, player.partyId, worldKey);
-  // Saves created before the structured world-state engine already carry their
-  // progress in the legacy clue/interactions state. Let the compatibility
-  // rules finish those sessions instead of treating them as a fresh arrival.
-  const hasLegacyLanternProgress = definition.id === "lantern-below"
-    && !savedWorld
-    && Number(dmState?.clueStage || 0) > 0
-    && !dmState?.currentLocationKey;
-  if (hasLegacyLanternProgress) return false;
+  const authoredLocation = currentAuthoredLocation(adventure, dmState);
   const legacyLocation = definition.locations?.[dmState.currentLocationKey]
     ? dmState.currentLocationKey
-    : definition.startLocation;
-  const world = createInitialWorldState(definition, savedWorld || { currentLocation: legacyLocation });
+    : definition.id === "lantern-below" && Number(dmState?.clueStage || 0) > 0
+      ? "back-room"
+    : definition.locations?.[authoredLocation?.key]
+      ? authoredLocation.key
+      : definition.startLocation;
+  const repairInitialLocation = savedWorld
+    && savedWorld.currentLocation === definition.startLocation
+    && legacyLocation !== definition.startLocation;
+  const worldSeed = savedWorld
+    ? repairInitialLocation
+      ? {
+          ...savedWorld,
+          currentLocation:legacyLocation,
+          previousLocation:savedWorld.currentLocation,
+          visited:[...new Set([...(savedWorld.visited || []), legacyLocation])],
+        }
+      : savedWorld
+    : { currentLocation:legacyLocation };
+  const world = createCanonicalState(definition, worldSeed);
+  if (definition.id === "lantern-below") {
+    const stage = Number(dmState?.clueStage || 0);
+    if (!savedWorld || Number(savedWorld.schemaVersion || 1) < 2 || stage > canonicalStage(definition, world)) {
+      if (stage >= 1) world.flags.letterOpened = true;
+      if (dmState?.miteAwake) world.flags.miteAwake = true;
+      world.discoveries = [...new Set([...(world.discoveries || []), ...(dmState?.storyDiscoveries || [])])];
+    }
+    const cellarHatch = world.objects["cellar-hatch"];
+    const keyedDoor = world.objects["keyed-stone-door"];
+    const spindleDoor = world.objects["spindle-door"];
+    const cellarWasHidden = cellarHatch.discovered === false;
+    if (stage >= 3) cellarHatch.discovered = true;
+    if (stage >= 4 && (!savedWorld || cellarWasHidden)) cellarHatch.open = true;
+    if (stage >= 4 && (!savedWorld || keyedDoor.locked !== false)) Object.assign(keyedDoor, { locked: false, open: true });
+    if (stage >= 7 && spindleDoor.discovered === false) Object.assign(spindleDoor, { discovered: true, open: true });
+  }
+  const interaction = resolveAuthoredInteractionSequence({ definition, state:world, action, mode });
+  if (interaction.handled) {
+    const canonicalSaveIsActive = savedWorld && Number(savedWorld.schemaVersion || 1) >= 2;
+    if (interaction.accepted === false && !canonicalSaveIsActive) return false;
+    if (interaction.repeated && mode === "speak") return false;
+    setPartyState(db, player.partyId, worldKey, interaction.state);
+    setPartyState(db, player.partyId, "dm", { ...dmState, ...canonicalProjection(definition, interaction.state) });
+    if (interaction.accepted && interaction.state.currentLocation !== world.currentLocation) {
+      const location = definition.locations[interaction.state.currentLocation];
+      rememberKnownLocation(db, player.partyId, { name:location.name, summary:location.description || location.summary });
+    }
+    addEvent(db, { partyId:player.partyId, adventureId:adventure.id, visibility:"public", playerId:player.id, kind:"narration", speaker:"Dungeon Master", text:interaction.message });
+    if (interaction.accepted && interaction.state.currentLocation !== world.currentLocation) addLocationEntryBeats(db,player,adventure,definition,interaction.state.currentLocation);
+    return { ...interaction, source:"rules", rule:"authored-interaction", narration:interaction.message };
+  }
   const outcome = resolveWorldAction({
     definition,
     state: world,
@@ -1060,26 +1515,23 @@ function resolveStructuredWorldAction(db, player, adventure, dmState, mode, acti
     mode,
   });
 
-  if (!outcome.handled || outcome.intent === "observe") return false;
+  if (!outcome.handled) return false;
 
+  const enteredLocations=[];
   if (outcome.accepted) {
+    const previousComparable = { ...world, revision:0 };
+    const nextComparable = { ...outcome.state, revision:0 };
+    outcome.state.revision = JSON.stringify(previousComparable) === JSON.stringify(nextComparable)
+      ? Number(world.revision || 0)
+      : Number(world.revision || 0) + 1;
     setPartyState(db, player.partyId, worldKey, outcome.state);
-    let nextDmState = { ...dmState };
+    let nextDmState = { ...dmState, ...canonicalProjection(definition, outcome.state) };
+    setPartyState(db, player.partyId, "dm", nextDmState);
     for (const event of outcome.events || []) {
       if (event.type === "location-entered") {
         const location = definition.locations[event.locationId];
-        nextDmState = {
-          ...nextDmState,
-          currentLocationKey: event.locationId,
-          locationName: location.name,
-          locationNote: location.summary,
-        };
-        if (Number.isFinite(Number(location.stage))) {
-          const stateKey = definition.stateKey || "clueStage";
-          nextDmState[stateKey] = Math.max(Number(nextDmState[stateKey] || 0), Number(location.stage));
-        }
-        setPartyState(db, player.partyId, "dm", nextDmState);
-        rememberKnownLocation(db, player.partyId, { name: location.name, summary: location.summary });
+        rememberKnownLocation(db, player.partyId, { name: location.name, summary: location.description || location.summary });
+        enteredLocations.push(event.locationId);
       }
       if (event.type === "item-acquired") {
         const item = definition.items[event.itemId];
@@ -1104,7 +1556,8 @@ function resolveStructuredWorldAction(db, player, adventure, dmState, mode, acti
     speaker: "Dungeon Master",
     text: outcome.message,
   });
-  return true;
+  for (const locationId of enteredLocations) addLocationEntryBeats(db,player,adventure,definition,locationId);
+  return outcome;
 }
 
 export async function resolveAction(db, player, mode, action) {
@@ -1132,71 +1585,127 @@ export async function resolveAction(db, player, mode, action) {
   const playerSafeHistory = recentHistory.filter((event) => event.visibility === "public" || (event.visibility === "player" && event.playerId === player.id)).slice(-16);
   const preparedContext = prepareCampaignContext(adventure, dmState, action);
   const combatResult = handleCombatAction(db, player, mode, action);
-  if (combatResult) return combatResult;
-  if (resolveLocationQuestion(db,player,adventure,dmState,mode,action)) return {source:"rules"};
-  if (resolveRepeatedPickup(db,player,mode,action,recentHistory)) return {source:"rules"};
-  if (resolveUnsupportedConjuration(db, player, mode, action)) return { source:"rules" };
-  if (resolveLanternArrivalAction(db,player,adventure,dmState,mode,action,preparedContext)) return {source:"rules"};
-  if (resolveStructuredWorldAction(db, player, adventure, dmState, mode, action)) return { source: "rules" };
+  if (combatResult) return { ...combatResult, rule:"combat-action" };
+  if (resolveLocationQuestion(db,player,adventure,dmState,mode,action)) return {source:"rules",rule:"location-question"};
+  if (resolveVisibleNpcQuestion(db,player,adventure,dmState,mode,action)) return {source:"rules",rule:"visible-npc-question"};
+  if (resolveRepeatedPickup(db,player,mode,action,recentHistory)) return {source:"rules",rule:"repeated-pickup"};
+  if (resolveUnsupportedConjuration(db, player, mode, action)) return { source:"rules",rule:"unsupported-conjuration" };
+  const preStructuredState = getPartyState(db, player.partyId, "dm") || dmState;
+  const definition = adventureDefinition(adventure);
+  const savedCanonicalWorld = definition ? getPartyState(db,player.partyId,`world:${definition.id}`) : null;
+  const canonicalSaveIsActive = Boolean(savedCanonicalWorld && Number(savedCanonicalWorld.schemaVersion || 1) >= 2);
+  // Temporary, isolated legacy adapters run first only while no schema-v2
+  // canonical save exists. Once created, the authored graph owns movement.
+  if (!canonicalSaveIsActive) {
+    if (resolveLanternBoundaryAction(db, player, adventure, preStructuredState, mode, action, recentHistory)) return { source:"rules",rule:"lantern-boundary" };
+    if (resolveKeyedDoorInteraction(db, player, adventure, mode, action, recentHistory)) return { source:"rules",rule:"keyed-door-interaction" };
+  }
+  const structuredWorldResult = resolveStructuredWorldAction(db, player, adventure, dmState, mode, action);
+  if (structuredWorldResult) return { source:"rules", rule:structuredWorldResult.rule || "structured-world-action", accepted:structuredWorldResult.accepted, reason:structuredWorldResult.reason, diagnostic:structuredWorldResult.diagnostic, publicFacts:structuredWorldResult.publicFacts || (structuredWorldResult.message ? [structuredWorldResult.message] : []), narration:structuredWorldResult.narration || structuredWorldResult.message || "" };
+  // Legacy arrival handling is permitted only before a schema-v2 canonical
+  // save exists. It must never narrate a transition beside canonical state.
+  if (!canonicalSaveIsActive
+    && resolveLanternArrivalAction(db,player,adventure,dmState,mode,action,preparedContext)) return {source:"rules",rule:"lantern-arrival"};
+  if (!canonicalSaveIsActive
+    && resolveLanternTamsinConversation(db, player, adventure, getPartyState(db, player.partyId, "dm") || dmState, mode, action)) return { source:"rules",rule:"lantern-tamsin-conversation" };
+  const npcConversation=await resolveNpcConversation(db,player,adventure,getPartyState(db,player.partyId,"dm") || dmState,mode,action);
+  if (npcConversation) return npcConversation;
+  if (mode === "speak") {
+    const text=`${player.name} says this aloud. The words do not perform a physical action, and the established scene remains unchanged. Use Act if ${player.name} intends to do it.`;
+    addEvent(db,{partyId:player.partyId,adventureId:adventure?.id,visibility:"public",playerId:player.id,kind:"narration",speaker:"Dungeon Master",text});
+    setPlayerGuidance(db,player.id,player.partyId,[]);
+    return {source:"rules",rule:"state-neutral-speech",accepted:true,publicFacts:[text],narration:text};
+  }
   const roomState = getPartyState(db, player.partyId, "dm") || dmState;
-  if (resolveLanternBoundaryAction(db, player, adventure, roomState, mode, action, recentHistory)) return { source:"rules" };
-  if (resolveAuthoredRoomMovement(db,player,adventure,roomState,mode,action)) return {source:"rules"};
-  if (resolveOutOfRoomFeatureAction(db,player,adventure,roomState,mode,action)) return {source:"rules"};
-  if (resolveLanternSpeech(db, player, adventure, dmState, mode)) return { source:"rules" };
-  if (resolveLanternSourceSearch(db, player, adventure, dmState, mode, action)) return { source:"rules" };
-  if (resolveKeyedDoorInteraction(db, player, adventure, mode, action, recentHistory)) return { source:"rules" };
-  if (resolvePersistentContainerInteraction(db, player, adventure, mode, action, recentHistory)) return { source:"rules" };
-  if (offerLanternRescueCheck(db, player, adventure, dmState, mode, action)) return { source:"rules" };
-  if (offerLanternSafetyCheck(db, player, adventure, dmState, mode, action)) return { source:"rules" };
-  if (offerLanternChamberCheck(db, player, adventure, dmState, mode, action, preparedContext)) return { source:"rules" };
-  if (offerGeneralAbilityCheck(db, player, mode, action)) return { source:"rules" };
-  if (mode === "ask") return resolveDmQuestion(db, player, action, preparedContext, playerSafeHistory);
-  if (resolveAuthoritativeClueAction(db, player, adventure, dmState, action, preparedContext)) return { source: "rules" };
-  if (resolveBriarwatchClueAction(db, player, adventure, dmState, action, preparedContext)) return { source:"rules" };
+  if (!canonicalSaveIsActive && resolveAuthoredRoomMovement(db,player,adventure,roomState,mode,action)) return {source:"rules",rule:"authored-room-movement"};
+  if (!canonicalSaveIsActive && resolveOutOfRoomFeatureAction(db,player,adventure,roomState,mode,action)) return {source:"rules",rule:"out-of-room-feature"};
+  if (resolveLanternSpeech(db, player, adventure, dmState, mode)) return { source:"rules",rule:"lantern-speech" };
+  if (!canonicalSaveIsActive && resolvePersistentContainerInteraction(db, player, adventure, mode, action, recentHistory)) return { source:"rules",rule:"persistent-container-interaction" };
+  if (!canonicalSaveIsActive && offerLanternRescueCheck(db, player, adventure, dmState, mode, action)) return { source:"rules",rule:"lantern-rescue-check" };
+  if (!canonicalSaveIsActive && offerLanternSafetyCheck(db, player, adventure, dmState, mode, action)) return { source:"rules",rule:"lantern-safety-check" };
+  if (!canonicalSaveIsActive && offerLanternChamberCheck(db, player, adventure, dmState, mode, action, preparedContext)) return { source:"rules",rule:"lantern-chamber-check" };
+  if (offerGeneralAbilityCheck(db, player, mode === "ask" ? "act" : mode, action)) return { source:"rules",rule:"general-ability-check" };
+  if (mode === "ask") return { ...(await resolveDmQuestion(db, player, action, preparedContext, playerSafeHistory)), rule:"dm-question" };
+  if (!canonicalSaveIsActive && resolveAuthoritativeClueAction(db, player, adventure, dmState, action, preparedContext)) return { source: "rules",rule:"authoritative-clue" };
+  if (!canonicalSaveIsActive && resolveBriarwatchClueAction(db, player, adventure, dmState, action, preparedContext)) return { source:"rules",rule:"briarwatch-clue" };
+  const unresolvedMovement = unresolvedAuthoredMovementResult(player.name, adventure, getPartyState(db, player.partyId, "dm") || dmState, mode, action);
+  if (unresolvedMovement) {
+    addEvent(db, { partyId:player.partyId, adventureId:adventure?.id, visibility:"public", playerId:player.id, kind:"narration", speaker:"Dungeon Master", text:unresolvedMovement });
+    addEvent(db, { partyId:player.partyId, adventureId:adventure?.id, visibility:"dm", kind:"system", speaker:"DM Ledger", text:`Rejected unresolved movement at the authoritative location; no model-authored destination or state transition was accepted.` });
+    setPlayerGuidance(db, player.id, player.partyId, []);
+    return { source:"rules",rule:"unresolved-authored-movement",accepted:false,reason:"unresolved-movement" };
+  }
   if (!(await isOllamaReady())) return demoResolution(db, player, mode, action, dmState);
 
   try {
-    const roomAuthority = authoredRouteContext(adventure?.id, getPartyState(db, player.partyId, "dm") || dmState);
+    const definition = adventureDefinition(adventure);
+    const activeDmState = getPartyState(db, player.partyId, "dm") || dmState;
+    const activeWorldState = definition ? getPartyState(db, player.partyId, `world:${definition.id}`) || {} : {};
+    const roomAuthority = authoredRouteContext(adventure?.id, activeDmState, activeWorldState);
+    const storyAuthority = definition ? buildStoryAuthority(definition, {
+      dmState:activeDmState,
+      worldState:activeWorldState,
+    }) : null;
     const roomGuardrail = roomAuthority
       ? `AUTHORITATIVE ROOM STATE: ${JSON.stringify(roomAuthority)}. This is physical ground truth. Keep every character in currentLocation until an explicit movement action uses one of its exits. Only currentFeatures are present or reachable. Other authored rooms and their contents do not exist in the current scene yet. Never move, inspect, use, reveal, hear through, or illustrate a feature belonging to another room. If a requested destination or feature is not currently reachable, say which visible exit or transition must be used first.`
       : "No authored room graph exists for this adventure. Preserve the latest established location in recentHistory and never invent a transition merely to continue movement.";
-    const director = await ollamaChat([
+    const directorPrompt = await promptChat({ kind:"action-director", messages:[
       { role:"system", content:roomGuardrail },
       { role:"system", content:"Literal action semantics are mandatory in every adventure: finding or searching for an item only locates it. It does not pick up, apply, activate, consume, combine, or use it. Examining something does not operate it. Only perform those additional verbs when the player's newest action explicitly includes them." },
       { role:"system", content:"Complete every explicitly requested routine verb in the same response. In particular, 'unlock and open', 'open with the key', or equivalent wording leaves the object unlocked and fully open unless an already-established obstacle prevents it. Never split one routine compound action across duplicate turns." },
       { role:"system", content:"Audience tags in recentHistory are authoritative. Speech recorded as 'says quietly to the party' is private in-character conversation among the player characters: NPCs and creatures did not hear it, must not react to it, and must not learn its contents unless a character later repeats it aloud. Never impersonate or answer for another player character." },
       { role:"system", content:"Cotton, formally Sir Cotton Woltanade Floof the 67th, is the party's miserable Ragdoll-cat companion and a god in cat form. He is immortal and automatically evades every attack or harmful effect. A separate companion system controls his restrained cat reactions and combat abilities: never speak for him, choose actions for him, make him solve puzzles, reveal secrets, or use him to advance exploration." },
-      { role: "system", content: "You are the hidden Dungeon Master for a revised 2024 D&D campaign. Resolve the newest action using recent history and the secret adventure bible; continuity and discovery pacing are mandatory. Everything in the adventure bible is hidden by default. Treat clueChain as an ordered progression and obey revelationGates exactly. Reveal a clue only after its prerequisite action has actually occurred in recentHistory; never dump later clues merely because you know them. The supplied current campaign context is authoritative when recent narration contradicts it; do not preserve an invented object, route, location, or threat merely because a previous model mentioned it. Respect the literal scope of the player's verb: inspect/examine/look does not open, break, activate, consume, enter, or move an object unless explicitly stated. If wording is ambiguous, choose the least invasive reasonable interpretation and leave the consequential choice to the player. Be concrete, causal, and fair within that scope. Do not invent an NPC, creature, threat, trap, object, rule, motive, or complication unless it is present in the adventure bible or already established by the authoritative campaign context. Atmospheric sensory detail is allowed only when it does not introduce a new fact or obstacle. A movement action must do exactly one of three things: arrive at one established location and set locationName, stop at an already-established physical obstruction, or plainly state that no farther route is currently accessible. Never respond to movement merely by saying the character goes deeper while a sound, smell, darkness, pressure, or danger grows stronger ahead. If the player asks a direct factual question about something they can currently read, see, or have already uncovered, answer directly—never replace an available answer with 'cryptic', 'vague', or 'mysterious'. If the information is still sealed, hidden, or gated, state the observable obstruction rather than revealing it. Resolve routine unopposed actions decisively. Require a check only when failure is plausible and interesting; put the exact ability or skill and DC in requiredCheck and the stakes in checkReason, otherwise use empty strings. When a check is required, do not decide success before a roll appears in history. publicFacts must contain 1–3 specific player-perceivable facts, normally revealing no more than one new clue stage per action. inventoryChanges records only completed physical transfers explicitly requested in the newest action and confirmed by publicFacts: add an item actually picked up, received, or collected; remove one actually dropped, given away, discarded, lost, or destroyed. Merely inspecting, touching, using, lighting, opening, or noticing an item does not transfer it. Never add scenery automatically. Use an empty array when inventory did not change. Do not repeat previous narration. privateFact is only for a useful perception unique to the acting character, otherwise empty; it must not restate publicFacts or bypass a revelation gate. hiddenNote is the sealed continuity ledger. Set adventureComplete only when the central conflict truly ends. locationName and locationNote are only for a distinct place the party enters or clearly learns about. Never leak hidden facts into player-facing fields." },
-      { role: "user", content: JSON.stringify({ adventure, party, actingPlayer: player, mode, newestAction: action, recentHistory: directorHistory, availableCampaignContext: preparedContext.state }) },
-    ], directorSchema, { temperature:0.42, numPredict:620 });
-    validateAuthoredDestination(db,player,adventure,{...dmState,clueStage:preparedContext.nextClueStage},director);
+      { role: "system", content: "You are the hidden Dungeon Master for a revised 2024 D&D campaign. Resolve the newest action using recent history and the canonical story authority; continuity and discovery pacing are mandatory. Fixed truths are hidden by default. A relevant clue source is an authored possibility, not permission to reveal its fact automatically: reveal it only when the newest action actually uses one of its listed methods and satisfies the current physical context. Alternative clue sources are equally valid and must converge on the same fixed fact. Apply the authored fail-forward consequence when an attempted discovery fails; never delete or relocate an essential clue. The supplied current campaign context is authoritative when recent narration contradicts it; do not preserve an invented object, route, location, or threat merely because a previous model mentioned it. Respect the literal scope of the player's verb: inspect/examine/look does not open, break, activate, consume, enter, or move an object unless explicitly stated. If wording is ambiguous, choose the least invasive reasonable interpretation and leave the consequential choice to the player. Be concrete, causal, and fair within that scope. Do not invent an NPC, creature, threat, trap, object, rule, motive, or complication outside the story authority. Atmospheric sensory detail is allowed only within its improvisation policy. A movement action must arrive at one established adjacent location explicitly named by the player, stop at an established physical obstruction, or plainly state that no farther route is accessible. If the player asks a direct factual question about something currently visible or already uncovered, answer directly. Resolve routine unopposed actions decisively. Require a check only when failure is plausible and interesting; put an exact request such as 'Wisdom (Perception) DC 12' in requiredCheck and the visible stakes in checkReason, otherwise use empty strings. When a check is required, do not decide success before a roll appears in history. publicFacts must contain 1–3 specific player-perceivable facts and normally reveal no more than one discovery. inventoryChanges records only completed physical transfers explicitly requested in the newest action and confirmed by publicFacts. Merely inspecting, touching, using, lighting, opening, or noticing an item does not transfer it. Never add scenery automatically. Use an empty array when inventory did not change. Do not repeat previous narration. privateFact must be empty; private discoveries require a deterministic rule. hiddenNote may record continuity but cannot change state. dangerChange must be 0 and adventureComplete must be false; only the rules engine advances clocks or completes an adventure. locationName and locationNote are only for a destination explicitly named by the player. Never leak hidden facts into player-facing fields." },
+      { role:"user", content:JSON.stringify({ adventure:{ id:adventure?.id, title:adventure?.title, synopsis:adventure?.synopsis }, canonicalStoryAuthority:storyAuthority }) },
+      { role:"user", content:JSON.stringify({ availableCampaignContext:preparedContext.state }) },
+      { role:"user", content:JSON.stringify({ party, actingPlayer:player, mode, newestAction:action }) },
+      { role:"user", content:JSON.stringify({ recentHistory:directorHistory }) },
+    ], schema:directorSchema, generation:{ temperature:0.42, numPredict:620 }, sectionIds:["room-authority","literal-action-semantics","compound-action-semantics","audience-boundary","cotton-boundary","engine-contract","canonical-story-authority","campaign-authority","acting-character-and-action","recent-visible-history"], sectionVisibility:["secret","secret","secret","secret","secret","secret","secret","secret","private","private"], optionalSections:[9], metadata:{ partyId:player.partyId, playerId:player.id, adventureId:adventure?.id } });
+    const rawDirector = directorPrompt.output;
+    const sanitized = sanitizeDirectorConsequences(rawDirector, action);
+    const director = sanitized.director;
+    validateAuthoredDestination(db,player,adventure,{...dmState,clueStage:preparedContext.nextClueStage},director,action);
+    if (sanitized.rejected.length) addEvent(db, { partyId:player.partyId, adventureId:adventure?.id, visibility:"dm", kind:"system", speaker:"DM Ledger", text:`Rejected AI consequences: ${sanitized.rejected.join(", ")}.` });
+    if (director.requiredCheck) {
+      const pending = directorCheckRequest(player, action, director);
+      if (pending) {
+        if (director.hiddenNote) addEvent(db, { partyId:player.partyId, adventureId:adventure?.id, visibility:"dm", kind:"system", speaker:"DM Ledger", text:director.hiddenNote });
+        queueAbilityCheck(db, player, pending);
+        return { source:"ollama", rule:"validated-model-check", publicFacts:director.publicFacts, promptPacketIds:[directorPrompt.packetId], rejectedProposals:sanitized.rejected };
+      }
+      addEvent(db, { partyId:player.partyId, adventureId:adventure?.id, visibility:"dm", kind:"system", speaker:"DM Ledger", text:`Rejected malformed or unsupported AI check request: ${director.requiredCheck}.` });
+      director.requiredCheck="";
+      director.checkReason="";
+      director.publicFacts=["The proposed check was not valid enough to resolve, so the established scene remains unchanged."];
+    }
 
     const guidanceMode = getGuidanceMode(db, player.partyId);
     const requestGuidance = guidanceMode === "guided" || (guidanceMode === "standard" && appearsStalled(recentHistory));
-    const narrator = await ollamaChat([
+    const narratorPrompt = await promptChat({ kind:"action-narrator", messages:[
       { role:"system", content:roomGuardrail },
       { role: "system", content: "You narrate a tabletop fantasy adventure aloud using only player-safe information. Write 2–4 clear sentences, usually 45–95 words. The first sentence must directly state the result of the newest action within its exact scope. Include concrete sensory details or wording supplied in the facts, but reveal no more than the facts contain and never infer the next clue. Inspecting a closed object keeps it closed; noticing an entrance does not enter it. Do not repeat recent descriptions. Never use atmosphere as a substitute for information, and never call currently readable words merely cryptic or vague. If requiredCheck is nonempty, ask for that exact check and explain its stakes without narrating the result. Otherwise resolve routine actions decisively. End at the immediate choice created by this result, not at a later discovery. Never invent hidden motives, routes, identities, traps, or outcomes beyond the supplied facts. When requestGuidance is true, provide 2 or 3 optional suggestions based exclusively on visible facts and the character profile. Suggestions may propose a sensible check, direct examination, conversation, movement, item use, or class skill, but must never imply which choice is correct or reveal that a hidden thing exists. Each suggestion needs a short label, text ready to place in the player's input, the appropriate act/speak/ask mode, and a plain reason. When requestGuidance is false, suggestions must be an empty array. Do not mention being an AI." },
-      { role: "user", content: JSON.stringify({ adventureTitle: adventure?.title, playerName: player.name, character:{className:player.className,level:player.level,abilities:player.abilities,skills:player.skills,spellcasting:player.spellcasting,inventory:player.inventory.map((item)=>({name:item.name,quantity:item.quantity,status:item.status}))}, newestAction: action, recentVisibleHistory: playerSafeHistory, perceivableFacts: director.publicFacts, requiredCheck:director.requiredCheck, checkReason:director.checkReason, requestGuidance }) },
-    ], narrationSchema, { temperature:0.58, numPredict:360 });
+      { role:"user", content:JSON.stringify({ adventureTitle:adventure?.title, playerName:player.name, character:{className:player.className,level:player.level,abilities:player.abilities,skills:player.skills,spellcasting:player.spellcasting,inventory:player.inventory.map((item)=>({name:item.name,quantity:item.quantity,status:item.status}))}, newestAction:action, perceivableFacts:director.publicFacts, requiredCheck:director.requiredCheck, checkReason:director.checkReason, requestGuidance }) },
+      { role:"system", content:narrationStylePrompt("hearthbound") },
+      { role:"user", content:JSON.stringify({ recentVisibleHistory:playerSafeHistory }) },
+    ], schema:narrationSchema, generation:{ temperature:0.58, numPredict:360 }, sectionIds:["room-authority","narration-contract","validated-player-safe-context","narration-style","recent-visible-history"], sectionVisibility:["secret","secret","private","secret","private"], optionalSections:[3,4], metadata:{ partyId:player.partyId, playerId:player.id, adventureId:adventure?.id } });
 
-    const concreteNarration = ensureCompleteContainerResult(player.name,action,ensureConcreteMovementResult(player.name, action, director, narrator.narration));
-    addEvent(db, { partyId: player.partyId, visibility: "public", kind: "narration", speaker: "Dungeon Master", text: concreteNarration });
+    const narrator = narratorPrompt.output;
+    const validatedNarration = safeNarrationText(narrator.narration, director.publicFacts);
+    const concreteNarration = ensureCompleteContainerResult(player.name,action,ensureConcreteMovementResult(player.name, action, director, validatedNarration));
+    addEvent(db, { partyId: player.partyId, visibility: "public", kind: "narration", speaker: "Dungeon Master", text: concreteNarration, payload:{ authoritativeFacts:director.publicFacts } });
     if(String(adventure?.id || "").endsWith("ashes-briarwatch")) setPlayerGuidance(db,player.id,player.partyId,ASHES_GUIDANCE[Math.max(0,Math.min(6,Number(preparedContext.nextClueStage || 0)))] || []);
     else setPlayerGuidance(db, player.id, player.partyId, requestGuidance ? safeNarratorSuggestions(narrator.suggestions) : []);
-    const privateFact = String(adventure?.id || "").endsWith("lantern-below") ? "" : director.privateFact;
-    if (privateFact) addEvent(db, { partyId: player.partyId, visibility: "player", playerId: player.id, kind: "narration", speaker: "Dungeon Master", text: privateFact });
     if (director.hiddenNote) addEvent(db, { partyId: player.partyId, visibility: "dm", kind: "system", speaker: "DM Ledger", text: director.hiddenNote });
     const explicitInventoryChange = applyExplicitInventoryLanguage(db, player, adventure, action, recentHistory, director.publicFacts);
     if (!explicitInventoryChange) applyResolvedInventoryChanges(db, player, adventure, action, director.publicFacts, director.inventoryChanges);
     recordContainerInteraction(db,player,adventure,action,concreteNarration);
     if (director.locationName) rememberKnownLocation(db, player.partyId, { name: director.locationName, summary: director.locationNote });
     const latestState=getPartyState(db,player.partyId,"dm") || dmState;
-    setPartyState(db, player.partyId, "dm", { ...latestState, lanternArrivalStage:Math.max(lanternArrivalStage(latestState),Number(preparedContext.nextLanternArrivalStage ?? lanternArrivalStage(latestState))), clueStage:Math.max(Number(latestState.clueStage||0),Number(preparedContext.nextClueStage||0)), dangerClock: Math.max(0, Number(latestState.dangerClock || 0) + director.dangerChange) });
-    if (director.adventureComplete) completeActiveAdventure(db, player.partyId);
-    return { source: "ollama" };
+    setPartyState(db, player.partyId, "dm", { ...latestState, lanternArrivalStage:Math.max(lanternArrivalStage(latestState),Number(preparedContext.nextLanternArrivalStage ?? lanternArrivalStage(latestState))), clueStage:Math.max(Number(latestState.clueStage||0),Number(preparedContext.nextClueStage||0)) });
+    return { source: "ollama", rule:"validated-model-director", publicFacts:director.publicFacts, narration:concreteNarration, promptPacketIds:[directorPrompt.packetId,narratorPrompt.packetId], rejectedProposals:sanitized.rejected };
   } catch (error) {
     console.warn("Local AI resolution failed; using demo DM:", error.message);
-    return demoResolution(db, player, mode, action, dmState);
+    return { ...demoResolution(db, player, mode, action, dmState), rule:"demo-fallback" };
   }
 }
 
@@ -1224,4 +1733,4 @@ function demoResolution(db, player, mode, action, dmState) {
   return { source: "demo" };
 }
 
-export const dmModel = MODEL;
+export const currentDmModelProfile = currentModelProfile;

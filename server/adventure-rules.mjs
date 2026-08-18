@@ -1,4 +1,5 @@
 import { lanternBelowAdventure } from "./adventures/lantern-below.mjs";
+import { visibleLocationFeatures } from "./world-state.mjs";
 
 const legacyLanternLocations = [
   { key:"outside-inn", names:["outside the crooked lantern"], minimumStage:0, minimumArrivalStage:0, x:45, y:115, w:230, h:130, label:"Outside the Crooked Lantern", mapLabel:"Inn frontage", kind:"road", connectsTo:["inn"], features:["inn sign","front door","taproom windows"] },
@@ -102,7 +103,7 @@ export function locationTransitionIsAllowed(adventureId, state, currentNameOrKey
   return current.connectsTo.includes(target.key) || target.connectsTo.includes(current.key);
 }
 
-export function authoredRouteContext(adventureId, state) {
+export function authoredRouteContext(adventureId, state, worldState = null) {
   const rules=adventureRules(adventureId);
   if (!rules.locations.length) return null;
   const stage=Number(state?.[rules.stateKey] || 0);
@@ -112,10 +113,13 @@ export function authoredRouteContext(adventureId, state) {
   const connectedKeys=(room)=>rules.locations
     .filter((item)=>revealedKeys.has(item.key) && (room.connectsTo.includes(item.key) || item.connectsTo.includes(room.key)))
     .map((item)=>item.key);
+  const presentedFeatures=(room)=>worldState && String(adventureId || "").endsWith("lantern-below")
+    ? visibleLocationFeatures(lanternBelowAdventure, worldState, room.key).map((feature)=>feature.label)
+    : room.features || [];
   return {
     instruction:"The currentLocation and room contents are authoritative. Only describe features listed in the current room. A character may enter only a revealed location directly connected to it, and crossing a doorway must be an explicit movement action.",
-    currentLocation:current ? { key:current.key, name:current.label, features:current.features || [], exits:connectedKeys(current) } : null,
-    revealedLocations:revealed.map((item)=>({ key:item.key, name:item.label, connectsTo:connectedKeys(item), features:item.features || [] })),
+    currentLocation:current ? { key:current.key, name:current.label, features:presentedFeatures(current), exits:connectedKeys(current) } : null,
+    revealedLocations:revealed.map((item)=>({ key:item.key, name:item.label, connectsTo:connectedKeys(item), features:presentedFeatures(item) })),
     nextLocation:rules.locations.find((item)=>Number(item.minimumStage || 0)===stage+1)?.label || "",
   };
 }
