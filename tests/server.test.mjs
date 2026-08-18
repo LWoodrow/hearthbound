@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { addEvent, addInventoryItem, advancePartySpotlight, buildLobby, completeActiveAdventure, createDatabase, createParty, createPlayer, createWorld, deletePlayer, getGuidanceMode, getKnownLocations, getLevelUpOptions, getPartySpotlight, getPartyState, getPlayer, getPlayerGuidance, levelUpPlayer, listInventory, listRecentEventsForDm, listVisibleEvents, movePlayerToParty, rememberKnownLocation, removeInventoryItem, resetPartyStory, selectAdventure, setGuidanceMode, setPartyState, setPlayerHp } from "../server/database.mjs";
-import { ensureCompleteContainerResult, ensureConcreteMovementResult, prepareCampaignContext, resolveAction, resolvePendingCheck } from "../server/dm.mjs";
+import { directorCheckRequest, ensureCompleteContainerResult, ensureConcreteMovementResult, prepareCampaignContext, resolveAction, resolvePendingCheck, safeNarrationText, sanitizeDirectorConsequences, unresolvedAuthoredMovementResult } from "../server/dm.mjs";
 import { applyAdventureEvent, enrichKnownLocations, locationIsRevealed, locationTransitionIsAllowed } from "../server/adventure-rules.mjs";
 import { actionUsesSpotlight, canSubmitOutsideCombat, normalizeSpeechAudience } from "../server/spotlight.mjs";
 import { COTTON_FULL_NAME, COTTON_ID, cottonForParty, isCottonInteraction } from "../server/cotton.mjs";
@@ -47,6 +47,76 @@ test("adventure events advance monotonically and unknown adventures keep generic
   ]);
   assert.equal(generic.length,2);
   assert.deepEqual(generic[1].map.connectsTo,["one"]);
+});
+
+test("AI consequence sanitization keeps story authority outside the prose model", () => {
+  const raw={
+    publicFacts:["  A brass token lies on the desk.  ","The room is unchanged.","A third fact.","A fourth fact must be discarded."],
+    privateFact:"The acting player secretly learns the final culprit.",
+    hiddenNote:"  Preserve only this private ledger note.  ",
+    dangerChange:99,
+    adventureComplete:true,
+    locationName:"Invented Moon Vault",
+    locationNote:"A place invented by the model.",
+    requiredCheck:"Wisdom (Perception) DC 12",
+    checkReason:"Notice a visible detail before acting.",
+    inventoryChanges:[
+      {operation:"add",itemName:"Brass token",quantity:999,status:"stored",note:"Found on the desk."},
+      {operation:"add",itemName:"Secret crown",quantity:1,status:"equipped",note:"Not requested."},
+      {operation:"add",itemName:"Cotton",quantity:1,status:"carried",note:"Never an item."},
+      {operation:"add",itemName:"Brass token",quantity:1,status:"carried",note:"Duplicate."},
+    ],
+  };
+  const result=sanitizeDirectorConsequences(raw,"take the brass token");
+  assert.deepEqual(result.director.publicFacts,["A brass token lies on the desk.","The room is unchanged.","A third fact."]);
+  assert.equal(result.director.privateFact,"");
+  assert.equal(result.director.hiddenNote,"Preserve only this private ledger note.");
+  assert.equal(result.director.dangerChange,0);
+  assert.equal(result.director.adventureComplete,false);
+  assert.equal(result.director.locationName,"");
+  assert.deepEqual(result.director.inventoryChanges,[{operation:"add",itemName:"Brass token",quantity:1,status:"carried",note:"Found on the desk."}]);
+  assert.ok(result.rejected.includes("model-authored danger change"));
+  assert.ok(result.rejected.includes("model-authored adventure completion"));
+  assert.ok(result.rejected.includes("model-authored private revelation"));
+  assert.ok(result.rejected.includes("model-authored unnamed location"));
+});
+
+test("structured guidance can never leak into player narration", () => {
+  const leaked = 'The purses are visible. Guidance":[{"label":"Steal one","text":"Take it","type":"act"}] }';
+  assert.equal(safeNarrationText(leaked, ["No unattended portable item is established here."]), "No unattended portable item is established here.");
+  assert.equal(safeNarrationText("The door remains closed.", []), "The door remains closed.");
+});
+
+test("AI inventory quantities cannot exceed the amount explicitly requested", () => {
+  const base={publicFacts:["Three silver arrows are transferred to Dad."],privateFact:"",hiddenNote:"",dangerChange:0,adventureComplete:false,locationName:"",locationNote:"",requiredCheck:"",checkReason:"",inventoryChanges:[{operation:"add",itemName:"Silver arrows",quantity:50,status:"stored",note:"Recovered."}]};
+  assert.equal(sanitizeDirectorConsequences(base,"take 3 silver arrows").director.inventoryChanges[0].quantity,3);
+  assert.equal(sanitizeDirectorConsequences(base,"take one silver arrow").director.inventoryChanges[0].quantity,1);
+  assert.deepEqual(sanitizeDirectorConsequences(base,"inspect the three silver arrows").director.inventoryChanges,[]);
+  assert.deepEqual(sanitizeDirectorConsequences(base,"take the gold coins").director.inventoryChanges,[]);
+});
+
+test("AI-requested checks require a bounded DC and a valid ability-skill pairing", () => {
+  const player={name:"Dad",level:5,abilities:{wisdom:14,intelligence:10},skills:["Perception"]};
+  const valid=directorCheckRequest(player,"listen at the door",{requiredCheck:"Wisdom (Perception) DC 14",checkReason:"Hear movement on the other side."});
+  assert.deepEqual({ability:valid.ability,skill:valid.skill,modifier:valid.modifier,dc:valid.dc},{ability:"Wisdom",skill:"Perception",modifier:5,dc:14});
+  assert.equal(directorCheckRequest(player,"listen",{requiredCheck:"Intelligence (Perception) DC 14",checkReason:"Wrong ability."}),null);
+  assert.equal(directorCheckRequest(player,"listen",{requiredCheck:"Wisdom (Forbidden Lore) DC 14",checkReason:"Unknown skill."}),null);
+  assert.equal(directorCheckRequest(player,"listen",{requiredCheck:"Wisdom (Perception) DC 40",checkReason:"Unbounded DC."}),null);
+  assert.equal(directorCheckRequest(player,"listen",{requiredCheck:"Wisdom (Perception) DC 14",checkReason:""}),null);
+  assert.equal(directorCheckRequest(player,"listen",{requiredCheck:"make some kind of check",checkReason:"Vague."}),null);
+});
+
+test("resolved rolls cannot request another roll or add failed-check consequences", () => {
+  const raw={publicFacts:["The attempt fails."],privateFact:"A secret appears.",hiddenNote:"",dangerChange:2,adventureComplete:true,locationName:"New Chamber",locationNote:"Invented",requiredCheck:"Strength (Athletics) DC 12",checkReason:"Try again.",inventoryChanges:[{operation:"add",itemName:"Gem",quantity:1,status:"carried",note:"Invented"}]};
+  const result=sanitizeDirectorConsequences(raw,"take the gem",{checkResolved:true,allowInventory:false,allowLocation:false,authoritativeFact:"Dad fails to move the obstacle; it remains in place."});
+  assert.equal(result.director.requiredCheck,"");
+  assert.equal(result.director.checkReason,"");
+  assert.equal(result.director.locationName,"");
+  assert.deepEqual(result.director.inventoryChanges,[]);
+  assert.deepEqual(result.director.publicFacts,["Dad fails to move the obstacle; it remains in place."]);
+  assert.ok(result.rejected.includes("repeat check after resolved roll"));
+  assert.ok(result.rejected.includes("location change without successful movement"));
+  assert.ok(result.rejected.includes("model-authored check outcome replaced by rules result"));
 });
 import { beginCombatPotion, beginCombatSpell, combatView, resetWorkshopCombat, resolveCombatRoll, startWorkshopCombat, workshopOptions } from "../server/combat.mjs";
 
@@ -91,13 +161,13 @@ test("inspecting the sealed letter is resolved by rules without spoilers", async
   try {
     const party = buildLobby(item.db).worlds[0].parties[0];
     const player = createPlayer(item.db, { partyId: party.id, name: "Dad", species: "Human", className: "Fighter" });
-    setPartyState(item.db, party.id, "dm", { ...getPartyState(item.db, party.id, "dm"), lanternArrivalStage:2 });
+    setPartyState(item.db, party.id, "dm", { ...getPartyState(item.db, party.id, "dm"), lanternArrivalStage:2, currentLocationKey:"back-room" });
     const action = "pick up the letter and look at it";
     addEvent(item.db, { partyId: party.id, visibility: "public", playerId: player.id, kind: "action", speaker: player.name, text: `attempts: ${action}` });
     const result = await resolveAction(item.db, player, "act", action);
     const narration = listVisibleEvents(item.db, player).filter((event) => event.kind === "narration").at(-1).text.toLowerCase();
     assert.equal(result.source, "rules");
-    assert.equal(listInventory(item.db, player.id).some((item) => item.name === "Silver-moth letter"), true);
+    assert.equal(listInventory(item.db, player.id).some((item) => item.name === "Silver-moth letter"), false);
     for (const forbidden of ["mara", "ink-mite", "pantry", "cellar", "map", "burn", "bait", "magic", "glow"]) assert.equal(narration.includes(forbidden), false, `inspection leaked ${forbidden}`);
     const torchAction = "hold the letter up to a light source like a torch";
     addEvent(item.db, { partyId: party.id, visibility: "public", playerId: player.id, kind: "action", speaker: player.name, text: `attempts: ${torchAction}` });
@@ -128,6 +198,42 @@ test("finding puzzle supplies does not automatically use them", async () => {
   } finally { item.close(); }
 });
 
+test("warming the silver moth does not spend ink or invent an unstored map route", async () => {
+  const item=fixture();
+  try {
+    const party=buildLobby(item.db).worlds[0].parties[0];
+    const player=createPlayer(item.db,{partyId:party.id,name:"Nigel",species:"Human",className:"Barbarian"});
+    setPartyState(item.db,party.id,"dm",{
+      ...getPartyState(item.db,party.id,"dm"),
+      lanternArrivalStage:2,
+      clueStage:1,
+      currentLocationKey:"back-room",
+    });
+
+    await resolveAction(item.db,player,"act","warm the silver moth on the torch");
+    let state=getPartyState(item.db,party.id,"dm");
+    let narration=listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
+    assert.equal(state.clueStage,1);
+    assert.equal(state.miteAwake,true);
+    assert.match(narration,/uncurls and stirs/i);
+    assert.match(narration,/inkwell remains untouched/i);
+    assert.doesNotMatch(narration,/draws? a route|pantry shelves/i);
+
+    await resolveAction(item.db,player,"act","offer the awakened ink-mite one drop of fresh ink on the paper");
+    state=getPartyState(item.db,party.id,"dm");
+    narration=listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
+    assert.equal(state.clueStage,2);
+    assert.match(narration,/draw/i);
+    assert.match(narration,/pantry shelves/i);
+
+    await resolveAction(item.db,player,"act","investigate the line to the pantry shelves");
+    narration=listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
+    assert.match(narration,/studies the ink-mite's line/i);
+    assert.match(narration,/elsewhere in the inn/i);
+    assert.doesNotMatch(narration,/not present/i);
+    assert.equal(getPartyState(item.db,party.id,"dm").currentLocationKey,"back-room");
+  } finally { item.close(); }
+});
 test("investigating the routed pantry shelves reveals the established cellar door", async () => {
   const item = fixture();
   try {
@@ -476,6 +582,10 @@ test("a fresh Lantern adventure enters the public inn before the private letter 
   try {
     const party=buildLobby(item.db).worlds[0].parties[0];
     const player=createPlayer(item.db,{partyId:party.id,name:"Dad",species:"Human",className:"Fighter"});
+    const opening=listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
+    assert.match(opening,/painted sign|taproom windows/i);
+    assert.doesNotMatch(opening,/private room|letter|ink-mite|pantry|cellar/i);
+
     assert.equal(getPartyState(item.db,party.id,"dm").lanternArrivalStage,0);
     assert.deepEqual(getKnownLocations(item.db,party.id).map((location)=>location.name),["Outside the Crooked Lantern"]);
 
@@ -494,6 +604,419 @@ test("a fresh Lantern adventure enters the public inn before the private letter 
   } finally { item.close(); }
 });
 
+test("canonical state stays aligned across taproom questions and private-room entry", async () => {
+  const item=fixture();
+  try {
+    const party=buildLobby(item.db).worlds[0].parties[0];
+    const player=createPlayer(item.db,{partyId:party.id,name:"Nigel",species:"Human",className:"Fighter"});
+
+    await resolveAction(item.db,player,"act","Look through the taproom windows before going in.");
+    await resolveAction(item.db,player,"act","Enter the Crooked Lantern through the public front door.");
+    await resolveAction(item.db,player,"act","look around what is there?");
+    await resolveAction(item.db,player,"act","is there anything to pickup for my inventory?");
+    let narration=listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
+    assert.match(narration,/no unattended portable item/i);
+    assert.doesNotMatch(narration,/mugs|poker|purses|pouches|guidance\s*"?\s*:/i);
+
+    await resolveAction(item.db,player,"act","move to private room");
+    let world=getPartyState(item.db,party.id,"world:lantern-below");
+    assert.equal(world.currentLocation,"back-room");
+    assert.equal(getPartyState(item.db,party.id,"dm").currentLocationKey,"back-room");
+
+    await resolveAction(item.db,player,"act","inspect the letter");
+    narration=listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
+    assert.match(narration,/seal|silver-moth/i);
+    assert.doesNotMatch(narration,/not present.*taproom/i);
+
+    await resolveAction(item.db,player,"act","where are we?");
+    narration=listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
+    assert.match(narration,/private back room/i);
+    assert.doesNotMatch(narration,/you are in the crooked lantern taproom/i);
+  } finally { item.close(); }
+});
+
+test("reported Tamsin, table, and compound ink-mite sequence stays grounded end to end", async () => {
+  const item=fixture();
+  try {
+    const party=buildLobby(item.db).worlds[0].parties[0];
+    const player=createPlayer(item.db,{partyId:party.id,name:"Nigel",species:"Human",className:"Fighter"});
+    const latestNarration=()=>listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
+
+    await resolveAction(item.db,player,"act","Look through the taproom windows before going in.");
+    await resolveAction(item.db,player,"act","go inside");
+    await resolveAction(item.db,player,"act","what is Tamsin wearing and what colour hair does she have?");
+    assert.match(latestNarration(),/iron-grey hair.*dark green wool waistcoat.*brown apron/i);
+
+    await resolveAction(item.db,player,"speak","Ask the innkeeper whether the company can have a quiet private room.");
+    await resolveAction(item.db,player,"act","inspect the private table");
+    assert.match(latestNarration(),/otherwise bare.*sealed silver-moth letter/i);
+    await resolveAction(item.db,player,"act","what is on the private table?");
+    assert.match(latestNarration(),/sealed silver-moth letter/i);
+
+    const compound=await resolveAction(item.db,player,"act","open the seal warm it give the ink mite ink");
+    assert.equal(compound.rule,"authored-interaction");
+    const world=getPartyState(item.db,party.id,"world:lantern-below");
+    assert.equal(world.flags.letterOpened,true);
+    assert.equal(world.flags.miteAwake,true);
+    assert.equal(world.flags.inkOffered,true);
+    assert.equal(world.flags.mapDrawn,true);
+    assert.match(latestNarration(),/seal breaks.*warmth wakes.*draws a line/is);
+
+    await resolveAction(item.db,player,"act","look at the pantry shelves and the location the path leads");
+    assert.match(latestNarration(),/drawing.*pantry shelves elsewhere.*neither places.*nor moves/i);
+    assert.equal(getPartyState(item.db,party.id,"world:lantern-below").currentLocation,"back-room");
+  } finally { item.close(); }
+});
+
+test("natural privacy requests enter and map the authored private room", async () => {
+  for (const request of [
+    "ask for privacy",
+    "ask Tamsin about a private room or a secluded corner",
+    "we need a quiet corner",
+    "could we have a private room, and could you take us there please?",
+  ]) {
+    const item=fixture();
+    try {
+      const party=buildLobby(item.db).worlds[0].parties[0];
+      const player=createPlayer(item.db,{partyId:party.id,name:"Nigel",species:"Human",className:"Fighter"});
+      await resolveAction(item.db,player,"act","go inside");
+      const result=await resolveAction(item.db,player,"speak",request);
+      assert.equal(result.rule,"authored-interaction",request);
+      assert.equal(getPartyState(item.db,party.id,"world:lantern-below").currentLocation,"back-room",request);
+      assert.deepEqual(getKnownLocations(item.db,party.id).map((location)=>location.name),[
+        "Outside the Crooked Lantern",
+        "The Crooked Lantern Taproom",
+        "Private Back Room",
+      ],request);
+    } finally { item.close(); }
+  }
+});
+
+test("an important NPC initiates once when the party first enters their scene", async () => {
+  const item=fixture();
+  try {
+    const party=buildLobby(item.db).worlds[0].parties[0];
+    const player=createPlayer(item.db,{partyId:party.id,name:"Nigel",species:"Human",className:"Fighter"});
+    await resolveAction(item.db,player,"act","go into the tavern");
+    let welcomes=listVisibleEvents(item.db,player).filter((event)=>event.payload?.entryBeat==="tamsin-welcome");
+    assert.equal(welcomes.length,1);
+    assert.equal(welcomes[0].speaker,"Tamsin Reed");
+    assert.match(welcomes[0].text,/food, drink, or somewhere quiet/i);
+    await resolveAction(item.db,player,"act","go outside");
+    await resolveAction(item.db,player,"act","go back into the tavern");
+    welcomes=listVisibleEvents(item.db,player).filter((event)=>event.payload?.entryBeat==="tamsin-welcome");
+    assert.equal(welcomes.length,1);
+  } finally { item.close(); }
+});
+
+test("ordinary NPC conversation stays in character without changing canonical story state", async () => {
+  const item=fixture();
+  try {
+    const party=buildLobby(item.db).worlds[0].parties[0];
+    const player=createPlayer(item.db,{partyId:party.id,name:"Nigel",species:"Human",className:"Fighter"});
+    await resolveAction(item.db,player,"act","go inside");
+    const before=getPartyState(item.db,party.id,"world:lantern-below");
+    const greeting=await resolveAction(item.db,player,"speak","Hello Tamsin, how are you this evening?");
+    assert.equal(greeting.rule,"npc-conversation");
+    let event=listVisibleEvents(item.db,player).filter((entry)=>entry.kind==="narration").at(-1);
+    assert.equal(event.speaker,"Tamsin Reed");
+    assert.match(event.text,/evening|what can i do|Tamsin/i);
+    const menu=await resolveAction(item.db,player,"speak","What food and drink do you serve?");
+    assert.equal(menu.rule,"npc-conversation");
+    event=listVisibleEvents(item.db,player).filter((entry)=>entry.kind==="narration").at(-1);
+    assert.match(event.text,/stew|bread|beer|cider|roast/i);
+    const service=await resolveAction(item.db,player,"speak","could we get some ales around the bar?");
+    assert.equal(service.rule,"npc-conversation");
+    event=listVisibleEvents(item.db,player).filter((entry)=>entry.kind==="narration").at(-1);
+    assert.equal(event.speaker,"Tamsin Reed");
+    assert.match(event.text,/stew|bread|beer|cider|roast|ale/i);
+    const after=getPartyState(item.db,party.id,"world:lantern-below");
+    assert.deepEqual(after,before);
+    const memory=getPartyState(item.db,party.id,"npcConversation:lantern-below:tamsin-reed");
+    assert.equal(memory.length,3);
+    assert.equal(memory[2].speech,"could we get some ales around the bar?");
+  } finally { item.close(); }
+});
+
+test("human play wording cannot misroute drinks, split story state, or strand the pantry lead", async () => {
+  const item=fixture();
+  try {
+    const party=buildLobby(item.db).worlds[0].parties[0];
+    const player=createPlayer(item.db,{partyId:party.id,name:"Nigel",species:"Human",className:"Fighter"});
+    const latestNarration=()=>listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
+
+    const enter=await resolveAction(item.db,player,"act","walk into the pub");
+    assert.equal(enter.rule,"structured-world-action");
+    assert.equal(getPartyState(item.db,party.id,"world:lantern-below").currentLocation,"inn");
+
+    const drinks=await resolveAction(item.db,player,"speak","thank you we would like some drinks what do you have on offer our purse is tight so anything cheap would be good");
+    assert.equal(drinks.rule,"npc-conversation");
+    assert.equal(getPartyState(item.db,party.id,"world:lantern-below").currentLocation,"inn");
+
+    await resolveAction(item.db,player,"speak","could we have somewhere private to sit please");
+    assert.equal(getPartyState(item.db,party.id,"world:lantern-below").currentLocation,"back-room");
+
+    const spokenOpen=await resolveAction(item.db,player,"speak","open the letter and read it");
+    assert.equal(spokenOpen.rule,"state-neutral-speech");
+    assert.equal(getPartyState(item.db,party.id,"world:lantern-below").flags.letterOpened,false);
+    assert.match(latestNarration(),/words do not perform a physical action/i);
+
+    await resolveAction(item.db,player,"act","open the letter and read it");
+    const compound=await resolveAction(item.db,player,"act","warm the silver moth and give the ink mite ink");
+    assert.equal(compound.rule,"authored-interaction");
+    let world=getPartyState(item.db,party.id,"world:lantern-below");
+    assert.equal(world.flags.miteAwake,true);
+    assert.equal(world.flags.inkOffered,true);
+    assert.equal(world.flags.mapDrawn,true);
+
+    const pantry=await resolveAction(item.db,player,"act","walk to pantry shelves and inspect");
+    assert.equal(pantry.rule,"authored-interaction");
+    world=getPartyState(item.db,party.id,"world:lantern-below");
+    assert.equal(world.currentLocation,"pantry");
+    assert.equal(world.objects["cellar-hatch"].discovered,true);
+    assert.match(latestNarration(),/reaches the pantry|concealed cellar hatch/is);
+  } finally { item.close(); }
+});
+
+test("natural questions about work and trouble reach the sole present important NPC", async () => {
+  const item=fixture();
+  try {
+    const party=buildLobby(item.db).worlds[0].parties[0];
+    const player=createPlayer(item.db,{partyId:party.id,name:"Nigel",species:"Human",className:"Fighter"});
+    await resolveAction(item.db,player,"act","walk into the inn");
+    const before=getPartyState(item.db,party.id,"world:lantern-below");
+    for (const speech of [
+      "we'd like to understand if there's been any problems recently?",
+      "we're looking for work as adventurers",
+      "thank you, any work around these parts?",
+    ]) {
+      const result=await resolveAction(item.db,player,"speak",speech);
+      assert.equal(result.rule,"npc-conversation",speech);
+      const event=listVisibleEvents(item.db,player).filter((entry)=>entry.kind==="narration").at(-1);
+      assert.equal(event.speaker,"Tamsin Reed",speech);
+      assert.match(event.text,/contract|unusual|trouble|quieter/i,speech);
+    }
+    assert.deepEqual(getPartyState(item.db,party.id,"world:lantern-below"),before);
+  } finally { item.close(); }
+});
+
+test("opened letter instructions can be reread and natural warmth advances the canonical mite state", async () => {
+  const item=fixture();
+  try {
+    const party=buildLobby(item.db).worlds[0].parties[0];
+    const player=createPlayer(item.db,{partyId:party.id,name:"Nigel",species:"Human",className:"Fighter"});
+    const latestNarration=()=>listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
+    await resolveAction(item.db,player,"act","walk into the inn");
+    await resolveAction(item.db,player,"act","ask inn keeper for a private room");
+    await resolveAction(item.db,player,"act","open letter");
+
+    const reread=await resolveAction(item.db,player,"act","Carefully read the instructions on the parchment again.");
+    assert.equal(reread.rule,"authored-interaction");
+    assert.match(latestNarration(),/warm my silver moth.*one drop of fresh ink.*follow the line/i);
+
+    const wording=await resolveAction(item.db,player,"act","what do the instructions say?");
+    assert.equal(wording.rule,"authored-interaction");
+    assert.match(latestNarration(),/warm my silver moth.*one drop of fresh ink.*follow the line/i);
+
+    const warm=await resolveAction(item.db,player,"act","warm letter");
+    assert.equal(warm.rule,"authored-interaction");
+    let world=getPartyState(item.db,party.id,"world:lantern-below");
+    assert.equal(world.flags.miteAwake,true);
+    assert.equal(world.flags.mapDrawn,false);
+    assert.match(latestNarration(),/warmth wakes.*ink-mite/i);
+
+    const ink=await resolveAction(item.db,player,"act","apply ink to the ink-mite");
+    assert.equal(ink.rule,"authored-interaction");
+    world=getPartyState(item.db,party.id,"world:lantern-below");
+    assert.equal(world.flags.inkOffered,true);
+    assert.equal(world.flags.mapDrawn,true);
+    assert.match(latestNarration(),/draws a line.*pantry shelves/i);
+  } finally { item.close(); }
+});
+
+test("picked-up letter stays usable in the private room and no longer appears sealed on the table", async () => {
+  const item=fixture();
+  try {
+    const party=buildLobby(item.db).worlds[0].parties[0];
+    const player=createPlayer(item.db,{partyId:party.id,name:"Nigel",species:"Human",className:"Fighter"});
+    const latestNarration=()=>listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
+    await resolveAction(item.db,player,"act","walk into the inn");
+    await resolveAction(item.db,player,"act","could we have somewhere private to sit please");
+
+    const pickup=await resolveAction(item.db,player,"act","pickup letter");
+    assert.equal(pickup.rule,"structured-world-action");
+    assert.match(latestNarration(),/added to the inventory/i);
+
+    await resolveAction(item.db,player,"act","break the seal and read the letter");
+    let world=getPartyState(item.db,party.id,"world:lantern-below");
+    assert.equal(world.currentLocation,"back-room");
+    assert.equal(world.flags.letterOpened,true);
+    assert.equal(world.itemOwners["silver-moth-letter"],player.id);
+
+    const reread=await resolveAction(item.db,player,"act","what do the instructions say?");
+    assert.equal(reread.rule,"authored-interaction");
+    assert.match(latestNarration(),/warm my silver moth.*one drop of fresh ink.*follow the line/i);
+
+    await resolveAction(item.db,player,"act","look around");
+    assert.doesNotMatch(latestNarration(),/sealed silver-moth letter/i);
+    assert.match(latestNarration(),/small private room/i);
+  } finally { item.close(); }
+});
+
+test("repeat NPC questions become conversation instead of replaying a plot transition", async () => {
+  const item=fixture();
+  try {
+    const party=buildLobby(item.db).worlds[0].parties[0];
+    const player=createPlayer(item.db,{partyId:party.id,name:"Nigel",species:"Human",className:"Fighter"});
+    await resolveAction(item.db,player,"act","go inside");
+    await resolveAction(item.db,player,"speak","ask Tamsin about a private room");
+    await resolveAction(item.db,player,"act","return to the taproom");
+    const repeated=await resolveAction(item.db,player,"speak","Tamsin, why do you keep private rooms?");
+    assert.equal(repeated.rule,"npc-conversation");
+    assert.equal(getPartyState(item.db,party.id,"world:lantern-below").currentLocation,"inn");
+  } finally { item.close(); }
+});
+
+test("Tamsin provides a stored alternate route to the pantry lead", async () => {
+  const item=fixture();
+  try {
+    const party=buildLobby(item.db).worlds[0].parties[0];
+    const player=createPlayer(item.db,{partyId:party.id,name:"Dad",species:"Human",className:"Fighter"});
+
+    await resolveAction(item.db,player,"act","enter the inn");
+    await resolveAction(item.db,player,"speak","ask Tamsin whether Mara Vey stayed here or expected visitors");
+    let state=getPartyState(item.db,party.id,"dm");
+    let narration=listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
+    assert.equal(state.clueStage,0);
+    assert.ok(state.storyDiscoveries.includes("mara-stayed-at-inn"));
+    assert.match(narration,/eleven days|private back room/i);
+    assert.doesNotMatch(narration,/cellar|guardian|witness constellation/i);
+
+    await resolveAction(item.db,player,"speak","ask Tamsin for the private back room");
+    await resolveAction(item.db,player,"act","open and read the silver-moth letter");
+    await resolveAction(item.db,player,"act","return to the taproom through the private-room door");
+    await resolveAction(item.db,player,"speak","show Tamsin Mara's signed note and ask what Mara was investigating");
+    state=getPartyState(item.db,party.id,"dm");
+    narration=listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
+    assert.ok(state.storyDiscoveries.includes("pantry-destination"));
+    assert.equal(state.pantryLeadSource,"tamsin");
+    assert.ok(state.storyDiscoveries.includes("pantry-destination"));
+    assert.match(narration,/pantry shelves|draught/i);
+    assert.doesNotMatch(narration,/ink-mite.*draw/i);
+
+    const context=prepareCampaignContext({id:party.activeAdventureId},state,"look around").state.unlockedPlayerFacingContext;
+    assert.match(context.situation,/Tamsin/i);
+    assert.match(context.availableFacts.join(" "),/has not drawn/i);
+  } finally { item.close(); }
+});
+
+test("the Tamsin route can discover the cellar hatch from physical evidence", async () => {
+  const item=fixture();
+  try {
+    const party=buildLobby(item.db).worlds[0].parties[0];
+    const player=createPlayer(item.db,{partyId:party.id,name:"Dad",species:"Human",className:"Rogue"});
+    setPartyState(item.db,party.id,"dm",{
+      ...getPartyState(item.db,party.id,"dm"),
+      lanternArrivalStage:2,
+      clueStage:2,
+      currentLocationKey:"pantry",
+      pantryLeadSource:"tamsin",
+      storyDiscoveries:["pantry-destination:tamsin"],
+    });
+    setPartyState(item.db,party.id,"world:lantern-below",{
+      currentLocation:"pantry",
+      visited:["outside-inn","inn","kitchen","pantry"],
+    });
+
+    await resolveAction(item.db,player,"act","inspect the cold floor-level draught and scrape marks");
+    const state=getPartyState(item.db,party.id,"dm");
+    const world=getPartyState(item.db,party.id,"world:lantern-below");
+    const narration=listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
+    assert.equal(state.clueStage,3);
+    assert.equal(world.objects["cellar-hatch"].discovered,true);
+    assert.match(narration,/scrapes|draught/i);
+    assert.match(narration,/concealed cellar hatch/i);
+    assert.doesNotMatch(narration,/ink-mite's drawn route/i);
+  } finally { item.close(); }
+});
+
+test("taproom observation and stealth entry cannot create a phantom kitchen scene", async () => {
+  const item=fixture();
+  try {
+    const party=buildLobby(item.db).worlds[0].parties[0];
+    const player=createPlayer(item.db,{partyId:party.id,name:"Nigel",species:"Human",className:"Barbarian"});
+
+    await resolveAction(item.db,player,"act","enter the Crooked Lantern through the public front door");
+    assert.equal(getPartyState(item.db,party.id,"dm").currentLocationKey,"inn");
+    await resolveAction(item.db,player,"act","look around for the kitchen door");
+    let narration=listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
+    assert.match(narration,/kitchen door is closed/i);
+    assert.doesNotMatch(narration,/ajar/i);
+
+    await resolveAction(item.db,player,"act","sneak into the kitchen through the staff kitchen door");
+    narration=listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
+    assert.match(narration,/cannot move directly|party remains/i);
+    assert.equal(getPartyState(item.db,party.id,"dm").currentLocationKey,"inn");
+
+    await resolveAction(item.db,player,"act","is there a letter in the room?");
+    narration=listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
+    assert.match(narration,/(?:no letter matching|silver-moth letter is not present).*taproom/i);
+
+    await resolveAction(item.db,player,"act","search the cluttered counter");
+    narration=listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
+    assert.match(narration,/no feature matching/i);
+    assert.doesNotMatch(narration,/silver-moth|sealed letter|lavender/i);
+    assert.equal(getPartyState(item.db,party.id,"dm").currentLocationKey,"inn");
+  } finally { item.close(); }
+});
+
+test("Lantern route guesses stay sealed until discovery reaches structured navigation state", async () => {
+  const item = fixture();
+  try {
+    const party = buildLobby(item.db).worlds[0].parties[0];
+    const player = createPlayer(item.db, { partyId:party.id, name:"Dad", species:"Human", className:"Fighter" });
+    setPartyState(item.db, party.id, "dm", {
+      ...getPartyState(item.db, party.id, "dm"),
+      lanternArrivalStage:2,
+      clueStage:2,
+      currentLocationKey:"pantry",
+    });
+
+    await resolveAction(item.db, player, "act", "open the concealed cellar hatch");
+    assert.equal(getPartyState(item.db, party.id, "dm").clueStage, 2);
+    assert.match(listVisibleEvents(item.db, player).at(-1).text, /no revealed route|no stair or passage is visible/i);
+
+    await resolveAction(item.db, player, "act", "search the pantry shelves where the route ends");
+    assert.equal(getPartyState(item.db, party.id, "dm").clueStage, 3);
+
+    await resolveAction(item.db, player, "act", "open the concealed cellar hatch");
+    const worldState = getPartyState(item.db, party.id, "world:lantern-below");
+    assert.deepEqual(worldState.objects["cellar-hatch"], {
+      discovered:true,
+      locked:false,
+      open:true,
+    });
+    assert.equal(worldState.currentLocation, "pantry");
+
+    await resolveAction(item.db, player, "act", "descend to the cellar");
+    assert.equal(getPartyState(item.db, party.id, "dm").currentLocationKey, "cellar");
+    assert.equal(getPartyState(item.db, party.id, "world:lantern-below").currentLocation, "cellar");
+
+    await resolveAction(item.db, player, "act", "take the cellar key");
+    await resolveAction(item.db, player, "act", "use the cellar key on the stone door");
+    await resolveAction(item.db, player, "act", "go through the stone door");
+    assert.equal(getPartyState(item.db, party.id, "dm").currentLocationKey, "cellar-passage");
+
+    await resolveAction(item.db, player, "act", "close the stone door");
+    await resolveAction(item.db, player, "act", "take the map");
+    assert.deepEqual(getPartyState(item.db, party.id, "world:lantern-below").objects["keyed-stone-door"], {
+      locked:false,
+      open:false,
+    });
+  } finally {
+    item.close();
+  }
+});
 test("Briarwatch rejects locations from another adventure and non-adjacent jumps", () => {
   const item=fixture();
   try{
@@ -525,6 +1048,32 @@ test("Briarwatch travel advances through connected authored places one step at a
     assert.equal(getPartyState(item.db,party.id,"dm").clueStage,2);
     assert.equal(getKnownLocations(item.db,party.id).at(-1).name,"Briarwatch East Well");
     assert.equal(getKnownLocations(item.db,party.id).some((location)=>location.name==="The Crooked Lantern"),false);
+  }finally{item.close();}
+});
+
+test("unresolved movement cannot fall through to AI and invent an authored-map destination", async () => {
+  const item=fixture();
+  try{
+    const world=buildLobby(item.db).worlds[0],party=world.parties[0];
+    const ashes=world.adventures.find((adventure)=>adventure.id.endsWith("ashes-briarwatch"));
+    selectAdventure(item.db,party.id,ashes.id);
+    const player=createPlayer(item.db,{partyId:party.id,name:"Dad",species:"Human",className:"Fighter"});
+    const before=getPartyState(item.db,party.id,"dm");
+
+    assert.equal(unresolvedAuthoredMovementResult(player.name,ashes,before,"speak","go deeper"),null);
+    assert.equal(unresolvedAuthoredMovementResult(player.name,ashes,before,"act","inspect the road"),null);
+
+    const result=await resolveAction(item.db,player,"act","go deeper into the fog");
+    const after=getPartyState(item.db,party.id,"dm");
+    const visible=listVisibleEvents(item.db,player).at(-1).text;
+    const ledger=listRecentEventsForDm(item.db,party.id,10).find((event)=>event.visibility==="dm" && /Rejected unresolved movement/.test(event.text));
+
+    assert.equal(result.source,"rules");
+    assert.deepEqual(after,before);
+    assert.match(visible,/remains in The Briarwatch Road/i);
+    assert.match(visible,/no farther revealed destination/i);
+    assert.ok(ledger);
+    assert.deepEqual(getKnownLocations(item.db,party.id).map((location)=>location.name),["The Briarwatch Road"]);
   }finally{item.close();}
 });
 
@@ -900,11 +1449,21 @@ test("test reset clears story and map discoveries but preserves characters", () 
     addEvent(item.db, { partyId: party.id, visibility: "public", playerId: player.id, kind: "action", speaker: player.name, text: "TEST-ACTION" });
     addEvent(item.db, { partyId: party.id, visibility: "player", playerId: player.id, kind: "narration", speaker: "Dungeon Master", text: "TEST-PRIVATE" });
     rememberKnownLocation(item.db, party.id, { name: "Test Cellar", summary: "A temporary test location." });
+    setPartyState(item.db, party.id, "world:lantern-below", { currentLocation:"alcove", visited:["outside-inn","alcove"], objects:{ "spindle-door":{ open:true } } });
+    setPartyState(item.db, party.id, `interactions:${party.activeAdventureId}`, { keyedDoor:{ unlocked:true, open:true } });
+    setPartyState(item.db, party.id, "world:unrelated-adventure", { preserved:true });
+    setPartyState(item.db, party.id, `turnTraces:${party.activeAdventureId}`, [{ id:"test-trace" }]);
+    setPartyState(item.db, party.id, `turnRevision:${party.activeAdventureId}`, 7);
     resetPartyStory(item.db, party.id);
     const visible = listVisibleEvents(item.db, player);
     assert.equal(visible.some((event) => event.text.includes("TEST-")), false);
     assert.equal(visible.length, 1);
     assert.equal(getKnownLocations(item.db, party.id).some((location) => location.name === "Test Cellar"), false);
+    assert.equal(getPartyState(item.db, party.id, `turnTraces:${party.activeAdventureId}`), null);
+    assert.equal(getPartyState(item.db, party.id, `turnRevision:${party.activeAdventureId}`), null);
+    assert.equal(getPartyState(item.db, party.id, "world:lantern-below"), null);
+    assert.equal(getPartyState(item.db, party.id, `interactions:${party.activeAdventureId}`), null);
+    assert.deepEqual(getPartyState(item.db, party.id, "world:unrelated-adventure"), { preserved:true });
     assert.equal(getPlayer(item.db, player.id).name, "Orin");
   } finally { item.close(); }
 });
@@ -991,4 +1550,48 @@ test("explicit class skills must match the 2024 class list and count", () => {
     const valid=createPlayer(item.db,{partyId:party.id,name:"Valid",species:"Human",className:"Warlock",skills:["Arcana","Religion"]});
     assert.deepEqual(valid.skills,["Arcana","Religion"]);
   } finally { item.close(); }
+});
+
+test("mothglass navigation persists the opened passage and stays aligned while backtracking", async () => {
+  const item = fixture();
+  try {
+    const party = buildLobby(item.db).worlds[0].parties[0];
+    const player = createPlayer(item.db, { partyId:party.id, name:"Dad", species:"Human", className:"Fighter" });
+    setPartyState(item.db, party.id, "dm", {
+      ...getPartyState(item.db, party.id, "dm"),
+      lanternArrivalStage:2,
+      clueStage:6,
+      currentLocationKey:"mothglass",
+    });
+
+    await resolveAction(item.db, player, "act", "open the concealed passage");
+    assert.equal(getPartyState(item.db, party.id, "dm").clueStage, 6);
+    assert.match(listVisibleEvents(item.db, player).at(-1).text, /no revealed route/i);
+
+    await resolveAction(item.db, player, "act", "turn the counterweighted lantern");
+    assert.equal(getPartyState(item.db, party.id, "dm").clueStage, 7);
+    assert.deepEqual(getPartyState(item.db, party.id, "world:lantern-below").objects["spindle-door"], {
+      discovered:true,
+      locked:false,
+      open:true,
+    });
+
+    await resolveAction(item.db, player, "act", "turn the counterweighted lantern again");
+    assert.match(listVisibleEvents(item.db, player).at(-1).text, /already open|remains open/i);
+
+    await resolveAction(item.db, player, "act", "go forward into the concealed passage");
+    assert.equal(getPartyState(item.db, party.id, "dm").currentLocationKey, "passage");
+
+    await resolveAction(item.db, player, "act", "continue forward");
+    assert.equal(getPartyState(item.db, party.id, "dm").clueStage, 8);
+    assert.equal(getPartyState(item.db, party.id, "dm").currentLocationKey, "alcove");
+    assert.equal(getPartyState(item.db, party.id, "world:lantern-below").currentLocation, "alcove");
+
+    await resolveAction(item.db, player, "act", "go back");
+    assert.equal(getPartyState(item.db, party.id, "dm").clueStage, 8);
+    assert.equal(getPartyState(item.db, party.id, "dm").currentLocationKey, "passage");
+    assert.equal(getPartyState(item.db, party.id, "world:lantern-below").currentLocation, "passage");
+  } finally {
+    item.close();
+  }
 });

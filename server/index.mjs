@@ -4,12 +4,18 @@ import { spawn } from "node:child_process";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { addEvent, advancePartySpotlight, buildLobby, createDatabase, createParty, createPlayer, createWorld, deletePlayer, getActiveAdventure, getGuidanceMode, getKnownLocations, getLevelUpOptions, getParty, getPartySpotlight, getPartyState, getPlayerByToken, getPlayerGuidance, levelUpPlayer, listPlayers, listVisibleEvents, loginPlayer, movePlayerToParty, resetPartyStory, selectAdventure, setGuidanceMode, setPartySpotlight } from "./database.mjs";
+import { addEvent, advancePartySpotlight, buildLobby, createDatabase, createParty, createPlayer, createWorld, deletePlayer, getActiveAdventure, getGuidanceMode, getKnownLocations, getLevelUpOptions, getParty, getPartySpotlight, getPartyState, getPlayerByToken, getPlayerGuidance, levelUpPlayer, listInventory, listPlayers, listVisibleEvents, loginPlayer, movePlayerToParty, resetPartyStory, selectAdventure, setGuidanceMode, setPartySpotlight } from "./database.mjs";
 import { actionUsesSpotlight, canSubmitOutsideCombat, normalizeSpeechAudience } from "./spotlight.mjs";
-import { dmModel, generateCharacterDetail, isOllamaReady, refreshPlayerGuidance, resolveAction, resolvePendingCheck } from "./dm.mjs";
+import { generateCharacterDetail, refreshPlayerGuidance, resolveAction, resolvePendingCheck } from "./dm.mjs";
+import { currentModelProfile, modelRuntimeView, selectAndLoadModel } from "./model-runtime.mjs";
 import { cottonForParty, isCottonInteraction, maybeCottonInterjection } from "./cotton.mjs";
 import { beginCombatAttack, beginCombatPotion, beginCombatSpell, combatView, isCombatActive, resetWorkshopCombat, resolveCombatRoll, startWorkshopCombat, takeCombatDodge, workshopOptions } from "./combat.mjs";
 import { authoredRouteContext } from "./adventure-rules.mjs";
+import { inspectPromptPackets, promptInspectorEnabled } from "./prompt-packets.mjs";
+import { buildAuthoritativeRecap } from "./story-recaps.mjs";
+import { buildHearthboundPlaytestStatus, playtestToolsEnabled } from "./playtest-status.mjs";
+import { adventureDefinition } from "./adventure-registry.mjs";
+import { appendTurnTrace, captureTurnState, completeTurnTrace, createTurnTrace, listTurnTraces, redactedTurnTraces } from "./turn-traces.mjs";
 
 const dev = process.argv.includes("--dev");
 const port = Number(process.env.PORT || 4173);
@@ -43,6 +49,18 @@ const readJson = async (request) => { const chunks = []; for await (const chunk 
 const readBuffer = async (request) => { const chunks = []; for await (const chunk of request) chunks.push(chunk); return Buffer.concat(chunks); };
 const authenticatedPlayer = (request) => { const authorization = request.headers.authorization || ""; return getPlayerByToken(db, authorization.startsWith("Bearer ") ? authorization.slice(7) : ""); };
 
+function currentTurnState(player, adventure = getActiveAdventure(db, player.partyId)) {
+  const dmState = getPartyState(db, player.partyId, "dm") || {};
+  const definition = adventureDefinition(adventure);
+  const structuredAdventureId = definition?.id || String(adventure?.id || "");
+  const worldState = getPartyState(db, player.partyId, `world:${structuredAdventureId}`) || {};
+  return captureTurnState({
+    dmState, worldState, roomAuthority:authoredRouteContext(adventure?.id, dmState, worldState),
+    pendingCheck:getPartyState(db, player.partyId, `pendingCheck:${player.id}`),
+    inventory:listInventory(db, player.id), knownLocations:getKnownLocations(db, player.partyId),
+  });
+}
+
 export async function handleApi(request, response, url) {
   try {
     if (request.method === "POST" && url.pathname === "/api/system/restart") {
@@ -50,7 +68,27 @@ export async function handleApi(request, response, url) {
       setTimeout(() => void queueApplicationRestart(), 80);
       return;
     }
-    if (request.method === "GET" && url.pathname === "/api/health") return json(response, 200, { ok: true, aiConnected: await isOllamaReady(), model: dmModel, transcriptionConfigured: Boolean(process.env.WHISPER_URL) });
+    if (request.method === "GET" && url.pathname === "/api/health") {
+      const ai = await modelRuntimeView();
+      return json(response, 200, { ok:true, aiConnected:ai.connected, model:ai.model, modelProfile:ai.profile, modelStatus:ai.status, playtestTools:playtestToolsEnabled(), transcriptionConfigured:Boolean(process.env.WHISPER_URL) });
+    }
+    if (request.method === "GET" && url.pathname === "/api/models") {
+      const player = authenticatedPlayer(request);
+      if (!player) return json(response, 401, { error:"Choose your character again." });
+      return json(response, 200, await modelRuntimeView({ force:true }));
+    }
+    if (request.method === "POST" && url.pathname === "/api/models/select") {
+      const player = authenticatedPlayer(request);
+      if (!player) return json(response, 401, { error:"Choose your character again." });
+      const body = await readJson(request);
+      return json(response, 200, await selectAndLoadModel(body.model));
+    }
+    if (request.method === "GET" && url.pathname === "/api/debug/prompt-packets") {
+      if (!promptInspectorEnabled()) return json(response, 404, { error:"Prompt inspection is disabled." });
+      const player = authenticatedPlayer(request);
+      if (!player) return json(response, 401, { error:"Choose your character again." });
+      return json(response, 200, { packets:inspectPromptPackets({ partyId:player.partyId, playerId:player.id }) });
+    }
     if (request.method === "GET" && url.pathname === "/api/lobby") return json(response, 200, buildLobby(db));
     if (request.method === "POST" && url.pathname === "/api/character-suggestion") return json(response, 200, await generateCharacterDetail(await readJson(request)));
     if (request.method === "POST" && url.pathname === "/api/worlds") return json(response, 201, { world: createWorld(db, await readJson(request)) });
@@ -89,15 +127,25 @@ export async function handleApi(request, response, url) {
       const guidanceMode = getGuidanceMode(db, player.partyId);
       let guidance = getPlayerGuidance(db, player.id, player.partyId);
       const pendingCheck = getPartyState(db, player.partyId, `pendingCheck:${player.id}`);
+      const events = listVisibleEvents(db, player);
+      const knownLocations = getKnownLocations(db, player.partyId);
+      const humanParty = listPlayers(db, player.partyId);
+      const dmState = getPartyState(db, player.partyId, "dm") || {};
+      const structuredAdventureId = adventureDefinition(adventure)?.id || String(adventure?.id || "");
+      const worldState = getPartyState(db, player.partyId, `world:${structuredAdventureId}`) || {};
+      const roomAuthority = authoredRouteContext(adventure?.id, dmState, worldState);
       if (guidanceMode === "guided" && !guidance.length && !pendingCheck) guidance = refreshPlayerGuidance(db, player);
+      const ai = await modelRuntimeView();
       return json(response, 200, {
         world: { id: partyInfo.worldId, name: partyInfo.worldName },
         group: { id: partyInfo.id, name: partyInfo.name },
         campaign: { title: adventure?.title || "Untitled Adventure", chapter: adventure?.chapter || "A new beginning", scene: adventure?.scene || "At the threshold", minLevel: adventure?.minLevel || 1, maxLevel: adventure?.maxLevel || 1 },
         player,
-        party: [...listPlayers(db, player.partyId), cottonForParty(db, player.partyId)],
-        events: listVisibleEvents(db, player),
-        knownLocations: getKnownLocations(db, player.partyId),
+        party: [...humanParty, cottonForParty(db, player.partyId)],
+        events,
+        knownLocations,
+        recap:buildAuthoritativeRecap({ campaign:{ title:adventure?.title, scene:adventure?.scene }, events, knownLocations, party:humanParty, roomAuthority, pendingCheck }),
+        playtest:playtestToolsEnabled() ? buildHearthboundPlaytestStatus({ adventure, dmState, worldState, events, pendingCheck, turnTraces:redactedTurnTraces(listTurnTraces(db, player.partyId, adventure?.id, 8)) }) : null,
         spotlight: getPartySpotlight(db, player.partyId),
         pendingCheck,
         combat: combatView(db, player),
@@ -105,7 +153,7 @@ export async function handleApi(request, response, url) {
         levelUp:getLevelUpOptions(db, player.id),
         guidanceMode,
         guidance,
-        ai: { connected: await isOllamaReady(), model: dmModel },
+        ai: { ...ai, promptInspectorEnabled:promptInspectorEnabled() },
         speech: { transcriptionConfigured: Boolean(process.env.WHISPER_URL) },
         art: { imageConfigured: Boolean(process.env.HEARTHBOUND_IMAGE_API_URL) },
       });
@@ -129,9 +177,22 @@ export async function handleApi(request, response, url) {
       if (!combatActive && !canSubmitOutsideCombat({ mode, audience, partySize, spotlightPlayerId:currentSpotlight.playerId, playerId:player.id })) {
         return json(response, 409, { error:`${currentSpotlight.name} has the spotlight. You can still talk to the party or ask the DM, or take the spotlight if it is your turn.` });
       }
+      const adventure = getActiveAdventure(db, player.partyId);
+      const trace = createTurnTrace({ adventureId:adventure?.id, playerId:player.id, mode, audience, text, before:currentTurnState(player, adventure), modelProfile:currentModelProfile().id });
+      const finishTrace = (result) => {
+        const after = currentTurnState(player, adventure);
+        const pendingCheck = getPartyState(db, player.partyId, `pendingCheck:${player.id}`);
+        const latestNarration = listVisibleEvents(db, player).filter((event) => event.kind === "narration" && event.visibility === "public").at(-1)?.text || "";
+        appendTurnTrace(db, player.partyId, adventure?.id, completeTurnTrace(trace, {
+          source:result.source, selectedRule:result.rule, after, pendingCheck,
+          publicFacts:Array.isArray(result.publicFacts) ? result.publicFacts : [], narration:result.narration || latestNarration, accepted:result.accepted !== false, reason:result.reason,
+          diagnostic:result.diagnostic, promptPacketIds:result.promptPacketIds, rejectedProposals:result.rejectedProposals,
+        }));
+      };
       if (mode === "speak" && audience === "party") {
         addEvent(db, { partyId:player.partyId, visibility:"public", playerId:player.id, kind:"action", speaker:player.name, text:`says quietly to the party: ${text}`, payload:{ audience:"party" } });
         await maybeCottonInterjection(db, player, mode, audience, text);
+        finishTrace({ source:"party-conversation", rule:"private-party-speech" });
         return json(response, 200, { ok:true, source:"party-conversation", spotlight:currentSpotlight });
       }
       const prefixes = { act: "attempts", speak: "says aloud", ask: "asks the DM" };
@@ -139,11 +200,13 @@ export async function handleApi(request, response, url) {
       if (mode !== "ask" && isCottonInteraction(text)) {
         await maybeCottonInterjection(db, player, mode, audience, text);
         const spotlight = combatActive ? getPartySpotlight(db, player.partyId) : advancePartySpotlight(db, player.partyId, player.id);
+        finishTrace({ source:"cotton", rule:"companion-interaction" });
         return json(response, 200, { ok:true, source:"cotton", spotlight });
       }
       const result = await resolveAction(db, player, mode, text);
       if (mode !== "ask") await maybeCottonInterjection(db, player, mode, audience, text);
       const spotlight = !actionUsesSpotlight(mode, audience) || combatActive ? getPartySpotlight(db, player.partyId) : advancePartySpotlight(db, player.partyId, player.id);
+      finishTrace(result);
       return json(response, 200, { ok: true, source: result.source, spotlight });
     }
     if (request.method === "POST" && url.pathname === "/api/combat/attack") {
@@ -211,9 +274,16 @@ export async function handleApi(request, response, url) {
       if (!player) return json(response, 401, { error: "Your character session has expired." });
       const sides = Number(body.sides);
       if (![4, 6, 8, 10, 12, 20, 100].includes(sides)) return json(response, 400, { error: "That die is not available." });
+      const pendingBeforeRoll = sides === 20 ? getPartyState(db, player.partyId, `pendingCheck:${player.id}`) : null;
+      const adventure = pendingBeforeRoll ? getActiveAdventure(db, player.partyId) : null;
+      const trace = pendingBeforeRoll ? createTurnTrace({ adventureId:adventure?.id, playerId:player.id, mode:"act", audience:"nearby", text:`resolve ${pendingBeforeRoll.ability} (${pendingBeforeRoll.skill}) check`, before:currentTurnState(player, adventure), modelProfile:currentModelProfile().id }) : null;
       const result = Math.floor(Math.random() * sides) + 1;
       const combatRoll = resolveCombatRoll(db, player, sides, result);
       const check = combatRoll ? null : sides === 20 ? await resolvePendingCheck(db, player, result) : null;
+      if (trace && check) appendTurnTrace(db, player.partyId, adventure?.id, completeTurnTrace(trace, {
+        source:check.source, selectedRule:check.rule, after:currentTurnState(player, adventure), publicFacts:check.publicFacts, narration:check.narration || "",
+        accepted:true, diagnostic:check.diagnostic, promptPacketIds:check.promptPacketIds, rejectedProposals:check.rejectedProposals,
+      }));
       if (!check && !combatRoll) addEvent(db, { partyId: player.partyId, visibility: "public", playerId: player.id, kind: "roll", speaker: "Dice", text: `${player.name} rolled d${sides}: ${result}`, payload: { sides, result } });
       return json(response, 200, { sides, result, check, combatRoll });
     }
@@ -233,7 +303,9 @@ export async function handleApi(request, response, url) {
       if (!process.env.HEARTHBOUND_IMAGE_API_URL) return json(response, 503, { error:"Scene pictures need a local image generator configured on the PC first." });
       const adventure = getActiveAdventure(db, player.partyId);
       const dmState = getPartyState(db, player.partyId, "dm") || {};
-      const route = authoredRouteContext(adventure?.id, dmState);
+      const definition = adventureDefinition(adventure);
+      const worldState = getPartyState(db, player.partyId, `world:${definition?.id || String(adventure?.id || "")}`) || {};
+      const route = authoredRouteContext(adventure?.id, dmState, worldState);
       const known = getKnownLocations(db, player.partyId).at(-1);
       const room = route?.currentLocation || (known ? { name:known.name, features:[] } : null);
       const recent = listVisibleEvents(db, player).filter((event)=>event.kind==="narration" && event.visibility==="public").slice(-3).map((event)=>event.text).join(" ");
@@ -261,7 +333,7 @@ export async function handleApi(request, response, url) {
 }
 
 const mimeTypes = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8", ".webmanifest": "application/manifest+json", ".png": "image/png", ".svg": "image/svg+xml" };
-async function start() {
+export async function start() {
   if (dev) { const { createServer: createViteServer } = await import("vite"); vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" }); }
   const requestHandler = async (request, response) => {
     const url = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);

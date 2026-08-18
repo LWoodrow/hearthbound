@@ -5,15 +5,91 @@ This document records agreed future work. It is a planning document; an item bei
 ## Delivery order
 
 1. Create a private GitHub safety baseline and recoverable first release
-2. Global Storyman guardrails and regression tests
-3. Adventure schema, state-machine validation, and authoring tools
-4. Rebuild and validate The Lantern Below using the finished schema
-5. Validate Ashes of Briarwatch and the connected high-fantasy campaign arc
-6. Complete the rules matrix and missing combat/class automation
-7. Complete exploration, conversation, spotlight, and initiative behaviour
-8. Improve maps, avatars, scene art, narration voices, and iPad presentation
-9. Add modular content packs and weighted generation tables
-10. Research and design each further universe, then implement it only after the shared engine is stable
+2. Preserve reported playtest failures as classified replay fixtures
+3. Add canonical turn traces and one authoritative campaign-state model
+4. Add executable authored interactions plus generic intent and reference resolution
+5. Migrate and validate The Lantern Below, removing equivalent hard-coded story branches as each slice lands
+6. Validate Ashes of Briarwatch and the connected high-fantasy campaign arc
+7. Build the replay, paraphrase, invariant, and authoring-validation toolchain
+8. Prove reuse with the first Hysteria pilot without universe-specific central-engine conditions
+9. Prove fair-play evidence and bounded suspect knowledge with an Unmasked pilot
+10. Complete the rules matrix and missing combat/class automation
+11. Complete exploration, conversation, spotlight, and initiative behaviour
+12. Improve maps, avatars, scene art, narration voices, and iPad presentation
+13. Add modular content packs and weighted generation tables
+14. Research and design each further universe, then implement it only after the shared engine is stable
+15. Evaluate Gemma 4 12B Unified as a local narration model after the story-engine contract is stable; compare prose quality, continuity, invention rate, latency, and hardware requirements against the current model
+
+The detailed migration sequence, stop/go gates, and convergence measures are in [`docs/STORY-ENGINE-ROADMAP.md`](docs/STORY-ENGINE-ROADMAP.md). New and revised stories must follow [`docs/STORY-BUILDING-RULESET.md`](docs/STORY-BUILDING-RULESET.md), which consolidates the proven rules for scenes, occupants, NPC conversation, clues, interactions, maps, and testing. This roadmap is the active authority for story-engine ordering. In particular, new sentence-specific Hearthbound patches should not take priority over turn tracing, canonical state, executable interactions, and replay fixtures unless they block diagnosis or corrupt saved state.
+
+Current story-engine package: convergence phases 0-9 and the phase-10 evaluation harness are implemented. The shared engine now has schema-v2 canonical state, executable authored interactions, generic intent/reference handling, traces, replay and mutation coverage, a Hysteria reuse pilot, and an Unmasked fair-play case pilot. The immediate gate is real browser playtesting of Hearthbound with varied natural language, removal of the remaining pre-v2 compatibility paths, and an identical-packet Qwen-versus-Gemma evaluation before selecting the default narrator.
+
+Current characters, campaigns, in-flight stories, saves, and generated play records are disposable prototype data. Architecture work may reset them instead of adding compatibility complexity. Authored content, source code, regression fixtures, and design decisions remain protected; any reset must still be explicitly scoped and reported after it is performed.
+
+The story-definition and executable-interaction foundation for items 4 and 5 is complete: The Lantern Below has one canonical playable-story package containing fixed truths, a four-act dramatic spine, NPC goals and bounded knowledge, multiple discovery sources for every essential clue, fail-forward consequences, and explicit improvisation boundaries. A reusable NPC conversation layer now projects only the present character's voice, currently permitted facts, visible scene, and bounded recent conversation to the prose model; ordinary conversation cannot mutate canonical state, while explicit authored outcomes still record clues, permission, and movement. The adventure validator rejects a future essential clue that has fewer than two authored sources. Remaining Hearthbound work is browser validation of conversational quality and the complete and alternate routes, removal of obsolete compatibility handlers, and expansion of consecutive-turn usefulness tests whenever a real playtest exposes a mismatch.
+
+Maintenance guardrail: every systemic playtest or implementation lesson must update the story-building ruleset in the same work package, or the handoff must name the existing rule that already covered it. Do not close a story-engine item while its implementation, validation, tests, authoring rules, AI authority contract, and roadmap status disagree.
+
+### AI prompt infrastructure
+
+Completed in the story-engine guardrail branch:
+
+- Versioned local model profiles, with Qwen 3 14B remaining the default and Gemma 4 12B available only as an explicit evaluation candidate
+- Named, token-budgeted prompt packets for freeform action adjudication and resolved-check narration
+- Deterministic priority: engine contract, authored adventure data, campaign authority, and the current action are retained before optional recent history
+- An opt-in authenticated prompt inspector that shows section names, token estimates, inclusion decisions, and hashes while redacting all hidden and player-private content
+- Regression coverage proving a model-profile switch does not change the authoritative facts in a prompt packet
+
+Next work after the current guardrails are exercised in play:
+
+1. Add recurring-NPC example exchanges as versioned style assets, never as campaign facts. The first universe-level Hearthbound voice asset is complete.
+2. Extend authoritative recaps with authored objective milestones as each adventure moves fully onto the structured state engine. The initial state/ledger recap is complete and never calls a prose model.
+3. Add a reproducible Qwen-versus-Gemma narration evaluation fixture using identical saved prompt packets.
+4. Consider semantic retrieval only for optional flavour and previously established public history; retrieval results must never unlock routes, clues, inventory, clocks, or completion.
+
+### Hearthbound playtest gate
+
+The first structured-engine browser playtest is ready on the guardrail branch. It uses an isolated database and port, a thirteen-checkpoint Lantern journey, deterministic recap data, redacted prompt diagnostics, and a restart path that clears the active adventure's structured rooms, objects, interactions, pending checks, guidance, and Cotton timing without clearing another adventure's saved state.
+
+Before moving the shared engine into Hysteria work:
+
+1. Complete the full journey in `docs/HEARTHBOUND-PLAYTEST.md` using varied natural wording.
+2. Verify restart after reaching at least the cellar and again after opening the spindle passage.
+3. Capture any mismatch with Copy test status, the exact player wording, the visible response, and the expected result.
+4. Fix and regress every state, secrecy, repetition, map, recap, inventory, or check mismatch found.
+5. Repeat the route with at least two character classes and once with two human player characters before declaring the Hearthbound engine gate stable.
+6. Complete the alternate-route playtest: learn about Mara from Tamsin, reach the pantry with Tamsin's cooperation, find the hatch through physical evidence rather than the ink-mite's exact route, and resolve the guardian without default combat.
+7. Confirm a failed investigation changes cost or available approach without deleting an essential clue or forcing a restart.
+
+### Player experience and tablet flow
+
+These items are informed by current playtesting and a review of TableForge's public product flow. They are interaction patterns, not a visual redesign or a change to Hearthbound's established universe palettes.
+
+1. **Canonical Adventure Journal**
+   - Replace the large diagnostic checklist in the normal player view with a compact journal showing the current objective, earned milestones, open leads, party condition, and unresolved rewards.
+   - Derive every entry from canonical state and accepted outcomes. Narration and model memory cannot create or complete journal entries.
+   - Keep the full checklist and trace inspector available only in the disposable playtest mode.
+
+2. **Suggestions as separate editable controls**
+   - Render optional actions beside the input as buttons/cards that populate the input for review; selecting one must never execute it automatically.
+   - Never embed suggestions or serialized guidance inside Dungeon Master narration.
+   - Generate suggestions only from currently available authored affordances and visible facts.
+
+3. **Resume latest campaign**
+   - Put the most recently played campaign first, with its current scene, canonical objective, last accepted public outcome, party status, and a single Continue action.
+   - Use the deterministic recap projection rather than asking a prose model to reconstruct the session.
+
+4. **Explicit local-AI availability and retry state**
+   - Show when Ollama or the selected narrator is loading, slow, unavailable, or has returned an invalid response.
+   - Preserve the submitted turn for safe retry and never replace a failed narrator call with invented generic story progression.
+   - Distinguish a narration-service problem from an engine refusal or required player choice.
+
+5. **iPad-first play tabs**
+   - Keep narration and the action composer primary.
+   - Place Map, Journal, Character, and Inventory in stable tabs or drawers on tablet/mobile rather than keeping every panel visible.
+   - Preserve scroll position, prevent layout jumps when selections change, and keep critical current-location/turn status visible.
+
+Recommended order: finish the Hearthbound story-engine playtest gate first, then implement suggestions/output separation and AI retry state before the Journal, resume card, and tablet information architecture.
 
 ## Private GitHub safety baseline
 
@@ -36,8 +112,118 @@ Each universe gets its own campaign continuity, characters, rules profile, termi
 - Cosmic horror - **Hysteria**
 - Murder mystery - **Unmasked**
 - Gothic horror - **Forsaken**
-- Modern supernatural - **Wayward Sons**
+- Modern supernatural - **Hunters** (stable internal identifier: `supernatural`)
 - Espionage - **Classified**
+
+## Classified: Cold War counter-intelligence design
+
+Status: backlog design only. Build after Hearthbound has established the shared engine, Hysteria has proved cross-universe reuse, and Unmasked has proved immutable evidence, provenance, timelines, and bounded suspect knowledge.
+
+### Premise and identity
+
+- Bureaucratic Cold War noir in a fictional rain-slicked divided city inspired by the 1970s, without depending on a real intelligence service or historical conspiracy.
+- The player directs a counter-intelligence unit from an underground headquarters.
+- A senior department head is leaking a deep-cover roster. The player must identify, contain, turn, or expose the mole before the roster-transfer clock expires.
+- Each new operation may select a different valid conspiracy package: mole, handler, motive, channel, dead drop, compromised assets, cover story, and intended exfiltration route.
+- Randomisation selects from prevalidated combinations. It must not assemble an impossible case or allow the model to change the culprit during play.
+
+### Strict gameplay loop
+
+1. **Briefing:** review overnight intercepts, current threats, available staff, budget, political pressure, and time remaining.
+2. **Planning:** assign a bounded number of operations, targets, agents, equipment, and cover arrangements.
+3. **Operations:** deterministically spend time and budget, resolve exposure and counter-surveillance risks, and create raw observations.
+4. **Analysis:** compare records, build links, test hypotheses, identify contradictions, and decide whether evidence justifies escalation.
+5. **Interrogation or deception:** question a suspect, confront them with selected evidence, attempt to recruit them, or feed controlled information.
+6. **Resolution:** arrest, surveil, turn, deceive, protect the roster, or allow another day to pass. The engine evaluates the decision against canonical truth.
+
+Time advances through declared operations rather than every conversational exchange. The player cannot perform unlimited surveillance or interrogation during one day.
+
+### Authoritative operation dossier
+
+Every playable operation records immutable ground truth before play:
+
+- Mole, handler, motive, recruitment history, access level, objectives, and escape threshold
+- Exact day-by-day ground-truth timeline, including meetings, communications, file access, payments, dead drops, and cover activity
+- Suspect roles, routines, relationships, vulnerabilities, secrets, authorised access, and innocent explanations
+- What each person observed, believes, suspects, remembers, conceals, and is deliberately lying about at each point in time
+- Communication channels, code systems, dead-drop locations, surveillance vulnerabilities, and counter-surveillance behaviour
+- Evidence identifiers, provenance, reliability, custody, ambiguity, and the deductions each item can legitimately support
+- Enemy reactions to leaked or fabricated information
+- Roster-transfer clock, political-pressure clock, operational budget, personnel availability, exposure risk, and collateral consequences
+- Valid endings: correct arrest, recruited double agent, successful deception operation, mole escape, wrongful accusation, burned investigation, or partial containment
+
+The complete dossier is never sent to a model. Each operation receives only the smallest authorised projection required for its role.
+
+### Core mechanics
+
+#### Surveillance and wiretaps
+
+- Bugging an office, tapping a line, tailing a suspect, opening mail, and monitoring file access are distinct operations with costs, durations, legal/political risks, and detection chances.
+- The engine first determines who was present, what objectively occurred, what the equipment could capture, gaps or noise, and whether surveillance was detected.
+- The model may render a transcript from those supplied observations. It cannot insert a code word, meeting, confession, or suspicious act that the engine did not authorise.
+- Innocent intercepts may reveal genuine personal or bureaucratic secrets, not artificially spotless filler; these can explain suspicious behaviour without changing the conspiracy.
+
+#### Reconnaissance and imagery
+
+- Field photography, static observation, document photography, and aerial or satellite reconnaissance produce structured observations with time, place, visibility, identity confidence, and chain of custody.
+- An image-analyst voice turns those observations into a clinical report but cannot identify an obscured person or object beyond the recorded confidence.
+- Later evidence may corroborate or overturn an analyst's tentative interpretation while the original observation remains unchanged.
+
+#### Dossiers, hypotheses, and contradictions
+
+- The player-facing intelligence board separates established facts, reports, assessed claims, unresolved leads, competing hypotheses, and disproved explanations.
+- Evidence retains its source and reliability; repeated reports do not become multiple independent clues when they share one origin.
+- Financial anomalies, travel, access logs, testimony, intercepts, and imagery are compared against the canonical timeline.
+- Contradictions are engine-computed relationships between stable claims and evidence identifiers, not model opinions.
+
+#### Interrogation and stress
+
+- The player chooses questions and which evidence to disclose. This choice changes the suspect's knowledge of the investigation.
+- A suspect receives only their personality, current knowledge, intended truths/lies, the question, disclosed evidence, and a bounded response policy.
+- The engine tracks pressure, confidence, loyalty, fear, fatigue, suspicion of surveillance, and willingness to defect. The model expresses those states but cannot choose their numerical change.
+- A mole constructs no new alibi during dialogue. Permitted claims and cover stories come from the prevalidated timeline; when contradicted, deterministic policy selects denial, qualification, silence, counter-accusation, flight preparation, or cooperation.
+- Innocent suspects can be stressed, evasive, or dishonest about secondary secrets. Stress alone is never proof of guilt.
+
+#### Double agents and controlled leaks
+
+- The player can attempt recruitment, run a turned asset, compartmentalise information, plant a marked document, or transmit a deliberately false plan.
+- Every fabricated intelligence package has a unique identifier and recipient set. Later enemy behaviour can be linked back to its actual exposure path.
+- Enemy response is selected from authored capabilities and objectives; the narrator cannot invent a convenient reaction that confirms the player's preferred suspect.
+- A turned mole remains risky: loyalty, handler suspicion, communication access, and exposure are tracked explicitly.
+
+### AI boundary
+
+Use the local model for atmosphere and bounded presentation:
+
+- Render an authorised intercept transcript from structured utterance facts
+- Write an imagery or document-analysis briefing from supplied observations
+- Voice a suspect using only their projected knowledge and permitted claims
+- Summarise the player's established intelligence board without promoting speculation to fact
+- Produce period-appropriate bureaucratic wording and restrained noir narration
+
+Do not let the model select the mole, invent evidence, determine operation success, change clocks or budget, calculate contradictions, decide what an NPC knows, or evaluate the final accusation.
+
+The supplied `spy_game.py` concept is retained as design research, not production architecture. Its useful ideas are the phased loop, hidden ground truth, operations budget, time pressure, and partial context projection. Before reuse, replace freeform evidence-log prompting, model-authored clues, unlimited free interrogations, hard-coded guilty/innocent transcript branches, and unvalidated random combinations with the shared Storyman state, evidence, interaction, and trace systems.
+
+### First pilot and validation gate
+
+Build one compact operation after Unmasked's evidence model is stable:
+
+- Five department heads, one mole, one handler, two viable communication channels, and three prevalidated conspiracy variants
+- Seven in-game days with a limited daily action allowance and operational budget
+- Wiretap, tail, file-access audit, imagery review, interrogation, controlled leak, recruitment attempt, and accusation
+- At least three independent evidence routes to the mole and credible innocent explanations for suspicious secondary behaviour
+- More than one successful ending: arrest with proof, turn the mole, or protect the roster through deception
+
+Required validation:
+
+1. The same seed always produces the same truth, timeline, evidence, and consequences regardless of narration model.
+2. No suspect states knowledge they have not acquired and no intercept contains an unauthorised clue.
+3. Equivalent player wording selects equivalent operations and costs.
+4. Budget, elapsed time, staff assignments, evidence custody, stress, exposure, and clocks survive reload and cannot be duplicated.
+5. A wrong accusation remains possible but follows recorded evidence and consequences; the game never changes the mole to reward the guess.
+6. Turning or deceiving the mole uses the same canonical conspiracy rather than creating an alternate solution.
+7. Model-off replay proves the case is mechanically playable and solvable; model-on evaluation scores faithfulness and style separately.
 
 ## Hysteria research and purchased Cthulhu reference audit
 
