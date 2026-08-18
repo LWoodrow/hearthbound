@@ -746,7 +746,7 @@ h1, h2, p { margin-top: 0; }
 }
 
 /* Shared universe packages ------------------------------------------------- */
-:root[data-universe="supernatural"], [data-universe="supernatural"] { --ink:#101313; --panel:#191c1b; --panel-raised:#272b29; --gold:#aeb2aa; --gold-bright:#f0ead8; --cream:#eee9dc; --muted:#aaa79d; --line:#484b47; --red:#b23b32; --heading-font:Rockwell,"Roboto Slab",Georgia,serif; --body-font:"Arial Narrow",Inter,Aptos,sans-serif; --theme-background:radial-gradient(circle at 75% -20%,#3a3b36 0,#171a19 38%,#0b0d0d 100%); --theme-texture:repeating-linear-gradient(2deg,#ffffff06 0 1px,transparent 1px 8px); --theme-radius:1px; }
+:root[data-universe="supernatural"], [data-universe="supernatural"] { --ink:#101313; --panel:#191c1b; --panel-raised:#272b29; --gold:#8fafbc; --gold-bright:#c7dfe7; --cream:#eee9dc; --muted:#aaa79d; --line:#40545a; --red:#b23b32; --heading-font:Rockwell,"Roboto Slab",Georgia,serif; --body-font:"Arial Narrow",Inter,Aptos,sans-serif; --theme-background:radial-gradient(circle at 75% -20%,#3a3b36 0,#171a19 38%,#0b0d0d 100%); --theme-texture:repeating-linear-gradient(2deg,#ffffff06 0 1px,transparent 1px 8px); --theme-radius:1px; }
 :root[data-universe="mystery"], [data-universe="mystery"] { --ink:#0c1420; --panel:#131e2c; --panel-raised:#1c2b3c; --gold:#b99a58; --gold-bright:#ead7a2; --cream:#f4efe4; --muted:#aab2ba; --line:#35475a; --red:#a83d3d; --heading-font:Baskerville,Georgia,serif; --body-font:"Courier New",Inter,monospace; --theme-background:radial-gradient(circle at 20% -10%,#24374c 0,#101a27 42%,#080e16 100%); --theme-texture:linear-gradient(90deg,#ffffff05 1px,transparent 1px); --theme-radius:2px; }
 :root[data-universe="gothic"], [data-universe="gothic"] { --ink:#100b0c; --panel:#1c1214; --panel-raised:#2b191d; --gold:#a9a3a0; --gold-bright:#eee5d7; --cream:#f0e7dc; --muted:#a89a98; --line:#4c3639; --red:#772b31; --heading-font:Garamond,"Times New Roman",serif; --body-font:Georgia,Aptos,serif; --theme-background:radial-gradient(circle at 50% -20%,#46252a 0,#1a1012 42%,#080607 100%); --theme-texture:repeating-linear-gradient(92deg,#ffffff04 0 1px,transparent 1px 17px); --theme-radius:0; }
 :root[data-universe="cosmic"], [data-universe="cosmic"] { --ink:#080d0d; --panel:#101919; --panel-raised:#172524; --gold:#4d9b8e; --gold-bright:#91d2c4; --cream:#e7e5d8; --muted:#92a39d; --line:#28433e; --red:#82474b; --heading-font:"Palatino Linotype",Georgia,serif; --body-font:"Courier New",Consolas,monospace; --theme-background:radial-gradient(ellipse at 58% -10%,#193936 0,#0d1716 38%,#050909 100%); --theme-texture:repeating-radial-gradient(circle at 63% 12%,#4d9b8e08 0 1px,transparent 2px 18px); --theme-radius:0; }
@@ -766,7 +766,7 @@ h1, h2, p { margin-top: 0; }
 .brand-identity>span:last-child { min-width:0; }
 .universe-mark { width:64px; height:64px; flex:0 0 auto; display:grid; place-items:center; color:var(--gold-bright); border:1px solid var(--gold); background:color-mix(in srgb,var(--panel-raised) 88%,transparent); box-shadow:inset 0 0 24px color-mix(in srgb,var(--gold) 10%,transparent); }
 .universe-mark.compact { width:36px; height:36px; }
-.universe-mark svg { width:70%; height:70%; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+.universe-mark svg { width:82%; height:82%; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
 .library-status { color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.13em; }
 
 .menu-journey { position:relative; height:58px; display:flex; align-items:stretch; gap:1px; margin:0 0 clamp(24px,3vw,38px); border:1px solid var(--line); background:var(--line); }
@@ -797,9 +797,10 @@ h1, h2, p { margin-top: 0; }
 .universe-card::after { content:""; position:absolute; inset:0; z-index:1; pointer-events:none; background:linear-gradient(90deg,color-mix(in srgb,var(--card-ink) 70%,transparent) 0%,color-mix(in srgb,var(--card-panel) 48%,transparent) 38%,color-mix(in srgb,var(--card-ink) 14%,transparent) 68%,color-mix(in srgb,var(--card-ink) 4%,transparent) 100%); }
 .universe-card-art { position:absolute; inset:0; z-index:0; width:100%; height:100%; object-fit:cover; object-position:center; opacity:.94; filter:saturate(1.08) contrast(1.03) brightness(1.16); transition:opacity .22s ease,transform .35s ease,filter .22s ease; }
 .universe-card>.universe-mark,.universe-card-copy,.universe-card>.availability { position:relative; z-index:2; }
-.universe-card[data-universe="supernatural"] { --card-ink:#101313;--card-panel:#191c1b;--card-line:#484b47;--card-accent:#aeb2aa;--card-text:#eee9dc; }
+.universe-card[data-universe="hearthbound"] { --card-ink:#12100e;--card-panel:#1b1814;--card-line:#4b3d2a;--card-accent:#caa45d;--card-text:#f1eadb; }
+.universe-card[data-universe="supernatural"] { --card-ink:#101313;--card-panel:#191c1b;--card-line:#40545a;--card-accent:#8fafbc;--card-text:#eee9dc; }
 .universe-card[data-universe="mystery"] { --card-ink:#0c1420;--card-panel:#131e2c;--card-line:#35475a;--card-accent:#b99a58;--card-text:#f4efe4; }
-.universe-card[data-universe="gothic"] { --card-ink:#100b0c;--card-panel:#1c1214;--card-line:#4c3639;--card-accent:#a9a3a0;--card-text:#f0e7dc; }
+.universe-card[data-universe="gothic"] { --card-ink:#100b0c;--card-panel:#1c1214;--card-line:#57383d;--card-accent:#c45f69;--card-text:#f0e7dc; }
 .universe-card[data-universe="cosmic"] { --card-ink:#080d0d;--card-panel:#101919;--card-line:#28433e;--card-accent:#4d9b8e;--card-text:#e7e5d8; }
 .universe-card[data-universe="espionage"] { --card-ink:#0b0e0d;--card-panel:#111715;--card-line:#33483b;--card-accent:#65a976;--card-text:#e9e5d8; }
 .universe-card:hover,.universe-card.active { border-color:var(--card-accent); }
@@ -817,7 +818,14 @@ h1, h2, p { margin-top: 0; }
 .universe-preview::after { content:""; position:absolute; inset:0; z-index:-1; pointer-events:none; background:linear-gradient(0deg,color-mix(in srgb,var(--ink) 62%,transparent) 0%,transparent 40%),linear-gradient(90deg,transparent 0 36%,color-mix(in srgb,var(--ink) 34%,transparent) 52%,color-mix(in srgb,var(--ink) 10%,transparent) 69%,transparent 84%); }
 .preview-background { position:absolute; top:0; right:0; bottom:0; z-index:-2; width:64%; height:100%; object-fit:cover; object-position:center; opacity:.98; filter:saturate(1.08) contrast(1.03) brightness(1.18); -webkit-mask-image:linear-gradient(90deg,transparent 0%,rgba(0,0,0,.18) 8%,#000 28%); mask-image:linear-gradient(90deg,transparent 0%,rgba(0,0,0,.18) 8%,#000 28%); }
 .preview-summary { display:grid; grid-template-columns:56px minmax(0,1fr) auto; gap:16px; align-items:center; min-height:148px; }
-.preview-summary .universe-mark { width:54px; height:54px; background:color-mix(in srgb,var(--panel) 84%,transparent); box-shadow:0 4px 18px color-mix(in srgb,var(--ink) 70%,transparent); }
+.preview-summary .universe-mark { width:54px; height:54px; color:var(--preview-accent,var(--gold)); border-color:var(--preview-accent,var(--gold)); background:color-mix(in srgb,var(--panel) 84%,transparent); box-shadow:0 4px 18px color-mix(in srgb,var(--ink) 70%,transparent); }
+.universe-preview[data-universe="hearthbound"] { --preview-accent:#caa45d; }
+.universe-preview[data-universe="supernatural"] { --preview-accent:#8fafbc; }
+.universe-preview[data-universe="mystery"] { --preview-accent:#b99a58; }
+.universe-preview[data-universe="gothic"] { --preview-accent:#c45f69; }
+.universe-preview[data-universe="cosmic"] { --preview-accent:#4d9b8e; }
+.universe-preview[data-universe="espionage"] { --preview-accent:#65a976; }
+.preview-summary .eyebrow { color:var(--preview-accent,var(--gold)); }
 .preview-summary>div { position:relative; isolation:isolate; }
 .preview-summary>div::before { content:""; position:absolute; z-index:-1; inset:-20px -48px -20px -16px; pointer-events:none; background:radial-gradient(ellipse at 16% 50%,color-mix(in srgb,var(--ink) 82%,transparent) 0%,color-mix(in srgb,var(--ink) 48%,transparent) 48%,transparent 78%); }
 .preview-summary h2 { margin:3px 0 5px; font-size:clamp(32px,3.2vw,46px); line-height:1; text-shadow:0 2px 12px #000; }

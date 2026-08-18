@@ -132,7 +132,7 @@ function UniverseMark({ theme, compact = false }: { theme:UniverseTheme; compact
     {icon === "shield" && <><path d="M8 7h32v16c0 10-5.8 16.8-16 21C13.8 39.8 8 33 8 23V7Z"/><path d="m9.5 27 14.5-10 14.5 10"/><path d="M12 10h7l-2.2 2.4 2.2 2.4h-2.6v5.7h-1.8v-5.7H12l2.2-2.4L12 10ZM29 10h7l-2.2 2.4 2.2 2.4h-2.6v5.7h-1.8v-5.7H29l2.2-2.4L29 10ZM20.5 27h7l-2.2 2.4 2.2 2.4h-2.6v6.2h-1.8v-6.2h-2.6l2.2-2.4-2.2-2.4Z"/></>}
     {icon === "cross" && <><path d="M21 5h6l-1 9 9-1v7l-9-1v23h-4V19l-9 1v-7l9 1-1-9Z"/><path d="M18 16h12M24 10v27"/><path d="m19 8 5-3 5 3M19 39l5 3 5-3"/></>}
     {icon === "magnifier" && <><circle cx="20" cy="20" r="11"/><path d="m28 28 12 12"/></>}
-    {icon === "pentacle" && <><circle cx="24" cy="24" r="17"/><path d="m24 9 9 28-23-17h28L15 37z"/><circle cx="24" cy="24" r="3"/></>}
+    {icon === "pentacle-image" && <image href="/art/universes/forsaken-pentagram.png" x="-3" y="-3" width="54" height="54" preserveAspectRatio="xMidYMid meet"/>}
     {icon === "cthulhu-bust" && <image href="/art/universes/hysteria-monster.png" x="-1" y="1" width="50" height="46" preserveAspectRatio="xMidYMid meet"/>}
     {icon === "dossier" && <><path d="M7 13h13l4 5h17v22H7z"/><path d="M10 10h13l4 5h11M13 25h12M13 31h8"/><circle cx="32" cy="29" r="5"/><path d="m36 33 5 5"/></>}
   </svg></span>;
