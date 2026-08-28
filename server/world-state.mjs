@@ -210,9 +210,16 @@ function namedThingScore(words, ...candidates) {
   if (matches(words, ...candidates)) return 100;
   const actionTokens = new Set(normalise(words).split(" ").filter(Boolean).flatMap((token) => [token, singularToken(token)]));
   const generic = new Set(["area", "door", "item", "place", "room", "thing"]);
-  return Math.max(0, ...candidates.map((candidate) => normalise(candidate)
-    .split(" ")
-    .filter((token) => token.length >= 4 && !generic.has(token) && actionTokens.has(singularToken(token))).length));
+  return Math.max(0, ...candidates.map((candidate) => {
+    const candidateTokens = normalise(candidate).split(" ").filter(Boolean);
+    const meaningful = candidateTokens.filter((token) => token.length >= 4 && !generic.has(token));
+    const overlap = meaningful.filter((token) => actionTokens.has(singularToken(token))).length;
+    // The final meaningful noun is normally the entity being named. Weight it
+    // above incidental modifiers: "note ... writing" should select the note,
+    // not a writing desk; "cellar hatch" should not select a cellar key.
+    const head = meaningful.at(-1);
+    return overlap + (head && actionTokens.has(singularToken(head)) ? 10 : 0);
+  }));
 }
 
 function inventoryNames(inventory = []) {
@@ -347,26 +354,15 @@ function observationResult(definition, state, words) {
       ? { message:`Portable items currently established here: ${portableItems.join(", ")}. Nothing is taken until a character explicitly takes a named item.` }
       : { message:`No unattended portable item is established in ${location.name}. The visible scenery is not automatically available as inventory.` };
   }
-  const namedItem = Object.entries(definition.items || {}).find(([id, item]) => mentionsNamedThing(words, id, item.name));
-  if (namedItem) {
-    const [itemId, item] = namedItem;
-    const container = item.container ? definition.containers?.[item.container] : null;
-    const present = item.container
-      ? container?.location === state.currentLocation && state.containers[item.container]?.open
-      : item.location === state.currentLocation && !state.itemOwners[itemId];
-    if (!present) return { message:`${item.name} is not present in ${location.name}.` };
-    const feature = visibleFeatures.find((entry) => entry.id === itemId || mentionsNamedThing(normalise(item.name), entry.id, entry.label));
-    if (feature?.kind === "clue") return { handled:false };
-    return { message:`${item.name} is visible in ${location.name}. Examining it does not move or take it.` };
-  }
-
   const namedFeature = visibleFeatures
-    .map((feature) => ({ feature, score:namedThingScore(words, feature.id, feature.label) }))
+    .map((feature) => {
+      const item = definition.items?.[feature.id];
+      return { feature, score:namedThingScore(words, feature.id, feature.label, item?.name, ...(item?.aliases || [])) };
+    })
     .filter((entry) => entry.score > 0)
     .sort((left, right) => right.score - left.score)[0]?.feature;
-  if (namedFeature?.kind === "clue") return { handled:false };
   if (namedFeature) {
-    if (namedFeature.observation && /\b(look|see|peer|watch|view|inspect|examine)\b/.test(words)) {
+    if (namedFeature.observation && /\b(look|see|peer|watch|view|inspect|examine|investigate|study|search|check)\b/.test(words)) {
       return { message:namedFeature.observation };
     }
     if (namedFeature.contents?.length && /\b(on|upon|contains|holding|items|clues|what)\b/.test(words)) {
@@ -374,7 +370,28 @@ function observationResult(definition, state, words) {
     }
     const object = state.objects?.[namedFeature.id];
     const condition = object ? object.locked ? "locked" : object.open ? "open" : "closed" : "visible";
+    if (/\b(mark|marks|marking|markings|symbol|symbols|rune|runes|carving|carvings|scratch|scratches|surface|detail|details)\b/.test(words)) {
+      return { message:`No further markings or surface details are established on the ${namedFeature.label}. It is ${condition} in ${location.name}.` };
+    }
+    if (namedFeature.kind === "clue") return { handled:false };
     return { message:`The ${namedFeature.label} is ${condition} in ${location.name}.` };
+  }
+
+  // Only consider non-local items after every visible local feature has had a
+  // chance to match. This prevents an absent cellar key from stealing a
+  // reference to the visible cellar hatch.
+  const namedItem = Object.entries(definition.items || {})
+    .map(([id,item]) => ({ id, item, score:namedThingScore(words,id,item.name,...(item.aliases || [])) }))
+    .filter((entry) => entry.score > 0)
+    .sort((left,right) => right.score-left.score)[0];
+  if (namedItem) {
+    const { id:itemId, item } = namedItem;
+    const container = item.container ? definition.containers?.[item.container] : null;
+    const present = item.container
+      ? container?.location === state.currentLocation && state.containers[item.container]?.open
+      : item.location === state.currentLocation && !state.itemOwners[itemId];
+    if (!present) return { message:`${item.name} is not present in ${location.name}.` };
+    return { message:`${item.name} is visible in ${location.name}. Examining it does not move or take it.` };
   }
 
   const featureElsewhere = Object.values(definition.locations || {})

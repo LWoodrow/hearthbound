@@ -340,8 +340,8 @@ export const lanternBelowAdventure = assertValidAdventure({
         feature("writing-desk", "writing desk"),
         feature("room-lamp", "oil lamp"),
         feature("fresh-inkwell", "fresh inkwell"),
-        { ...feature("silver-moth-letter", "sealed silver-moth letter", "clue"), presentations:[
-          { requires:[{path:"flags.letterOpened",equals:true}], label:"Mara Vey's opened silver-moth letter" },
+        { ...feature("silver-moth-letter", "sealed silver-moth letter", "clue"), observation:"The sealed letter bears an unbroken silver-moth wax seal; no other exterior writing is visible.", presentations:[
+          { requires:[{path:"flags.letterOpened",equals:true}], label:"Mara Vey's opened silver-moth letter", observation:"Mara Vey's opened note contains the written instructions already read by the company; no additional visible markings are established on it." },
         ] },
       ],
       exits: [exit("inn", "private-room door", { object: "private-room-door" })],
@@ -397,7 +397,7 @@ export const lanternBelowAdventure = assertValidAdventure({
         feature("cellar-hatch", "stairs up to the pantry", "door"),
         feature("cellar-barrels", "barrels"),
         feature("survey-marks", "old survey marks", "clue"),
-        feature("keyed-stone-door", "locked stone door", "door"),
+        { ...feature("keyed-stone-door", "locked stone door", "door"), observation:"A sturdy stone door blocks the rear of the cellar. Its lock is visible, and the old survey marks approach it; nothing visible establishes what lies beyond." },
       ],
       exits: [
         exit("pantry", "cellar stairs", { direction:"up", object: "cellar-hatch" }),
