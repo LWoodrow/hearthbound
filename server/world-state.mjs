@@ -229,7 +229,19 @@ function objectForAction(definition, state, words) {
 
 function exitForMovement(definition, state, words) {
   const location = definition.locations[state.currentLocation];
-  const exits = location?.exits || [];
+  const authoredExits = location?.exits || [];
+  const requestedDirection = /\b(?:down|descend|downstairs|below)\b/.test(words)
+    ? "down"
+    : /\b(?:up|ascend|upstairs|above)\b/.test(words)
+      ? "up"
+      : "";
+  const directionalExits = authoredExits.filter((exit) => exit.direction);
+  // If this location has authored vertical routes, a directional command must
+  // agree with one of them. Never turn "go down" into movement up the only
+  // stairs merely because both phrases mention stairs.
+  const exits = requestedDirection && directionalExits.length
+    ? authoredExits.filter((exit) => exit.direction === requestedDirection)
+    : authoredExits;
   const matchesTarget = exits.filter((exit) => {
     const destination = definition.locations[exit.to];
     return mentionsNamedThing(words, exit.to, destination?.name, ...(destination?.aliases || []), exit.via);

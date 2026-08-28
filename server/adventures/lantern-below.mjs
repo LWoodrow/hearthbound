@@ -380,6 +380,7 @@ export const lanternBelowAdventure = assertValidAdventure({
       exits: [
         exit("kitchen", "pantry door", { object: "pantry-door" }),
         exit("cellar", "concealed cellar hatch", {
+          direction: "down",
           object: "cellar-hatch",
           requires: [{ path: "objects.cellar-hatch.open", equals: true }],
         }),
@@ -398,7 +399,7 @@ export const lanternBelowAdventure = assertValidAdventure({
         feature("keyed-stone-door", "locked stone door", "door"),
       ],
       exits: [
-        exit("pantry", "cellar stairs", { object: "cellar-hatch" }),
+        exit("pantry", "cellar stairs", { direction:"up", object: "cellar-hatch" }),
         exit("cellar-passage", "stone door", {
           object: "keyed-stone-door",
           requires: [{ path: "objects.keyed-stone-door.open", equals: true }],

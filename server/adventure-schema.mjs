@@ -167,6 +167,7 @@ export function validateAdventure(adventure) {
         errors.push(`locations.${locationId}.exits[${index}] points to unknown location '${exit?.to || "(missing)"}'.`);
       }
       if (!exit?.via) errors.push(`locations.${locationId}.exits[${index}].via is required.`);
+      if (exit?.direction && !["up","down"].includes(exit.direction)) errors.push(`locations.${locationId}.exits[${index}].direction must be up or down when supplied.`);
       validateRequirements(exit?.requires, `locations.${locationId}.exits[${index}].requires`, errors);
     }
   }
