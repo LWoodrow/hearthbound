@@ -134,7 +134,10 @@ export async function handleApi(request, response, url) {
       const structuredAdventureId = adventureDefinition(adventure)?.id || String(adventure?.id || "");
       const worldState = getPartyState(db, player.partyId, `world:${structuredAdventureId}`) || {};
       const roomAuthority = authoredRouteContext(adventure?.id, dmState, worldState);
-      if (guidanceMode === "guided" && !guidance.length && !pendingCheck) guidance = refreshPlayerGuidance(db, player);
+      // Guided cards are a projection of the current canonical scene, not a
+      // historical response artifact. Rebuild them on every view so a card
+      // from an earlier room can never survive a location or clue transition.
+      if (guidanceMode === "guided" && !pendingCheck) guidance = refreshPlayerGuidance(db, player);
       const ai = await modelRuntimeView();
       return json(response, 200, {
         world: { id: partyInfo.worldId, name: partyInfo.worldName },

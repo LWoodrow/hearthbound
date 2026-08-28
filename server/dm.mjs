@@ -246,10 +246,14 @@ export function refreshPlayerGuidance(db, player) {
   const state = getPartyState(db, player.partyId, "dm") || {};
   if (String(adventure?.id || "").endsWith("ashes-briarwatch")) return setPlayerGuidance(db, player.id, player.partyId, ASHES_GUIDANCE[Math.max(0,Math.min(6,Number(state.clueStage || 0)))] || []);
   if (!String(adventure?.id || "").endsWith("lantern-below")) return setPlayerGuidance(db, player.id, player.partyId, []);
-  const arrivalStage=lanternArrivalStage(state);
+  const definition=adventureDefinition(adventure);
+  const savedWorld=definition ? getPartyState(db,player.partyId,`world:${definition.id}`) : null;
+  const world=definition && savedWorld ? createCanonicalState(definition,savedWorld) : null;
+  const projected=world ? canonicalProjection(definition,world) : state;
+  const arrivalStage=lanternArrivalStage(projected);
   if(arrivalStage<2) return updateGuidance(db,player,0,LANTERN_ARRIVAL_GUIDANCE[arrivalStage]);
-  if(Number(state.clueStage || 0)===2 && state.pantryLeadSource==="tamsin") return setPlayerGuidance(db,player.id,player.partyId,TAMSIN_PANTRY_GUIDANCE);
-  return updateGuidance(db, player, Number(state.clueStage || 0));
+  if(Number(projected.clueStage || 0)===2 && projected.pantryLeadSource==="tamsin") return setPlayerGuidance(db,player.id,player.partyId,TAMSIN_PANTRY_GUIDANCE);
+  return updateGuidance(db, player, Number(projected.clueStage || 0));
 }
 
 function appearsStalled(history) {
