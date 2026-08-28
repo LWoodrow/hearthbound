@@ -227,14 +227,16 @@ function objectForAction(definition, state, words) {
   return null;
 }
 
+function requestedVerticalDirection(words) {
+  if (/\b(?:down|descend|downstairs|below)\b/.test(words)) return "down";
+  if (/\b(?:up|ascend|upstairs|above)\b/.test(words)) return "up";
+  return "";
+}
+
 function exitForMovement(definition, state, words) {
   const location = definition.locations[state.currentLocation];
   const authoredExits = location?.exits || [];
-  const requestedDirection = /\b(?:down|descend|downstairs|below)\b/.test(words)
-    ? "down"
-    : /\b(?:up|ascend|upstairs|above)\b/.test(words)
-      ? "up"
-      : "";
+  const requestedDirection = requestedVerticalDirection(words);
   const directionalExits = authoredExits.filter((exit) => exit.direction);
   // If this location has authored vertical routes, a directional command must
   // agree with one of them. Never turn "go down" into movement up the only
@@ -473,6 +475,19 @@ export function resolveWorldAction({ definition, state: suppliedState, action, a
   }
 
   if (intent === "move") {
+    const requestedDirection = requestedVerticalDirection(words);
+    const directionalExits = (definition.locations[next.currentLocation]?.exits || []).filter((exit) => exit.direction);
+    if (requestedDirection && directionalExits.length && !directionalExits.some((exit) => exit.direction === requestedDirection)) {
+      const available = directionalExits
+        .map((exit) => `${exit.direction} through ${exit.via} to ${definition.locations[exit.to]?.name || exit.to}`)
+        .join(", ");
+      return result({
+        accepted:false,
+        reason:"direction-mismatch",
+        message:`No revealed route leads ${requestedDirection} from ${definition.locations[next.currentLocation].name}. The established vertical route leads ${available}; the party remains in ${definition.locations[next.currentLocation].name}.`,
+        diagnostic:{ candidateAffordances:candidates, selectedAffordance:"blocked:direction-mismatch", rejectedAlternatives:candidates.map((item) => item.id) },
+      });
+    }
     const exit = exitForMovement(definition, next, words);
     if (!exit) {
       const namedOtherLocation = Object.entries(definition.locations).find(([id, location]) => id !== next.currentLocation && matches(words, id, location.name));
