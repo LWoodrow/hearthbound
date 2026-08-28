@@ -196,7 +196,7 @@ export const lanternBelowAdventure = assertValidAdventure({
       id:"open-silver-moth-letter", idempotencyKey:"letter:open", location:"back-room", modes:["act"], stage:1,
       verbs:["open","break","unseal","read"], targets:["sealed silver moth letter","silver moth seal","seal","letter","envelope","instructions","Mara's instructions","Mara's note","parchment"],
       requires:[{path:"flags.letterOpened",equals:false}], effects:[{op:"set",path:"flags.letterOpened",value:true},{op:"add",path:"discoveries",value:"mara-sent-message"}],
-      outcome:{ message:"The seal breaks deliberately. Inside are Mara Vey's signed instructions and a tiny dormant ink-mite; the note explains that warmth and one drop of fresh ink will wake it, but names no destination.", publicFacts:["Mara Vey sent the letter.","The opened letter instructs the party to warm the dormant ink-mite and offer one drop of fresh ink."] },
+      outcome:{ message:"The seal breaks deliberately. Inside are Mara Vey's signed instructions and a tiny dormant ink-mite; the note explains that warmth and one drop of fresh ink will wake it.", publicFacts:["Mara Vey sent the letter.","The opened letter instructs the party to warm the dormant ink-mite and offer one drop of fresh ink."] },
       repeat:{message:"The letter is already open. Mara's instructions read: “Warm my silver moth over a flame, give what wakes inside one drop of fresh ink, and follow the line it draws.”",publicFacts:["The letter is already open.","Mara's instructions say to warm the ink-mite, give it one drop of fresh ink, and follow the line it draws."]},
     },
     {
@@ -216,14 +216,14 @@ export const lanternBelowAdventure = assertValidAdventure({
       id:"warm-ink-mite", idempotencyKey:"mite:warm", location:"back-room", modes:["act"], stage:1,
       verbs:["warm","heat","hold"], targets:["silver moth","moth","seal","ink mite","letter","opened letter","parchment"],
       requires:[{path:"flags.letterOpened",equals:true}], effects:[{op:"set",path:"flags.miteAwake",value:true},{op:"add",path:"discoveries",value:"mite-awake"}],
-      outcome:{ message:"Steady warmth wakes the tiny ink-mite. It uncurls and stirs beside Mara's note but draws nothing; the fresh inkwell remains untouched until deliberately offered.", publicFacts:["The harmless ink-mite is awake.","No ink has been offered and no route has been drawn."] },
+      outcome:{ message:"Steady warmth wakes the tiny ink-mite. It uncurls and stirs beside Mara's note.", publicFacts:["The harmless ink-mite is awake."] },
     },
     {
       id:"offer-mite-ink", idempotencyKey:"mite:ink", location:"back-room", modes:["act"], stage:2,
       verbs:["offer","give","feed","place","apply","put"], targets:["ink mite","mite","silver moth"], instruments:["fresh ink","ink","drop of ink","inkwell"],
-      requires:[{path:"flags.miteAwake",equals:true}], effects:[{op:"set",path:"flags.inkOffered",value:true},{op:"set",path:"flags.mapDrawn",value:true},{op:"add",path:"discoveries",value:"pantry-destination"}],
+      requires:[{path:"flags.miteAwake",equals:true}], effects:[{op:"set",path:"flags.inkOffered",value:true},{op:"set",path:"flags.mapDrawn",value:true}],
       blocked:{message:"The ink-mite is still dormant. Fresh ink will not make it draw until the opened letter's other instruction—steady warmth—has first awakened it.",publicFacts:["The ink-mite remains dormant and no route is drawn."]},
-      outcome:{ message:"Given one deliberate drop of fresh ink, the mite draws a line on the paper ending at a particular section of pantry shelves elsewhere in the inn.", publicFacts:["The ink-mite draws a route ending at the pantry shelves.","The drawing reveals no cellar or later room."] },
+      outcome:{ message:"Given one deliberate drop of fresh ink, the mite draws a fine line across the paper and onward, forming a route the company can follow.", publicFacts:["The ink-mite has drawn a route the company can follow."] },
     },
     {
       id:"follow-drawn-route-to-pantry", idempotencyKey:"map:follow-to-pantry", location:"back-room", modes:["act"], stage:2, priority:20,
@@ -235,6 +235,7 @@ export const lanternBelowAdventure = assertValidAdventure({
         {op:"add",path:"visited",value:"inn"},
         {op:"add",path:"visited",value:"kitchen"},
         {op:"add",path:"visited",value:"pantry"},
+        {op:"add",path:"discoveries",value:"pantry-destination"},
         {op:"set",path:"objects.private-room-door.open",value:true},
         {op:"set",path:"objects.kitchen-door.open",value:true},
         {op:"set",path:"objects.pantry-door.open",value:true},
@@ -246,7 +247,7 @@ export const lanternBelowAdventure = assertValidAdventure({
       verbs:["study","inspect","investigate","read","follow","look","see"], targets:["drawn route","line to the pantry","map line","drawn path"], representations:["pantry shelves"],
       requires:[{path:"flags.mapDrawn",equals:true}], once:false,
       blocked:{message:"No drawn route exists to study yet. The opened letter's instructions must be completed before the ink-mite can draw one.",publicFacts:["No route has been drawn."]},
-      outcome:{ message:"The party studies the ink-mite's line here as a drawing. It identifies pantry shelves elsewhere in the inn; studying it neither places those shelves in this room nor moves the party.", publicFacts:["The drawing represents a route to the pantry shelves elsewhere in the inn."] },
+      outcome:{ message:"The ink-mite's line forms a continuous route away from the private room.", publicFacts:["The drawing represents a route the company can follow."] },
     },
     {
       id:"discover-cellar-hatch", idempotencyKey:"pantry:hatch", location:"pantry", modes:["act"], stage:3,

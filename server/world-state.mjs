@@ -224,6 +224,17 @@ function objectForAction(definition, state, words) {
   const exits = location?.exits || [];
   const candidates = exits.filter((exit) => exit.object && matches(words, exit.object, exit.via));
   if (candidates.length === 1) return { id: candidates[0].object, exit: candidates[0] };
+  const genericRouteObject = /\b(?:door|hatch|gate|entrance|exit)\b/.test(words);
+  if (genericRouteObject) {
+    const visible = exits.filter((exit) => exit.object && state.objects?.[exit.object]?.discovered !== false);
+    const stateChanging = visible.filter((exit) => {
+      const object = state.objects?.[exit.object] || {};
+      if (/\bopen\b/.test(words)) return object.open !== true;
+      if (/\b(?:close|shut)\b/.test(words)) return object.open === true;
+      return false;
+    });
+    if (stateChanging.length === 1) return { id:stateChanging[0].object, exit:stateChanging[0] };
+  }
   return null;
 }
 

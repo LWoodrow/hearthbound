@@ -1484,8 +1484,13 @@ function resolveStructuredWorldAction(db, player, adventure, dmState, mode, acti
   const world = createCanonicalState(definition, worldSeed);
   const offerKey=`conversationOffer:${definition.id}:${player.id}`;
   const pendingOffer=getPartyState(db,player.partyId,offerKey);
-  const acceptsOffer=mode === "speak"
-    && /^(?:yes|yes please|please|please do|certainly|absolutely|alright|all right|okay|ok|that would be|id like that|we would like that)\b/i.test(String(action || "").trim());
+  const offeredNpc=pendingOffer?.npcId ? definition.story?.npcs?.[pendingOffer.npcId] : null;
+  const followsOfferingNpc=mode === "act" && pendingOffer && offeredNpc
+    && /\bfollow\b/i.test(String(action || ""))
+    && new RegExp(`\\b(?:${String(offeredNpc.name || "").split(/\\s+/).filter(Boolean).join("|")})\\b`,"i").test(String(action || ""));
+  const acceptsOffer=(mode === "speak"
+    && /^(?:yes|yes please|please|please do|certainly|absolutely|alright|all right|okay|ok|ready|were ready|we are ready|im ready|i am ready|that would be|id like that|we would like that)\b/i.test(String(action || "").replace(/[’']/g,"").trim()))
+    || followsOfferingNpc;
   if (definition.id === "lantern-below") {
     const stage = Number(dmState?.clueStage || 0);
     if (!savedWorld || Number(savedWorld.schemaVersion || 1) < 2 || stage > canonicalStage(definition, world)) {
@@ -1509,7 +1514,7 @@ function resolveStructuredWorldAction(db, player, adventure, dmState, mode, acti
   const effectiveAction=acceptsOffer && offeredInteraction
     ? `${offeredInteraction.verbs?.[0] || "request"} ${offeredInteraction.targets?.[0] || ""}`
     : action;
-  if (mode === "speak" && pendingOffer) setPartyState(db,player.partyId,offerKey,null);
+  if (pendingOffer && (acceptsOffer || mode === "speak")) setPartyState(db,player.partyId,offerKey,null);
   const interaction = resolveAuthoredInteractionSequence({ definition, state:world, action:effectiveAction, mode });
   if (interaction.handled) {
     const canonicalSaveIsActive = savedWorld && Number(savedWorld.schemaVersion || 1) >= 2;

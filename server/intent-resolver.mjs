@@ -1,5 +1,7 @@
 const normalise = (value) => String(value || "").toLowerCase().replace(/[’']/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 const words = (value) => normalise(value).split(" ").filter(Boolean);
+const LOW_SIGNAL_WORDS = new Set(["some","somewhere","thing","things","place","places","area","areas","room","rooms"]);
+const meaningfulWords = (value) => words(value).filter((word) => word.length > 3 && !LOW_SIGNAL_WORDS.has(word));
 
 const VERB_FAMILIES = {
   observe:["look","inspect","examine","study","search","investigate","read","check"],
@@ -31,7 +33,7 @@ function phrasePresent(action, phrase) {
   if (!needle) return false;
   if (haystack.includes(needle)) return true;
   const actionWords = new Set(words(action));
-  const meaningful = words(phrase).filter((word) => word.length > 3);
+  const meaningful = meaningfulWords(phrase);
   return meaningful.length > 0 && meaningful.every((word) => actionWords.has(word));
 }
 
@@ -41,8 +43,10 @@ function entityScore(action, entity) {
   for (const alias of aliases) {
     if (normalise(action).includes(normalise(alias))) score = Math.max(score, 1);
     else {
-      const overlap = words(alias).filter((word) => word.length > 3 && words(action).includes(word)).length;
-      if (overlap) score = Math.max(score, Math.min(.9, overlap / Math.max(1, words(alias).length)));
+      const aliasWords = meaningfulWords(alias);
+      const actionWords = new Set(meaningfulWords(action));
+      const overlap = aliasWords.filter((word) => actionWords.has(word)).length;
+      if (overlap) score = Math.max(score, Math.min(.9, overlap / Math.max(1, aliasWords.length)));
     }
   }
   return score;
@@ -86,7 +90,7 @@ export function interactionMatch(interaction, action, mode = "act") {
   // entities. A tie between aliases must not make the interaction ambiguous.
   // A single weak overlap (for example "some" in "some drinks" versus
   // "some privacy") can never trigger a consequential story transition.
-  const targetMatch = exactTargetMatch || Boolean(target.selected && target.selected.confidence > .5);
+  const targetMatch = exactTargetMatch || Boolean(target.selected && target.selected.confidence >= .5);
   const instrumentMatch = !interaction.instruments?.length
     || exactInstrumentMatch
     || Boolean(instrument.selected && instrument.selected.confidence > .5);
