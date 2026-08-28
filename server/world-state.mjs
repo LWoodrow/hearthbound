@@ -490,7 +490,10 @@ export function resolveWorldAction({ definition, state: suppliedState, action, a
     next.previousLocation = next.currentLocation;
     next.currentLocation = exit.to;
     if (!next.visited.includes(exit.to)) next.visited.push(exit.to);
-    return result({ message: exit.message || `The party moves to ${definition.locations[exit.to].name}.`, events: [{ type: "location-entered", locationId: exit.to }], diagnostic:{ candidateAffordances:candidates, selectedAffordance:`move:${state.currentLocation}:${exit.to}`, rejectedAlternatives:candidates.filter((item) => item.id !== `move:${state.currentLocation}:${exit.to}`).map((item) => item.id) } });
+    const destination = definition.locations[exit.to];
+    const transition = exit.message
+      || `The party passes through ${exit.via} and enters ${destination.name}. ${destination.description || ""}`.trim();
+    return result({ message: transition, events: [{ type: "location-entered", locationId: exit.to }], diagnostic:{ candidateAffordances:candidates, selectedAffordance:`move:${state.currentLocation}:${exit.to}`, rejectedAlternatives:candidates.filter((item) => item.id !== `move:${state.currentLocation}:${exit.to}`).map((item) => item.id) } });
   }
 
   return result({ handled: false, check: abilityCheckForAction(action) });
