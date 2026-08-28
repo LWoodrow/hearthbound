@@ -28,9 +28,16 @@ Improve player freedom and reliable conversational interpretation without weaken
 
 | Owner | Branch/worktree | Scope | Status | Files affected |
 | --- | --- | --- | --- | --- |
+| Codex | `codex/conversation-commitments` | Preserve deterministic NPC offers and ensure natural transfer wording commits authored state before narration | Ready for human retest; intentionally not tested by Codex | `server/intent-resolver.mjs`, `server/interaction-engine.mjs`, `server/dm.mjs`, `server/database.mjs`, `HANDOFF.md` |
 | Unassigned | — | Select the next item from `BACKLOG.md` | Ready | — |
 
 Workers must add a row before beginning substantial work and remove or archive it in the handoff log when finished.
+
+## Queued human playtest findings
+
+- **Deferred to the next grouped engine update; do not patch or independently replay yet:** after reading Mara's opened instructions, `follow the letter's instructions` is classified as movement because `follow` is treated as a navigation verb. The interpreter should resolve the reference to the established instructions and either execute their explicit authored steps or ask which required step the player intends, without attempting a location transition.
+- **Deferred narration overreach:** after `warm silver moth`, the result correctly wakes the ink-mite but then volunteers that the fresh inkwell remains untouched until deliberately offered. Although ink is already an established fact, this unnecessarily recommends the next action. Action narration should report the immediate result and changed state without prompting the next authored step unless guidance was requested or enabled through the guidance controls.
+- **Implemented; awaiting human retest:** the Private Back Room remains the authored letter room and the pantry remains elsewhere through the taproom and kitchen. Natural transfer wording such as `add ink to inkmite` now resolves to the authored ink-transfer interaction, which commits `flags.mapDrawn` and `pantry-destination` before success narration. `follow the route to the pantry shelves` can then execute the existing authored multi-room route. No independent replay or automated test was run at the user's request.
 
 ## Problem categories
 

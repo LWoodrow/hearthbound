@@ -8,7 +8,7 @@ import { currentModelProfile, isCurrentModelReady } from "./model-runtime.mjs";
 import { buildPromptPacket, recordPromptPacket } from "./prompt-packets.mjs";
 import { narrationStylePrompt } from "./narration-styles.mjs";
 import { buildStoryAuthority } from "./story-authority.mjs";
-import { canonicalProjection, canonicalStage, createCanonicalState, resolveAuthoredInteractionSequence } from "./interaction-engine.mjs";
+import { canonicalProjection, canonicalStage, conversationInteractionOffer, createCanonicalState, resolveAuthoredInteractionSequence } from "./interaction-engine.mjs";
 import { parseModelJson } from "./model-output.mjs";
 
 export async function isOllamaReady() {
@@ -986,6 +986,7 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
   if (!found) return false;
   const [npcId,npc]=found;
   const facts=npcConversationFacts(npc,world);
+  const offerKey=`conversationOffer:${definition.id}:${player.id}`;
   const memoryKey=`npcConversation:${definition.id}:${npcId}`;
   const memory=Array.isArray(getPartyState(db,player.partyId,memoryKey)) ? getPartyState(db,player.partyId,memoryKey).slice(-8) : [];
   let reply="";
@@ -1011,6 +1012,12 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
   if (!reply) reply=fallbackNpcReply(npc,action,facts);
   const nextMemory=[...memory,{player:player.name,speech:String(action).slice(0,500),npc:npc.name,reply}].slice(-8);
   setPartyState(db,player.partyId,memoryKey,nextMemory);
+  const authoredOffer=conversationInteractionOffer(definition,world,action,mode);
+  setPartyState(db,player.partyId,offerKey,authoredOffer ? {
+    ...authoredOffer,
+    npcId,
+    worldRevision:Number(world.revision || 0),
+  } : null);
   addEvent(db,{partyId:player.partyId,adventureId:adventure.id,visibility:"public",playerId:player.id,kind:"narration",speaker:npc.name,text:reply,payload:{npcId,conversation:true}});
   return {source:packetId?"ollama":"rules",rule:"npc-conversation",narration:reply,promptPacketIds:packetId?[packetId]:[]};
 }
@@ -1475,6 +1482,10 @@ function resolveStructuredWorldAction(db, player, adventure, dmState, mode, acti
       : savedWorld
     : { currentLocation:legacyLocation };
   const world = createCanonicalState(definition, worldSeed);
+  const offerKey=`conversationOffer:${definition.id}:${player.id}`;
+  const pendingOffer=getPartyState(db,player.partyId,offerKey);
+  const acceptsOffer=mode === "speak"
+    && /^(?:yes|yes please|please|please do|certainly|absolutely|alright|all right|okay|ok|that would be|id like that|we would like that)\b/i.test(String(action || "").trim());
   if (definition.id === "lantern-below") {
     const stage = Number(dmState?.clueStage || 0);
     if (!savedWorld || Number(savedWorld.schemaVersion || 1) < 2 || stage > canonicalStage(definition, world)) {
@@ -1491,7 +1502,15 @@ function resolveStructuredWorldAction(db, player, adventure, dmState, mode, acti
     if (stage >= 4 && (!savedWorld || keyedDoor.locked !== false)) Object.assign(keyedDoor, { locked: false, open: true });
     if (stage >= 7 && spindleDoor.discovered === false) Object.assign(spindleDoor, { discovered: true, open: true });
   }
-  const interaction = resolveAuthoredInteractionSequence({ definition, state:world, action, mode });
+  const offeredInteraction=pendingOffer
+    && Number(pendingOffer.worldRevision || 0) === Number(world.revision || 0)
+    ? (definition.interactions || []).find((entry)=>entry.id === pendingOffer.interactionId)
+    : null;
+  const effectiveAction=acceptsOffer && offeredInteraction
+    ? `${offeredInteraction.verbs?.[0] || "request"} ${offeredInteraction.targets?.[0] || ""}`
+    : action;
+  if (mode === "speak" && pendingOffer) setPartyState(db,player.partyId,offerKey,null);
+  const interaction = resolveAuthoredInteractionSequence({ definition, state:world, action:effectiveAction, mode });
   if (interaction.handled) {
     const canonicalSaveIsActive = savedWorld && Number(savedWorld.schemaVersion || 1) >= 2;
     if (interaction.accepted === false && !canonicalSaveIsActive) return false;

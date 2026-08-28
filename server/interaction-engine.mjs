@@ -122,6 +122,25 @@ export function availableInteractions(definition, suppliedState, mode = "act") {
   });
 }
 
+// Conversation can establish a single authored next step before the player
+// explicitly accepts it. Keep that offer deterministic: it must identify one
+// currently available interaction by its authored target and prerequisites.
+export function conversationInteractionOffer(definition, suppliedState, action, mode = "speak") {
+  const state = createCanonicalState(definition, suppliedState);
+  const candidates = (definition.interactions || [])
+    .map((interaction) => ({ interaction, candidate:candidateFor(interaction, state, action, mode) }))
+    .filter(({ candidate }) => candidate.modeMatch
+      && candidate.targetMatch
+      && candidate.instrumentMatch
+      && candidate.groupMatch
+      && candidate.failedPrerequisites.length === 0
+      && !candidate.repeated)
+    .sort((left, right) => right.candidate.priority - left.candidate.priority
+      || right.candidate.confidence - left.candidate.confidence);
+  if (candidates.length !== 1) return null;
+  return { interactionId:candidates[0].interaction.id };
+}
+
 export function resolveAuthoredInteraction({ definition, state:suppliedState, action, mode = "act", excludeInteractionIds = [] }) {
   const state = createCanonicalState(definition, suppliedState);
   const excluded = new Set(excludeInteractionIds);

@@ -5,10 +5,25 @@ const VERB_FAMILIES = {
   observe:["look","inspect","examine","study","search","investigate","read","check"],
   move:["go","move","enter","follow","sneak","slip","creep","walk","descend","ascend","leave","return"],
   open:["open","unseal","break","unlock","unfasten"],
-  use:["use","warm","heat","offer","give","apply","operate","place"],
+  use:["use","warm","heat","offer","give","apply","operate","place","add"],
   speak:["ask","tell","say","show","request","question","interrogate"],
   take:["take","collect","grab","pickup","retrieve"],
 };
+
+const VERB_EQUIVALENTS = [
+  ["offer","give","feed","place","apply","put","add"],
+  ["warm","heat"],
+  ["go","move","enter","follow","walk","head","travel"],
+  ["look","inspect","examine","study","search","investigate","check"],
+];
+
+function equivalentVerbPresent(action, authoredVerb) {
+  const actionWords = new Set(words(action));
+  const authoredWords = words(authoredVerb);
+  if (authoredWords.length !== 1) return false;
+  const group = VERB_EQUIVALENTS.find((aliases) => aliases.includes(authoredWords[0]));
+  return Boolean(group?.some((alias) => actionWords.has(alias)));
+}
 
 function phrasePresent(action, phrase) {
   const haystack = normalise(action);
@@ -57,7 +72,8 @@ export function interactionMatch(interaction, action, mode = "act") {
   const parsed = parseLiteralIntent(action, mode);
   const verbs = interaction.verbs || [];
   const modeMatch = !interaction.modes?.length || interaction.modes.includes(mode);
-  const verbMatch = verbs.some((verb) => words(verb).every((word) => words(action).includes(word)));
+  const verbMatch = verbs.some((verb) => words(verb).every((word) => words(action).includes(word))
+    || equivalentVerbPresent(action, verb));
   const targets = [...(interaction.targets || []), ...(interaction.representations || [])];
   const target = resolveEntityReferences(action, targets.map((name, index) => ({ id:`target:${index}`, name })));
   const instrument = interaction.instruments?.length
