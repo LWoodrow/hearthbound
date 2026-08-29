@@ -16,10 +16,12 @@ import { buildAuthoritativeRecap } from "./story-recaps.mjs";
 import { buildHearthboundPlaytestStatus, playtestToolsEnabled } from "./playtest-status.mjs";
 import { adventureDefinition } from "./adventure-registry.mjs";
 import { appendTurnTrace, captureTurnState, completeTurnTrace, createTurnTrace, listTurnTraces, redactedTurnTraces } from "./turn-traces.mjs";
+import { readRunningBuildInfo } from "./build-info.mjs";
 
 const dev = process.argv.includes("--dev");
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "0.0.0.0";
+const build = readRunningBuildInfo({ cwd:resolve(".") });
 const db = createDatabase();
 let vite;
 let runningServer;
@@ -70,7 +72,7 @@ export async function handleApi(request, response, url) {
     }
     if (request.method === "GET" && url.pathname === "/api/health") {
       const ai = await modelRuntimeView();
-      return json(response, 200, { ok:true, aiConnected:ai.connected, model:ai.model, modelProfile:ai.profile, modelStatus:ai.status, playtestTools:playtestToolsEnabled(), transcriptionConfigured:Boolean(process.env.WHISPER_URL) });
+      return json(response, 200, { ok:true, build, aiConnected:ai.connected, model:ai.model, modelProfile:ai.profile, modelStatus:ai.status, playtestTools:playtestToolsEnabled(), transcriptionConfigured:Boolean(process.env.WHISPER_URL) });
     }
     if (request.method === "GET" && url.pathname === "/api/models") {
       const player = authenticatedPlayer(request);
@@ -142,6 +144,7 @@ export async function handleApi(request, response, url) {
       }
       const ai = await modelRuntimeView();
       return json(response, 200, {
+        build,
         world: { id: partyInfo.worldId, name: partyInfo.worldName },
         group: { id: partyInfo.id, name: partyInfo.name },
         campaign: { title: adventure?.title || "Untitled Adventure", chapter: adventure?.chapter || "A new beginning", scene: adventure?.scene || "At the threshold", minLevel: adventure?.minLevel || 1, maxLevel: adventure?.maxLevel || 1 },

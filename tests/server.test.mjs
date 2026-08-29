@@ -756,6 +756,24 @@ test("ordinary NPC conversation stays in character without changing canonical st
   } finally { item.close(); }
 });
 
+test("a direct reply stays with the active NPC without repeating their name", async () => {
+  const item=fixture();
+  try {
+    const party=buildLobby(item.db).worlds[0].parties[0];
+    const player=createPlayer(item.db,{partyId:party.id,name:"Nigel",species:"Human",className:"Fighter"});
+    await resolveAction(item.db,player,"act","go inside");
+    const greeting=await resolveAction(item.db,player,"speak","Tamsin, is there somewhere private we could sit?");
+    assert.equal(greeting.rule,"npc-conversation");
+    assert.equal(getPartyState(item.db,party.id,`conversationOffer:lantern-below:${player.id}`).interactionId,"request-private-room");
+    const reply=await resolveAction(item.db,player,"speak","Nigel");
+    assert.equal(reply.rule,"npc-conversation");
+    const event=listVisibleEvents(item.db,player).filter((entry)=>entry.kind==="narration").at(-1);
+    assert.equal(event.speaker,"Tamsin Reed");
+    assert.equal(getPartyState(item.db,party.id,`activeNpcConversation:lantern-below:${player.id}`).npcId,"tamsin-reed");
+    assert.equal(getPartyState(item.db,party.id,`conversationOffer:lantern-below:${player.id}`).interactionId,"request-private-room");
+  } finally { item.close(); }
+});
+
 test("human play wording cannot misroute drinks, split story state, or strand the pantry lead", async () => {
   const item=fixture();
   try {

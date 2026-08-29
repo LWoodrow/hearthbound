@@ -6,7 +6,7 @@ This is the shared operational record for humans and AI collaborators. Update it
 
 - Integrated GitHub baseline: `main` at `03fb588` (`docs: add shared project handoff workflow`)
 - Active development branch: `codex/conversation-commitments` at `839dca9` before this documentation update
-- Latest full automated verification: 156 tests passing; production build and adventure validation passing
+- Latest verification for the build-marker/conversation-continuity package: 168 of 172 tests pass; the four failures are pre-existing stale projection/narration expectations; production build and adventure validation pass
 - Recent resolver slices received syntax checks only; human playtesting is in progress by request
 - Package 1 scene-command-surface work is complete on `codex/scene-command-surface`; commit and local merge are authorized for human retest
 - Runtime servers: do not assume a port or process is active; inspect before testing
@@ -34,6 +34,7 @@ Improve player freedom and reliable conversational interpretation without weaken
 | Codex | `codex/scene-command-surface` / `hearthbound-package1` | Package 1: derive one authoritative scene command surface and rebuild guidance from it | Complete; authorized for local merge and human retest | `server/scene-command-surface.mjs`, `server/dm.mjs`, `server/index.mjs`, `tests/scene-command-surface.test.mjs`, `docs/STORY-BUILDING-RULESET.md`, `HANDOFF.md` |
 | Codex | `codex/typed-resolution-events` / `hearthbound-packages2-3` | Packages 2-3: intent-typed scene reference resolution and revision-linked canonical transition events; prevent hidden interaction targets leaking through guidance | Complete; authorized for commit and merge to local `main`, then ready for human full-story retest | `server/scene-command-surface.mjs`, `server/scene-reference-resolver.mjs`, `server/canonical-events.mjs`, `server/dm.mjs`, tests, ruleset, `HANDOFF.md` |
 | Codex | `codex/conversation-door-authority` / `hearthbound-authority-fix` | Preserve conversational escort acceptance and make key possession, repeated door operations, route state, guidance, and movement agree | Complete; authorized for commit and local merge, then ready for human retest | `Start-Hearthbound.ps1`, `server/dm.mjs`, `server/world-state.mjs`, conversation/door regressions, ruleset, `HANDOFF.md` |
+| Codex | `codex/build-marker-conversation-continuity` / `hearthbound-final-defects` | Show the exact running branch/commit/start time and retain the active NPC for direct conversational replies | Complete; targeted regressions, production build, and adventure validation pass; user authorized merge, push, and restart | `server/build-info.mjs`, `server/index.mjs`, `server/dm.mjs`, `src/App.tsx`, styles, tests, ruleset, `HANDOFF.md` |
 | Unassigned | — | Select the next item from `BACKLOG.md` | Ready | — |
 
 Workers must add a row before beginning substantial work and remove or archive it in the handoff log when finished.
@@ -65,6 +66,8 @@ Workers must add a row before beginning substantial work and remove or archive i
 - **Confirmed during Package 1 human retest; active in Packages 2-3:** initial taproom guidance exposed `Ask Tamsin About Mara` before the party had learned Mara's identity. Mechanically eligible hidden interactions must remain executable when naturally attempted, but cannot become player suggestions unless their subject is already visible, known, offered, or explicitly marked discoverable.
 - **Confirmed after Packages 2-3 reload; active grouped authority fix:** Tamsin responded to a privacy request with an escort promise, but `beer please, lead the way to the room` did not accept the recorded offer and `follow Tamsin` had no canonical destination. Natural acceptance of a recorded offer must execute its exact authored transition before state-neutral NPC prose can contradict it.
 - **Confirmed in the same run; active grouped authority fix:** `use key in lock` opened the cellar stone door without the player carrying the cellar key; `open door` then fell through and invented a forced-entry check; successful prose revealed a passage that movement rejected while guidance advertised it. Schema-v2 state must not be repaired from legacy clue stage, instruments must be possessed, and repeated object operations must resolve canonically before model/check fallback.
+- **Implemented; ready for human retest:** after Tamsin asks a direct question, a short nearby reply such as `Nigel` remains addressed to Tamsin without requiring her name to be repeated. The active NPC is bound to the player, canonical room, and world revision; canonical movement invalidates it. A pending authored offer also survives intermediate conversational answers until accepted or invalidated by canonical state.
+- **Implemented; ready for human retest:** the game screen now shows the exact running Git branch and short commit. Hovering the marker shows the service start time, making stale or wrong-checkout test sessions immediately identifiable after restart.
 
 ## Problem categories
 

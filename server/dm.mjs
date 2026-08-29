@@ -985,7 +985,16 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
   if (!definition) return false;
   const saved=getPartyState(db,player.partyId,`world:${definition.id}`);
   const world=createCanonicalState(definition,saved || {currentLocation:dmState.currentLocationKey || definition.startLocation});
-  const found=addressedNpc(definition,world,action);
+  const activeKey=`activeNpcConversation:${definition.id}:${player.id}`;
+  const active=getPartyState(db,player.partyId,activeKey);
+  const activeNpc=active
+    && active.locationId === world.currentLocation
+    && Number(active.worldRevision || 0) === Number(world.revision || 0)
+    && definition.story?.npcs?.[active.npcId]
+    && (definition.story.npcs[active.npcId].locations || []).includes(world.currentLocation)
+    ? [active.npcId,definition.story.npcs[active.npcId]]
+    : null;
+  const found=addressedNpc(definition,world,action) || activeNpc;
   if (!found) return false;
   const [npcId,npc]=found;
   const facts=npcConversationFacts(npc,world);
@@ -1015,12 +1024,13 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
   if (!reply) reply=fallbackNpcReply(npc,action,facts);
   const nextMemory=[...memory,{player:player.name,speech:String(action).slice(0,500),npc:npc.name,reply}].slice(-8);
   setPartyState(db,player.partyId,memoryKey,nextMemory);
+  setPartyState(db,player.partyId,activeKey,{npcId,locationId:world.currentLocation,worldRevision:Number(world.revision || 0)});
   const authoredOffer=conversationInteractionOffer(definition,world,action,mode);
-  setPartyState(db,player.partyId,offerKey,authoredOffer ? {
+  if (authoredOffer) setPartyState(db,player.partyId,offerKey,{
     ...authoredOffer,
     npcId,
     worldRevision:Number(world.revision || 0),
-  } : null);
+  });
   addEvent(db,{partyId:player.partyId,adventureId:adventure.id,visibility:"public",playerId:player.id,kind:"narration",speaker:npc.name,text:reply,payload:{npcId,conversation:true}});
   return {source:packetId?"ollama":"rules",rule:"npc-conversation",narration:reply,promptPacketIds:packetId?[packetId]:[]};
 }
@@ -1521,7 +1531,7 @@ function resolveStructuredWorldAction(db, player, adventure, dmState, mode, acti
   const effectiveAction=acceptsOffer && offeredInteraction
     ? `${offeredInteraction.verbs?.[0] || "request"} ${offeredInteraction.targets?.[0] || ""}`
     : action;
-  if (pendingOffer && (acceptsOffer || mode === "speak")) setPartyState(db,player.partyId,offerKey,null);
+  if (pendingOffer && acceptsOffer) setPartyState(db,player.partyId,offerKey,null);
   const interaction = resolveAuthoredInteractionSequence({ definition, state:world, action:effectiveAction, mode });
   if (interaction.handled) {
     const canonicalSaveIsActive = savedWorld && Number(savedWorld.schemaVersion || 1) >= 2;

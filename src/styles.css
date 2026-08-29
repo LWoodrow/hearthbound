@@ -241,6 +241,7 @@ h1, h2, p { margin-top: 0; }
 .topbar small { color: var(--muted); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; margin-top: 2px; }
 .campaign-identity { min-width: 235px; }
 .campaign-identity > span { min-width:0; }
+.build-marker { position:fixed; right:8px; bottom:6px; z-index:40; max-width:calc(100vw - 16px); padding:4px 7px; border:1px solid #5b4828; border-radius:3px; background:#120f0be8; color:#c5a862; font-size:9px; line-height:1.2; letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none; }
 .model-control { position:relative; display:block; min-width:0; }
 .ai-model-line { display:flex !important; align-items:center; gap:5px; width:max-content; max-width:100%; margin:2px 0 0; padding:0; border:0; background:transparent; color:#b4a991 !important; font:inherit; font-size:10px; text-transform:uppercase; letter-spacing:.08em !important; cursor:pointer; white-space:nowrap; }
 .ai-model-line i { width:6px; height:6px; flex:0 0 auto; border-radius:50%; background:#8d645f; box-shadow:0 0 0 2px #8d645f18; }

@@ -79,6 +79,8 @@ Free NPC dialogue must never promise, offer, agree, or imply a canonical outcome
 
 When one important NPC is the clear conversational partner, natural statements and questions about work, trouble, help, or local problems must reach that NPC without requiring the player to repeat the NPC's name. Thanks plus a substantive question is still a question; acknowledgement must not discard the rest of the utterance.
 
+Once an NPC answers, they remain the active conversational partner for the player's next nearby spoken reply while the canonical location and world revision remain unchanged. A short answer such as a name, “yes,” or “no” must not fall through to generic Dungeon Master speech merely because it omits the NPC's name. Movement or another canonical transition invalidates that continuity.
+
 ## 5. Clues are facts with several fair routes
 
 Every essential clue needs:

@@ -104,6 +104,7 @@ export type KnownLocation = {
 };
 
 export type GameView = {
+  build: { branch:string; commit:string; startedAt:string };
   world: { id: string; name: string };
   group: { id: string; name: string };
   campaign: { title: string; chapter: string; scene: string; minLevel: number; maxLevel: number };
