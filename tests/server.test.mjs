@@ -692,6 +692,24 @@ test("natural privacy requests enter and map the authored private room", async (
   }
 });
 
+test("lead the way accepts the exact recorded NPC escort offer", async () => {
+  const item=fixture();
+  try {
+    const party=buildLobby(item.db).worlds[0].parties[0];
+    const player=createPlayer(item.db,{partyId:party.id,name:"Nigel",species:"Human",className:"Fighter"});
+    await resolveAction(item.db,player,"act","go inside");
+    const request=await resolveAction(item.db,player,"speak","is there somewhere private we could sit?");
+    assert.equal(request.rule,"npc-conversation");
+    assert.equal(getPartyState(item.db,party.id,"world:lantern-below").currentLocation,"inn");
+    assert.equal(getPartyState(item.db,party.id,`conversationOffer:lantern-below:${player.id}`)?.interactionId,"request-private-room");
+
+    const acceptance=await resolveAction(item.db,getPlayer(item.db,player.id),"speak","beer please, lead the way to the room");
+    assert.equal(acceptance.rule,"authored-interaction");
+    assert.equal(getPartyState(item.db,party.id,"world:lantern-below").currentLocation,"back-room");
+    assert.equal(getPartyState(item.db,party.id,`conversationOffer:lantern-below:${player.id}`),null);
+  } finally { item.close(); }
+});
+
 test("an important NPC initiates once when the party first enters their scene", async () => {
   const item=fixture();
   try {
@@ -1016,6 +1034,34 @@ test("Lantern route guesses stay sealed until discovery reaches structured navig
   } finally {
     item.close();
   }
+});
+
+test("schema-v2 cellar authority requires the carried key and keeps door guidance traversable", async () => {
+  const item=fixture();
+  try {
+    const party=buildLobby(item.db).worlds[0].parties[0];
+    const player=createPlayer(item.db,{partyId:party.id,name:"Nigel",species:"Human",className:"Fighter"});
+    setPartyState(item.db,party.id,"world:lantern-below",{
+      schemaVersion:2,revision:8,currentLocation:"cellar",previousLocation:"pantry",
+      visited:["outside-inn","inn","back-room","kitchen","pantry","cellar"],
+      flags:{letterOpened:true,miteAwake:true,mapDrawn:true},
+      objects:{"cellar-hatch":{discovered:true,locked:false,open:true},"keyed-stone-door":{locked:true,open:false}},
+    });
+    setPartyState(item.db,party.id,"dm",{...getPartyState(item.db,party.id,"dm"),clueStage:4,currentLocationKey:"cellar"});
+
+    await resolveAction(item.db,player,"act","use key in lock");
+    let world=getPartyState(item.db,party.id,"world:lantern-below");
+    assert.deepEqual(world.objects["keyed-stone-door"],{locked:true,open:false});
+    assert.match(listVisibleEvents(item.db,player).at(-1).text,/matching key is required/i);
+
+    addInventoryItem(item.db,player.id,{name:"Cellar key",quantity:1,status:"carried",origin:"adventure",sourceAdventureId:"world-hearthbound-lantern-below"});
+    await resolveAction(item.db,getPlayer(item.db,player.id),"act","use key in lock");
+    await resolveAction(item.db,getPlayer(item.db,player.id),"act","open door");
+    assert.match(listVisibleEvents(item.db,player).at(-1).text,/already open/i);
+    await resolveAction(item.db,getPlayer(item.db,player.id),"act","go to The Cellar Passage through the stone door");
+    world=getPartyState(item.db,party.id,"world:lantern-below");
+    assert.equal(world.currentLocation,"cellar-passage");
+  } finally { item.close(); }
 });
 test("Briarwatch rejects locations from another adventure and non-adjacent jumps", () => {
   const item=fixture();

@@ -37,6 +37,24 @@ test("The Lantern Below definition is valid and every location is reachable", ()
   assert.deepEqual(result.unreachable, []);
 });
 
+test("a keyed door cannot use an imagined key and repeated open remains state-neutral", () => {
+  const cellar = at("cellar", { schemaVersion:2 });
+  const withoutKey = act(cellar, "use key in lock");
+  assert.equal(withoutKey.accepted, false);
+  assert.equal(withoutKey.reason, "missing-key");
+  assert.deepEqual(withoutKey.state.objects["keyed-stone-door"], { locked:true, open:false });
+
+  const opened = act(cellar, "use the cellar key on the stone door", [{ name:"Cellar key", status:"carried", quantity:1 }]);
+  assert.deepEqual(opened.state.objects["keyed-stone-door"], { locked:false, open:true });
+  const repeated = act(opened.state, "open door", [{ name:"Cellar key", status:"carried", quantity:1 }]);
+  assert.equal(repeated.accepted, true);
+  assert.match(repeated.message, /already open/i);
+  assert.deepEqual(repeated.state.objects["keyed-stone-door"], { locked:false, open:true });
+
+  const crossed = act(repeated.state, "go to the cellar passage through the stone door");
+  assert.equal(crossed.state.currentLocation, "cellar-passage");
+});
+
 test("adventure validation rejects an exit to a missing room", () => {
   const invalid = structuredClone(lanternBelowAdventure);
   invalid.locations.inn.exits.push({ to: "missing-room", via: "impossible door" });

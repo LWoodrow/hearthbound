@@ -1492,23 +1492,27 @@ function resolveStructuredWorldAction(db, player, adventure, dmState, mode, acti
     && /\bfollow\b/i.test(String(action || ""))
     && new RegExp(`\\b(?:${String(offeredNpc.name || "").split(/\\s+/).filter(Boolean).join("|")})\\b`,"i").test(String(action || ""));
   const acceptsOffer=(mode === "speak"
-    && /^(?:yes|yes please|please|please do|certainly|absolutely|alright|all right|okay|ok|ready|were ready|we are ready|im ready|i am ready|that would be|id like that|we would like that)\b/i.test(String(action || "").replace(/[’']/g,"").trim()))
+    && (/^(?:yes|yes please|please|please do|certainly|absolutely|alright|all right|okay|ok|ready|were ready|we are ready|im ready|i am ready|that would be|id like that|we would like that)\b/i.test(String(action || "").replace(/[’']/g,"").trim())
+      || /\b(?:lead (?:me|us|the company|them)?\s*(?:the )?way|show (?:me|us|the company|them) (?:to|into)|take (?:me|us|the company|them) (?:to|into)|lets go|let us go)\b/i.test(String(action || "").replace(/[’']/g,"").trim())))
     || followsOfferingNpc;
   if (definition.id === "lantern-below") {
     const stage = Number(dmState?.clueStage || 0);
-    if (!savedWorld || Number(savedWorld.schemaVersion || 1) < 2 || stage > canonicalStage(definition, world)) {
+    const legacyWorld = !savedWorld || Number(savedWorld.schemaVersion || 1) < 2;
+    if (legacyWorld) {
       if (stage >= 1) world.flags.letterOpened = true;
       if (dmState?.miteAwake) world.flags.miteAwake = true;
       world.discoveries = [...new Set([...(world.discoveries || []), ...(dmState?.storyDiscoveries || [])])];
     }
-    const cellarHatch = world.objects["cellar-hatch"];
-    const keyedDoor = world.objects["keyed-stone-door"];
-    const spindleDoor = world.objects["spindle-door"];
-    const cellarWasHidden = cellarHatch.discovered === false;
-    if (stage >= 3) cellarHatch.discovered = true;
-    if (stage >= 4 && (!savedWorld || cellarWasHidden)) cellarHatch.open = true;
-    if (stage >= 4 && (!savedWorld || keyedDoor.locked !== false)) Object.assign(keyedDoor, { locked: false, open: true });
-    if (stage >= 7 && spindleDoor.discovered === false) Object.assign(spindleDoor, { discovered: true, open: true });
+    if (legacyWorld) {
+      const cellarHatch = world.objects["cellar-hatch"];
+      const keyedDoor = world.objects["keyed-stone-door"];
+      const spindleDoor = world.objects["spindle-door"];
+      const cellarWasHidden = cellarHatch.discovered === false;
+      if (stage >= 3) cellarHatch.discovered = true;
+      if (stage >= 4 && (!savedWorld || cellarWasHidden)) cellarHatch.open = true;
+      if (stage >= 4 && (!savedWorld || keyedDoor.locked !== false)) Object.assign(keyedDoor, { locked: false, open: true });
+      if (stage >= 7 && spindleDoor.discovered === false) Object.assign(spindleDoor, { discovered: true, open: true });
+    }
   }
   const offeredInteraction=pendingOffer
     && Number(pendingOffer.worldRevision || 0) === Number(world.revision || 0)

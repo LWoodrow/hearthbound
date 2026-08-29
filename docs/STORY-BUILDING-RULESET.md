@@ -39,6 +39,12 @@ Resolve references through an intent-typed scene pool: movement searches current
 
 Every accepted mutation must produce revision-linked canonical transition events. Guidance, maps, recaps, and narration payloads consume that accepted revision; prose never creates a parallel transition.
 
+An authored interaction that names an instrument must validate actual canonical ownership or carried inventory before applying its effects. Merely typing an instrument's name never establishes possession.
+
+Recorded NPC offers are commitments to one exact authored transition. Natural acceptance such as “lead the way,” “show us,” or “take us there” executes that transition before freeform NPC dialogue; state-neutral prose cannot promise an escort on its own.
+
+Repeated object operations are idempotent. Opening an already-open door reports its current state without requesting a check, and a visible exit is advertised only when the same canonical route can be traversed by the movement resolver.
+
 ## 3. Features must answer ordinary questions
 
 A visible feature should define enough information for common interactions:

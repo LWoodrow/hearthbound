@@ -231,9 +231,19 @@ function objectForAction(definition, state, words) {
   const exits = location?.exits || [];
   const candidates = exits.filter((exit) => exit.object && matches(words, exit.object, exit.via));
   if (candidates.length === 1) return { id: candidates[0].object, exit: candidates[0] };
+  if (/\bkey\b/.test(words) && /\block\b/.test(words)) {
+    const keyed = exits.filter((exit) => exit.object
+      && definition.objects?.[exit.object]?.key
+      && state.objects?.[exit.object]?.discovered !== false);
+    if (keyed.length === 1) return { id:keyed[0].object, exit:keyed[0] };
+  }
   const genericRouteObject = /\b(?:door|hatch|gate|entrance|exit)\b/.test(words);
   if (genericRouteObject) {
-    const visible = exits.filter((exit) => exit.object && state.objects?.[exit.object]?.discovered !== false);
+    const requestedKind = words.match(/\b(door|hatch|gate|entrance|exit)\b/)?.[1];
+    const visible = exits.filter((exit) => exit.object && state.objects?.[exit.object]?.discovered !== false)
+      .filter((exit) => !requestedKind
+        || normalise(exit.via).includes(requestedKind)
+        || normalise(definition.objects?.[exit.object]?.name).includes(requestedKind));
     const stateChanging = visible.filter((exit) => {
       const object = state.objects?.[exit.object] || {};
       if (/\bopen\b/.test(words)) return object.open !== true;
@@ -241,6 +251,7 @@ function objectForAction(definition, state, words) {
       return false;
     });
     if (stateChanging.length === 1) return { id:stateChanging[0].object, exit:stateChanging[0] };
+    if (visible.length === 1) return { id:visible[0].object, exit:visible[0] };
   }
   return null;
 }
@@ -262,11 +273,14 @@ function exitForMovement(definition, state, words) {
   const exits = requestedDirection && directionalExits.length
     ? authoredExits.filter((exit) => exit.direction === requestedDirection)
     : authoredExits;
-  const matchesTarget = exits.filter((exit) => {
+  const matchesTarget = exits.map((exit) => {
     const destination = definition.locations[exit.to];
-    return mentionsNamedThing(words, exit.to, destination?.name, ...(destination?.aliases || []), exit.via);
-  });
-  if (matchesTarget.length === 1) return matchesTarget[0];
+    const destinationScore = namedThingScore(words, exit.to, destination?.name, ...(destination?.aliases || []));
+    const routeScore = namedThingScore(words, exit.via);
+    return { exit, score:(destinationScore * 10) + routeScore };
+  }).filter((candidate) => candidate.score > 0)
+    .sort((left, right) => right.score - left.score);
+  if (matchesTarget[0] && (!matchesTarget[1] || matchesTarget[0].score > matchesTarget[1].score)) return matchesTarget[0].exit;
 
   const movesBackward = /\b(back|return|retreat)\b/.test(words);
   if (movesBackward) {
@@ -486,6 +500,7 @@ export function resolveWorldAction({ definition, state: suppliedState, action, a
       return result({ message: `${target.exit.via} is now unlocked.` });
     }
     if (/\bopen\b/.test(words)) {
+      if (objectState.open === true) return result({ message:`${target.exit.via} is already open.`, diagnostic:{ candidateAffordances:candidates, selectedAffordance:`object:${target.id}`, rejectedAlternatives:candidates.filter((item) => item.id !== `object:${target.id}`).map((item) => item.id) } });
       if (objectState.locked) {
         if (!hasRequiredKey(definition, next, objectDefinition, inventory)) {
           return result({ accepted: false, reason: "locked", message: `${target.exit.via} is locked; the matching key is required.` });

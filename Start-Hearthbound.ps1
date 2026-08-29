@@ -71,7 +71,13 @@ try {
     $null = Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/generate" -Method Post -ContentType "application/json" -Body $warmupBody -TimeoutSec 180
   }
 
-  if (-not (Test-LocalService $healthUrl)) {
+  if (Test-LocalService $healthUrl) {
+    $null = Invoke-RestMethod -Uri "http://127.0.0.1:4173/api/system/restart" -Method Post -TimeoutSec 5
+    Start-Sleep -Milliseconds 750
+    if (-not (Wait-ForService $healthUrl 30)) {
+      throw "Hearthbound did not return after loading the current code."
+    }
+  } else {
     New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
     Start-Process -FilePath $nodePath -ArgumentList "--env-file-if-exists=.env", "server/index.mjs" `
       -WorkingDirectory $projectDirectory -WindowStyle Hidden `
