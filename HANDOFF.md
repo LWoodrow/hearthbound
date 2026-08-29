@@ -8,6 +8,7 @@ This is the shared operational record for humans and AI collaborators. Update it
 - Active development branch: `codex/conversation-commitments` at `839dca9` before this documentation update
 - Latest full automated verification: 156 tests passing; production build and adventure validation passing
 - Recent resolver slices received syntax checks only; human playtesting is in progress by request
+- Package 1 scene-command-surface work is complete on `codex/scene-command-surface`; commit and local merge are authorized for human retest
 - Runtime servers: do not assume a port or process is active; inspect before testing
 - Local AI models: machine-specific Ollama installations are not stored in Git
 
@@ -30,6 +31,7 @@ Improve player freedom and reliable conversational interpretation without weaken
 | --- | --- | --- | --- | --- |
 | Codex | `codex/conversation-commitments` | Preserve deterministic NPC offers, commit natural actions canonically, and narrate movement as a bounded physical transition | Ready for human retest; intentionally not tested by Codex | `server/world-state.mjs`, `server/intent-resolver.mjs`, `server/interaction-engine.mjs`, `server/dm.mjs`, `server/database.mjs`, `HANDOFF.md` |
 | Codex | `codex/conversation-commitments` | Document and publish the one-click Windows startup and handoff workflow | Ready to publish; syntax checks only | `Start-Hearthbound.ps1`, `README.md`, `.env.example`, `docs/STARTUP-AND-HANDOFF.md`, `HANDOFF.md` |
+| Codex | `codex/scene-command-surface` / `hearthbound-package1` | Package 1: derive one authoritative scene command surface and rebuild guidance from it | Complete; authorized for local merge and human retest | `server/scene-command-surface.mjs`, `server/dm.mjs`, `server/index.mjs`, `tests/scene-command-surface.test.mjs`, `docs/STORY-BUILDING-RULESET.md`, `HANDOFF.md` |
 | Unassigned | — | Select the next item from `BACKLOG.md` | Ready | — |
 
 Workers must add a row before beginning substantial work and remove or archive it in the handoff log when finished.
@@ -131,4 +133,5 @@ For human testing, record:
 | Date | Worker | Branch/commit | Completed | Verification | Next step |
 | --- | --- | --- | --- | --- | --- |
 | 2026-08-18 | Codex | `main` / pending documentation commit | Added shared collaboration rules and operational handoff structure | Documentation-only change | Select next backlog item in a dedicated branch/worktree |
+| 2026-08-29 | Codex | `codex/scene-command-surface` / pending commit | Added one canonical scene command surface for visible features, exits, NPCs, inventory, eligible interactions and recorded offers; guided and active standard guidance now rebuild from that surface across all registered universes | Focused tests 4/4 pass; production build and adventure validation pass; full suite 156/160 with four pre-existing expectation mismatches unrelated to Package 1 | Commit, merge locally, restart the service, and human-retest guidance across room transitions |
 

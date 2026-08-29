@@ -10,6 +10,7 @@ import { narrationStylePrompt } from "./narration-styles.mjs";
 import { buildStoryAuthority } from "./story-authority.mjs";
 import { canonicalProjection, canonicalStage, conversationInteractionOffer, createCanonicalState, resolveAuthoredInteractionSequence } from "./interaction-engine.mjs";
 import { parseModelJson } from "./model-output.mjs";
+import { buildSceneCommandSurface } from "./scene-command-surface.mjs";
 
 export async function isOllamaReady() {
   return isCurrentModelReady();
@@ -243,17 +244,13 @@ function updateGuidance(db, player, stage, suggestions = null, forceStandard = f
 
 export function refreshPlayerGuidance(db, player) {
   const adventure = getActiveAdventure(db, player.partyId);
-  const state = getPartyState(db, player.partyId, "dm") || {};
-  if (String(adventure?.id || "").endsWith("ashes-briarwatch")) return setPlayerGuidance(db, player.id, player.partyId, ASHES_GUIDANCE[Math.max(0,Math.min(6,Number(state.clueStage || 0)))] || []);
-  if (!String(adventure?.id || "").endsWith("lantern-below")) return setPlayerGuidance(db, player.id, player.partyId, []);
   const definition=adventureDefinition(adventure);
-  const savedWorld=definition ? getPartyState(db,player.partyId,`world:${definition.id}`) : null;
-  const world=definition && savedWorld ? createCanonicalState(definition,savedWorld) : null;
-  const projected=world ? canonicalProjection(definition,world) : state;
-  const arrivalStage=lanternArrivalStage(projected);
-  if(arrivalStage<2) return updateGuidance(db,player,0,LANTERN_ARRIVAL_GUIDANCE[arrivalStage]);
-  if(Number(projected.clueStage || 0)===2 && projected.pantryLeadSource==="tamsin") return setPlayerGuidance(db,player.id,player.partyId,TAMSIN_PANTRY_GUIDANCE);
-  return updateGuidance(db, player, Number(projected.clueStage || 0));
+  if (!definition) return setPlayerGuidance(db, player.id, player.partyId, []);
+  const savedWorld=getPartyState(db,player.partyId,`world:${definition.id}`) || {};
+  const world=createCanonicalState(definition,savedWorld);
+  const pendingOffer=getPartyState(db,player.partyId,`conversationOffer:${definition.id}:${player.id}`);
+  const surface=buildSceneCommandSurface(definition,world,{inventory:listInventory(db,player.id),pendingOffer});
+  return setPlayerGuidance(db,player.id,player.partyId,surface.guidance);
 }
 
 function appearsStalled(history) {

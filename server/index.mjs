@@ -137,7 +137,9 @@ export async function handleApi(request, response, url) {
       // Guided cards are a projection of the current canonical scene, not a
       // historical response artifact. Rebuild them on every view so a card
       // from an earlier room can never survive a location or clue transition.
-      if (guidanceMode === "guided" && !pendingCheck) guidance = refreshPlayerGuidance(db, player);
+      if (!pendingCheck && (guidanceMode === "guided" || (guidanceMode === "standard" && guidance.length > 0))) {
+        guidance = refreshPlayerGuidance(db, player);
+      }
       const ai = await modelRuntimeView();
       return json(response, 200, {
         world: { id: partyInfo.worldId, name: partyInfo.worldName },

@@ -156,6 +156,8 @@ Use the model for:
 - Narration of already validated public facts.
 - Optional style and atmosphere that introduces no new facts.
 
+Derive one scene command surface from canonical state for every turn. It contains only the current location, visible features, revealed exits, present NPCs, carried items, eligible authored interactions, and a still-valid pending offer. Guidance, diagnostics, and later reference resolution must consume this same surface; they may not keep their own stage-based or narrator-invented list of available actions.
+
 ## 9. Authoring validation checklist
 
 Before a story can be called playable, verify:
