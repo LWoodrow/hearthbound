@@ -4,10 +4,10 @@ This is the shared operational record for humans and AI collaborators. Update it
 
 ## Current status
 
-- Integrated branch: `main`
-- Latest verified integration at creation: `590337b` (`Merge story engine guardrails`)
-- Automated verification: 156 tests passing; production build passing
-- Adventure validation: passing at the last completed engine slice
+- Integrated GitHub baseline: `main` at `03fb588` (`docs: add shared project handoff workflow`)
+- Active development branch: `codex/conversation-commitments` at `839dca9` before this documentation update
+- Latest full automated verification: 156 tests passing; production build and adventure validation passing
+- Recent resolver slices received syntax checks only; human playtesting is in progress by request
 - Runtime servers: do not assume a port or process is active; inspect before testing
 - Local AI models: machine-specific Ollama installations are not stored in Git
 
@@ -29,6 +29,7 @@ Improve player freedom and reliable conversational interpretation without weaken
 | Owner | Branch/worktree | Scope | Status | Files affected |
 | --- | --- | --- | --- | --- |
 | Codex | `codex/conversation-commitments` | Preserve deterministic NPC offers, commit natural actions canonically, and narrate movement as a bounded physical transition | Ready for human retest; intentionally not tested by Codex | `server/world-state.mjs`, `server/intent-resolver.mjs`, `server/interaction-engine.mjs`, `server/dm.mjs`, `server/database.mjs`, `HANDOFF.md` |
+| Codex | `codex/conversation-commitments` | Document and publish the one-click Windows startup and handoff workflow | Ready to publish; syntax checks only | `Start-Hearthbound.ps1`, `README.md`, `.env.example`, `docs/STARTUP-AND-HANDOFF.md`, `HANDOFF.md` |
 | Unassigned | — | Select the next item from `BACKLOG.md` | Ready | — |
 
 Workers must add a row before beginning substantial work and remove or archive it in the handoff log when finished.

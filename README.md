@@ -23,10 +23,12 @@ Hearthbound is a private family D&D prototype hosted by one Windows PC. Every hu
 1. Install Node.js 22 or newer and Ollama.
 2. Copy `.env.example` to `.env` and select an installed Ollama model.
 3. Run `npm install`, then `npm run build`.
-4. Run `Start-Hearthbound.ps1` or use the **Hearthbound D&D** desktop shortcut. The launcher quietly starts Ollama and the campaign server if needed, waits for them to become ready, and opens the game in the default browser. It is safe to use when Hearthbound is already running.
+4. Run `Start-Hearthbound.ps1` or use the **Hearthbound D&D** desktop shortcut. The launcher starts Ollama and the campaign server if needed, verifies and warms the configured model, prints the usable addresses, and opens the game. It is safe to run again when Hearthbound is already active.
 5. Open `http://<PC-address>:4173` from another device on the same network.
 
 Campaign data is saved in `data/campaign.sqlite`. Back up that file while the server is stopped, or copy the database together with its `-wal` and `-shm` files while it is running.
+
+See [Local startup and project handoff](docs/STARTUP-AND-HANDOFF.md) for launcher options, first-time setup, logs, and the contributor workflow.
 
 ## iPad microphone requirement
 
@@ -43,7 +45,7 @@ The configured Ollama model is used twice for each action:
 
 The narrator does not receive hidden doors, traps, enemy statistics, NPC motives, or future events. If Ollama or the configured model is unavailable, the opening scene remains playable through a deterministic demo DM.
 
-The current quality test uses `qwen3:14b-q4_K_M` with an 8K active context on the 12 GB RTX 5070. Set another installed model through `DND_MODEL` if response time or GPU headroom is unsuitable.
+Set `DND_MODEL` to an exact installed Ollama tag. The chosen model is local configuration and is not stored in Git; `.env.example` provides the documented default.
 
 ## Current prototype boundary
 
