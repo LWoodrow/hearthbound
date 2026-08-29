@@ -33,6 +33,12 @@ An entry beat should invite play without solving it. Good: an innkeeper offers f
 
 Never put an undiscovered clue in map decoration, room labels, recaps, guidance, art captions, or accessibility text.
 
+Keep mechanically eligible interactions separate from player-visible guidance. A hidden interaction target may remain executable when the player names it naturally, but guidance may expose it only after its subject is visible, known, explicitly offered, or deliberately marked discoverable.
+
+Resolve references through an intent-typed scene pool: movement searches current exits, speech searches present NPCs, observation searches visible local entities before carried items, and object use searches visible operable objects plus carried instruments. Do not rank absent story entities beside local visible ones.
+
+Every accepted mutation must produce revision-linked canonical transition events. Guidance, maps, recaps, and narration payloads consume that accepted revision; prose never creates a parallel transition.
+
 ## 3. Features must answer ordinary questions
 
 A visible feature should define enough information for common interactions:

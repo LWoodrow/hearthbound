@@ -2,7 +2,6 @@ import { availableInteractions, createCanonicalState } from "./interaction-engin
 import { requirementsMet, visibleLocationFeatures } from "./world-state.mjs";
 
 const normalise = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-const title = (value) => String(value || "").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 function visibleExit(definition, state, sourceId, route) {
   const objectState = route.object ? state.objects?.[route.object] : null;
@@ -39,21 +38,6 @@ function interactionEntry(interaction, mode) {
   };
 }
 
-function interactionGuidance(entry, locationName) {
-  const verb = entry.verbs[0] || (entry.mode === "speak" ? "ask" : "examine");
-  const target = entry.target;
-  if (!target) return null;
-  const connector = normalise(verb) === "ask" && !/\babout\b/i.test(target) ? " about" : "";
-  const text = `${verb}${connector} ${target}`.replace(/\s+/g, " ").trim();
-  return {
-    sourceId:`interaction:${entry.id}`,
-    label:title(text).slice(0, 48),
-    text:`${text[0].toUpperCase()}${text.slice(1)}.`,
-    mode:entry.mode,
-    reason:`This is an established option in ${locationName}.`,
-  };
-}
-
 export function guidanceFromCommandSurface(surface, limit = 3) {
   const suggestions = [];
   const seen = new Set();
@@ -73,8 +57,14 @@ export function guidanceFromCommandSurface(surface, limit = 3) {
     }, `offer:${surface.pendingOffer.interactionId}`);
   }
 
-  for (const interaction of surface.interactions) {
-    add(interactionGuidance(interaction, surface.location.name), `target:${normalise(interaction.target)}`);
+  for (const npc of surface.presentNpcs) {
+    add({
+      sourceId:`npc:${npc.id}`,
+      label:`Speak with ${npc.name}`,
+      text:`Speak with ${npc.name}.`,
+      mode:"speak",
+      reason:`${npc.name} is currently present.`,
+    }, `target:${normalise(npc.name)}`);
   }
   for (const route of surface.exits.filter((entry) => entry.available)) {
     add({
@@ -93,15 +83,6 @@ export function guidanceFromCommandSurface(surface, limit = 3) {
       mode:"act",
       reason:"This feature is currently visible.",
     }, `target:${normalise(feature.label)}`);
-  }
-  for (const npc of surface.presentNpcs) {
-    add({
-      sourceId:`npc:${npc.id}`,
-      label:`Speak with ${npc.name}`,
-      text:`Speak with ${npc.name}.`,
-      mode:"speak",
-      reason:`${npc.name} is currently present.`,
-    }, `target:${normalise(npc.name)}`);
   }
   return suggestions;
 }

@@ -19,15 +19,23 @@ test("scene command surface contains only current visible entities and exits", (
   assert(surface.guidance.every((suggestion) => !/letter/i.test(suggestion.text)));
 });
 
-test("guidance is rebuilt from eligible authored interactions", () => {
+test("hidden executable interactions do not automatically become player guidance", () => {
   const surface = buildSceneCommandSurface(lanternBelowAdventure, {
     currentLocation:"back-room",
     visited:["outside-inn","inn","back-room"],
   });
 
   assert(surface.interactions.some((interaction) => interaction.id === "open-silver-moth-letter"));
-  assert(surface.guidance.some((suggestion) => /letter/i.test(suggestion.text)));
-  assert(surface.guidance.every((suggestion) => suggestion.reason.includes("established") || suggestion.reason.includes("visible") || suggestion.reason.includes("exit")));
+  assert(surface.visibleFeatures.some((feature) => /letter/i.test(feature.label)));
+  assert(surface.guidance.every((suggestion) => !suggestion.sourceId.startsWith("interaction:")));
+  assert(surface.guidance.every((suggestion) => suggestion.reason.includes("visible") || suggestion.reason.includes("exit") || suggestion.reason.includes("present")));
+});
+
+test("initial taproom guidance does not reveal Mara before the party learns her name", () => {
+  const surface = buildSceneCommandSurface(lanternBelowAdventure, { currentLocation:"inn", visited:["outside-inn","inn"] });
+  assert(surface.interactions.some((interaction) => /mara/i.test(interaction.target)));
+  assert(!surface.guidance.some((suggestion) => /mara/i.test(`${suggestion.label} ${suggestion.text}`)));
+  assert(surface.guidance.some((suggestion) => /Tamsin Reed/i.test(suggestion.text)));
 });
 
 test("a pending conversational offer appears only at its recorded revision", () => {

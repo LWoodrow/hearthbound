@@ -11,6 +11,8 @@ import { buildStoryAuthority } from "./story-authority.mjs";
 import { canonicalProjection, canonicalStage, conversationInteractionOffer, createCanonicalState, resolveAuthoredInteractionSequence } from "./interaction-engine.mjs";
 import { parseModelJson } from "./model-output.mjs";
 import { buildSceneCommandSurface } from "./scene-command-surface.mjs";
+import { recordCanonicalTransition } from "./canonical-events.mjs";
+import { resolveSceneReference } from "./scene-reference-resolver.mjs";
 
 export async function isOllamaReady() {
   return isCurrentModelReady();
@@ -1521,26 +1523,48 @@ function resolveStructuredWorldAction(db, player, adventure, dmState, mode, acti
     const canonicalSaveIsActive = savedWorld && Number(savedWorld.schemaVersion || 1) >= 2;
     if (interaction.accepted === false && !canonicalSaveIsActive) return false;
     if (interaction.repeated && mode === "speak") return false;
+    const transition = interaction.accepted
+      ? recordCanonicalTransition(world, interaction.state, { interactionIds:interaction.interactionIds || [interaction.interactionId].filter(Boolean) })
+      : { state:interaction.state, canonicalEvents:[] };
+    interaction.state = transition.state;
+    interaction.canonicalEvents = transition.canonicalEvents;
     setPartyState(db, player.partyId, worldKey, interaction.state);
     setPartyState(db, player.partyId, "dm", { ...dmState, ...canonicalProjection(definition, interaction.state) });
     if (interaction.accepted && interaction.state.currentLocation !== world.currentLocation) {
       const location = definition.locations[interaction.state.currentLocation];
       rememberKnownLocation(db, player.partyId, { name:location.name, summary:location.description || location.summary });
     }
-    addEvent(db, { partyId:player.partyId, adventureId:adventure.id, visibility:"public", playerId:player.id, kind:"narration", speaker:"Dungeon Master", text:interaction.message });
+    addEvent(db, { partyId:player.partyId, adventureId:adventure.id, visibility:"public", playerId:player.id, kind:"narration", speaker:"Dungeon Master", text:interaction.message, payload:{ canonicalRevision:interaction.state.revision, canonicalEvents:interaction.canonicalEvents } });
     if (interaction.accepted && interaction.state.currentLocation !== world.currentLocation) addLocationEntryBeats(db,player,adventure,definition,interaction.state.currentLocation);
     return { ...interaction, source:"rules", rule:"authored-interaction", narration:interaction.message };
+  }
+  const inventory = listInventory(db, player.id);
+  const commandSurface = buildSceneCommandSurface(definition, world, { inventory, pendingOffer });
+  const sceneReference = resolveSceneReference({ surface:commandSurface, action, mode });
+  if (!sceneReference.selected && sceneReference.candidates.length > 1
+    && sceneReference.candidates[0].confidence === sceneReference.candidates[1].confidence) {
+    const labels = sceneReference.candidates.slice(0, 3).map((entry) => entry.label || entry.name || entry.destination).filter(Boolean);
+    const message = `That could refer to ${labels.join(" or ")}. Please name which one you mean.`;
+    addEvent(db, { partyId:player.partyId, adventureId:adventure.id, visibility:"public", playerId:player.id, kind:"narration", speaker:"Dungeon Master", text:message, payload:{ canonicalRevision:world.revision, canonicalEvents:[] } });
+    return {
+      handled:true, accepted:false, state:world, reason:"ambiguous-reference",
+      message,
+      diagnostic:{ candidateAffordances:sceneReference.candidates.map((entry) => ({ id:`${entry.entityType}:${entry.id}`, kind:entry.entityType, target:entry.label || entry.name || entry.destination })), selectedAffordance:"blocked:ambiguous-reference", rejectedAlternatives:sceneReference.candidates.map((entry) => `${entry.entityType}:${entry.id}`) },
+    };
   }
   const outcome = resolveWorldAction({
     definition,
     state: world,
     action,
     actorId: player.id,
-    inventory: listInventory(db, player.id),
+    inventory,
     mode,
   });
 
   if (!outcome.handled) return false;
+  outcome.sceneReference = sceneReference.selected
+    ? { id:sceneReference.selected.id, entityType:sceneReference.selected.entityType, confidence:sceneReference.selected.confidence }
+    : null;
 
   const enteredLocations=[];
   if (outcome.accepted) {
@@ -1549,6 +1573,9 @@ function resolveStructuredWorldAction(db, player, adventure, dmState, mode, acti
     outcome.state.revision = JSON.stringify(previousComparable) === JSON.stringify(nextComparable)
       ? Number(world.revision || 0)
       : Number(world.revision || 0) + 1;
+    const transition = recordCanonicalTransition(world, outcome.state);
+    outcome.state = transition.state;
+    outcome.canonicalEvents = transition.canonicalEvents;
     setPartyState(db, player.partyId, worldKey, outcome.state);
     let nextDmState = { ...dmState, ...canonicalProjection(definition, outcome.state) };
     setPartyState(db, player.partyId, "dm", nextDmState);
@@ -1580,6 +1607,7 @@ function resolveStructuredWorldAction(db, player, adventure, dmState, mode, acti
     kind: "narration",
     speaker: "Dungeon Master",
     text: outcome.message,
+    payload:{ canonicalRevision:outcome.state?.revision ?? world.revision, canonicalEvents:outcome.canonicalEvents || [] },
   });
   for (const locationId of enteredLocations) addLocationEntryBeats(db,player,adventure,definition,locationId);
   return outcome;
