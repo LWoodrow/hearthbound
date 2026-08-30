@@ -329,11 +329,39 @@ export function visibleLocationFeatures(definition, state, locationId = state.cu
   }).map((feature) => featurePresentation(feature, state));
 }
 
+export function visiblePortableItems(definition, state, locationId = state.currentLocation) {
+  return Object.entries(definition.items || {}).filter(([id, item]) => {
+    if (item.portable === false || state.itemOwners?.[id]) return false;
+    if (item.container) {
+      const container = definition.containers?.[item.container];
+      return container?.location === locationId && state.containers?.[item.container]?.open;
+    }
+    return item.location === locationId;
+  }).map(([id, item]) => ({ id, ...item }));
+}
+
 function observationResult(definition, state, words) {
   const location = definition.locations[state.currentLocation];
   if (!location) return { handled:false };
   const visibleFeatures = visibleLocationFeatures(definition, state);
   const featureList = visibleFeatures.map((feature) => feature.label).join(", ") || "the established surroundings";
+  const portableItems = visiblePortableItems(definition, state);
+  const portableItemList = portableItems.map((item) => item.name).join(", ");
+  const genericRoomLook = /\b(look around|what is (?:in|inside) (?:the )?(?:room|area|here)|what can (?:i|we) see|describe (?:the )?(room|area|surroundings))\b/.test(words);
+  const actionTokens = new Set(normalise(words).split(" ").filter(Boolean));
+  const explicitlyNamedFeature = visibleFeatures.some((feature) => {
+    const labelTokens = normalise(feature.label).split(" ").filter((token) => token.length >= 4 && !["the", "with", "from"].includes(token));
+    const matched = labelTokens.filter((token) => actionTokens.has(singularToken(token)) || actionTokens.has(token));
+    return matched.length >= Math.min(2, labelTokens.length) && matched.includes(labelTokens.at(-1));
+  });
+  // A generic look is about the whole current scene. Resolve it before fuzzy
+  // feature matching so a word such as "passage" cannot collapse the scene
+  // to an incidental local feature, or select a similarly named remote one.
+  // An explicit local feature such as "kitchen door" still takes precedence.
+  if (genericRoomLook && !explicitlyNamedFeature) {
+    const portable = portableItemList ? ` Portable items visible here: ${portableItemList}.` : "";
+    return { message:`${location.description} Visible here: ${featureList}.${portable}` };
+  }
   const visibleNpc = Object.values(definition.story?.npcs || {}).find((npc) =>
     (npc.locations || []).includes(state.currentLocation)
     && mentionsNamedThing(words, npc.name));
@@ -414,9 +442,6 @@ function observationResult(definition, state, words) {
     .filter((entry) => entry.score > 0)
     .sort((left, right) => right.score - left.score)[0]?.feature;
   if (featureElsewhere) return { message:`The ${featureElsewhere.label} is not present in ${location.name}. Visible here: ${featureList}.` };
-
-  const genericRoomLook = /\b(look around|what is (?:in|inside) (?:the )?(?:room|area|here)|what can (?:i|we) see|describe (?:the )?(?:room|area|surroundings))\b/.test(words);
-  if (genericRoomLook) return { message:`${location.description} Visible here: ${featureList}.` };
 
   return { message:`No feature matching that description is established in ${location.name}. Visible here: ${featureList}.` };
 }

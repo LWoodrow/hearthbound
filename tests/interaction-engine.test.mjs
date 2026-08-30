@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { lanternBelowAdventure } from "../server/adventures/lantern-below.mjs";
 import { assertCanonicalState, canonicalProjection, createCanonicalState, resolveAuthoredInteraction, resolveAuthoredInteractionSequence, validateInteractions } from "../server/interaction-engine.mjs";
+import { createInitialWorldState, resolveWorldAction } from "../server/world-state.mjs";
 
 function run(state, action, expected) {
   const outcome = resolveAuthoredInteraction({ definition:lanternBelowAdventure, state, action, mode:"act" });
@@ -31,6 +32,26 @@ test("the letter, warmth, ink, and representation route remain separate atomic i
   assert.deepEqual(state.flags, beforeStudy.flags);
   assert.deepEqual(state.objects, beforeStudy.objects);
   assert.deepEqual(state.discoveries, beforeStudy.discoveries);
+});
+
+test("generic scene inspection lists the canonical room surface before fuzzy feature references", () => {
+  const cellar = createInitialWorldState(lanternBelowAdventure, {
+    currentLocation:"cellar",
+    visited:["outside-inn", "inn", "kitchen", "pantry", "cellar"],
+    objects:{ "cellar-hatch":{ discovered:true, locked:false, open:true }, "keyed-stone-door":{ locked:true, open:false } },
+  });
+  const cellarLook = resolveWorldAction({ definition:lanternBelowAdventure, state:cellar, action:"look around the walls", actorId:"nigel" });
+  assert.match(cellarLook.message, /Cellar/);
+  assert.match(cellarLook.message, /Cellar key/);
+  assert.doesNotMatch(cellarLook.message, /vertical wall seam/i);
+
+  const passage = createInitialWorldState(lanternBelowAdventure, {
+    currentLocation:"cellar-passage",
+    visited:["outside-inn", "inn", "kitchen", "pantry", "cellar", "cellar-passage"],
+    objects:{ "keyed-stone-door":{ locked:false, open:true } },
+  });
+  const passageLook = resolveWorldAction({ definition:lanternBelowAdventure, state:passage, action:"look around the passage", actorId:"nigel" });
+  assert.match(passageLook.message, /mothglass chamber entrance/i);
 });
 
 test("an authored action blocked by prerequisites never falls through for AI invention", () => {

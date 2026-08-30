@@ -35,7 +35,7 @@ Never put an undiscovered clue in map decoration, room labels, recaps, guidance,
 
 Keep mechanically eligible interactions separate from player-visible guidance. A hidden interaction target may remain executable when the player names it naturally, but guidance may expose it only after its subject is visible, known, explicitly offered, or deliberately marked discoverable.
 
-Resolve references through an intent-typed scene pool: movement searches current exits, speech searches present NPCs, observation searches visible local entities before carried items, and object use searches visible operable objects plus carried instruments. Do not rank absent story entities beside local visible ones.
+Resolve references through an intent-typed scene pool: movement searches current exits, speech searches present NPCs, observation searches visible local entities before carried items, and object use searches visible operable objects plus carried instruments. A generic scene inspection (for example, “look around”) describes the complete current surface before fuzzy reference matching; include visible portable items so a required item never has to be guessed. Do not rank absent story entities beside local visible ones.
 
 Every accepted mutation must produce revision-linked canonical transition events. Guidance, maps, recaps, and narration payloads consume that accepted revision; prose never creates a parallel transition.
 

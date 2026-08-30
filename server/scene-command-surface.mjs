@@ -1,5 +1,5 @@
 import { availableInteractions, createCanonicalState } from "./interaction-engine.mjs";
-import { requirementsMet, visibleLocationFeatures } from "./world-state.mjs";
+import { requirementsMet, visibleLocationFeatures, visiblePortableItems } from "./world-state.mjs";
 
 const normalise = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
@@ -75,6 +75,15 @@ export function guidanceFromCommandSurface(surface, limit = 3) {
       reason:`This is a currently available exit from ${surface.location.name}.`,
     }, `target:${normalise(route.destination)}`);
   }
+  for (const item of surface.localPortableItems) {
+    add({
+      sourceId:`item:${item.id}`,
+      label:`Take ${item.name}`,
+      text:`Take the ${item.name}.`,
+      mode:"act",
+      reason:"This portable item is currently visible.",
+    }, `item:${normalise(item.name)}`);
+  }
   for (const feature of surface.visibleFeatures) {
     add({
       sourceId:`feature:${feature.id}`,
@@ -95,6 +104,9 @@ export function buildSceneCommandSurface(definition, suppliedState = {}, { inven
     id:feature.id,
     label:feature.label,
     kind:feature.kind || "scenery",
+  }));
+  const localPortableItems = visiblePortableItems(definition, state).map((item) => ({
+    id:item.id, name:item.name, quantity:Number(item.quantity || 1),
   }));
   const exits = (location.exits || []).map((route) => visibleExit(definition, state, state.currentLocation, route)).filter(Boolean);
   const presentNpcs = Object.entries(definition.story?.npcs || {})
@@ -119,6 +131,7 @@ export function buildSceneCommandSurface(definition, suppliedState = {}, { inven
     revision:Number(state.revision || 0),
     location:{ id:state.currentLocation, name:location.name },
     visibleFeatures,
+    localPortableItems,
     exits,
     presentNpcs,
     carriedItems,

@@ -16,6 +16,8 @@ test("scene command surface contains only current visible entities and exits", (
   assert(!surface.visibleFeatures.some((feature) => /letter/i.test(feature.label)));
   assert(surface.exits.every((route) => route.sourceId === "cellar"));
   assert.deepEqual(surface.carriedItems.map((item) => item.name), ["Rope"]);
+  assert.deepEqual(surface.localPortableItems.map((item) => item.name), ["Cellar key"]);
+  assert(surface.guidance.some((suggestion) => suggestion.text === "Take the Cellar key."));
   assert(surface.guidance.every((suggestion) => !/letter/i.test(suggestion.text)));
 });
 
@@ -65,6 +67,7 @@ test("every registered universe produces the same command-surface shape", () => 
     assert(Array.isArray(surface.exits));
     assert(Array.isArray(surface.presentNpcs));
     assert(Array.isArray(surface.carriedItems));
+    assert(Array.isArray(surface.localPortableItems));
     assert(Array.isArray(surface.interactions));
     assert(Array.isArray(surface.guidance));
     assert(surface.guidance.length <= 3);
