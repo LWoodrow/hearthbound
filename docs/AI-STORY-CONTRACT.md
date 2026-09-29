@@ -39,6 +39,8 @@ This story package is authoritative over legacy adventure summaries and recent m
 
 Once a schema-v2 canonical save exists, no legacy adventure handler may mutate story progress beside it. Compatibility data may seed a one-time migration only. Every displayed success must come from the same accepted canonical transaction that records its location, flags, discoveries, inventory, resources, and clocks; narration alone is never evidence that an outcome occurred.
 
+Combat victories and other subsystem outcomes obey that same transaction boundary. A defeated encounter cannot remain alive in the canonical world, and a generic check may report a roll but cannot claim a persistent obstacle changed without an authored state effect. Direct status questions about known entities use current canonical facts ahead of recent narration or model inference.
+
 Input mode is part of authority. Unmatched `Speak` input is state-neutral. It may become bounded conversation or an explicitly authored social interaction, but it cannot open, use, move, take, warm, attack, or otherwise execute a physical command merely because those words were spoken aloud.
 
 ## Accepted director fields

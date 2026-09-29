@@ -1,5 +1,8 @@
 import { addEvent, addInventoryItem, getActiveAdventure, getPartyState, getPlayer, listPlayers, removeInventoryItem, restorePlayerSpellSlots, setPartySpotlight, setPartyState, setPlayerGuidance, setPlayerHp, spendPlayerSpellSlot } from "./database.mjs";
 import { COTTON_ID, cottonCombatant, cottonLevel } from "./cotton.mjs";
+import { lanternBelowAdventure } from "./adventures/lantern-below.mjs";
+import { canonicalProjection, createCanonicalState } from "./interaction-engine.mjs";
+import { recordCanonicalTransition } from "./canonical-events.mjs";
 
 const WEAPONS = {
   "greatsword":{ name:"Greatsword", ability:"strength", dice:[2,6], range:"melee" },
@@ -368,6 +371,7 @@ function finishGuardianVictory(db, player, combat, method) {
   combat.active = false;
   combat.outcome = "victory";
   combat.pendingRoll = null;
+  const transition=commitGuardianVictory(db, player.partyId);
   const dmState = getPartyState(db, player.partyId, "dm") || {};
   setPartyState(db, player.partyId, "dm", { ...dmState, clueStage:Math.max(9, Number(dmState.clueStage || 0)) });
   setPlayerGuidance(db, player.id, player.partyId, [{ label:"Clear the stones", text:"Carefully clear the loose stones to free Mara.", mode:"act", reason:"The guardian no longer blocks the rescue." }]);
@@ -376,17 +380,43 @@ function finishGuardianVictory(db, player, combat, method) {
     : method === "cotton"
       ? `Cotton touches the ink-dark guardian with one immaculate paw. Its shape forgets how to exist and gutters into a harmless stain; Cotton washes the paw with pointed disgust while the way to Mara becomes clear.`
     : `${player.name}'s blow breaks the ink-dark guardian's shape apart. It gutters across the floor like spilled ink and goes still; the way to Mara and the loose stones is clear.`;
-  addEvent(db, { partyId:player.partyId, visibility:"public", kind:"narration", speaker:"Dungeon Master", text });
+  addEvent(db, { partyId:player.partyId, visibility:"public", kind:"narration", speaker:"Dungeon Master", text,
+    payload:{canonicalRevision:transition?.state.revision,canonicalEvents:transition?.canonicalEvents || [],authoritativeFacts:["The ink-dark guardian has been defeated and no longer blocks Mara."]} });
   return saveCombat(db, player.partyId, combat);
+}
+
+function commitGuardianVictory(db, partyId) {
+  const key="world:lantern-below";
+  const saved=getPartyState(db,partyId,key);
+  if (Number(saved?.schemaVersion || 0) < 2 || saved.flags?.guardianDefeated) return null;
+  const before=createCanonicalState(lanternBelowAdventure,saved);
+  const next=createCanonicalState(lanternBelowAdventure,{
+    ...before,
+    flags:{...before.flags,guardianDefeated:true},
+    revision:Number(before.revision || 0)+1,
+  });
+  const transition=recordCanonicalTransition(before,next,{interactionIds:["defeat-guardian-in-combat"]});
+  setPartyState(db,partyId,key,transition.state);
+  setPartyState(db,partyId,"dm",{
+    ...(getPartyState(db,partyId,"dm") || {}),
+    ...canonicalProjection(lanternBelowAdventure,transition.state),
+  });
+  return transition;
 }
 
 export function handleCombatAction(db, player, mode, action) {
   const dmState = getPartyState(db, player.partyId, "dm") || {};
   let combat = getPartyState(db, player.partyId, "combat");
+  // Reconcile pre-fix saves whose combat victory was recorded before the
+  // canonical world flag existed. This is idempotent across later turns.
+  if (combat?.encounterId === "lantern-ink-guardian" && combat.outcome === "victory") commitGuardianVictory(db,player.partyId);
   const words = String(action || "").toLowerCase();
   const attacks = /\b(attack|strike|hit|slash|stab|shoot|fight)\w*\b/.test(words);
   if (!combat?.active) {
-    if (mode === "act" && Number(dmState.clueStage || 0) === 8 && attacks && /\b(creature|guardian|thing|monster|it)\b/.test(words)) return startInkGuardianCombat(db, player);
+    if (mode === "act" && String(getActiveAdventure(db,player.partyId)?.id || "").endsWith("lantern-below")
+      && Number(dmState.clueStage || 0) === 8
+      && !getPartyState(db,player.partyId,"world:lantern-below")?.flags?.guardianDefeated
+      && attacks && /\b(creature|guardian|thing|monster|it)\b/.test(words)) return startInkGuardianCombat(db, player);
     return null;
   }
   if (mode === "ask") return null;

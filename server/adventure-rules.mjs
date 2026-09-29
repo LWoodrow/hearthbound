@@ -1,5 +1,5 @@
 import { lanternBelowAdventure } from "./adventures/lantern-below.mjs";
-import { visibleLocationFeatures } from "./world-state.mjs";
+import { visibleLocationDescription, visibleLocationFeatures } from "./world-state.mjs";
 import { canonicalStage } from "./interaction-engine.mjs";
 
 const legacyLanternLocations = [
@@ -16,6 +16,14 @@ const legacyLanternLocations = [
 ];
 
 const legacyLanternByKey = Object.fromEntries(legacyLanternLocations.map((location) => [location.key, location]));
+// Fixed survey plates are authored once; exploration only reveals them. The
+// boxes follow the actual exit graph and never change position as rooms appear.
+const lanternAtlas = {
+  "outside-inn": [40,175,170,150], inn:[265,150,240,200], "back-room":[555,90,185,125],
+  kitchen:[555,255,185,150], pantry:[790,275,160,130], cellar:[790,465,170,145],
+  "cellar-passage":[555,485,185,100], mothglass:[315,470,200,150],
+  passage:[315,685,250,90], alcove:[75,670,195,120],
+};
 const lanternLocations = Object.entries(lanternBelowAdventure.locations).map(([key, location]) => {
   const legacy = legacyLanternByKey[key] || {};
   const names = new Set([
@@ -25,9 +33,9 @@ const lanternLocations = Object.entries(lanternBelowAdventure.locations).map(([k
   ]);
   return {
     ...legacy,
-    // The adventure's own map grid is authoritative. Legacy pixel positions
-    // predate the later rooms and can overlap when more places are revealed.
-    ...(location.map ? { x:location.map.x*11, y:location.map.y*8, w:(location.map.w || 18)*11, h:(location.map.h || 18)*8 } : {}),
+    // This adventure uses the fixed survey plate above; the older coarse grid
+    // and legacy pixel positions overlap when all rooms are revealed.
+    ...(lanternAtlas[key] ? Object.fromEntries(["x","y","w","h"].map((field,index)=>[field,lanternAtlas[key][index]])) : {}),
     key,
     names: [...names],
     minimumStage: legacy.minimumStage ?? location.stage ?? 0,
@@ -133,17 +141,31 @@ export function authoredRouteContext(adventureId, state, worldState = null) {
   };
 }
 
-export function enrichKnownLocations(adventureId, state, locations) {
+export function enrichKnownLocations(adventureId, state, locations, worldState = null) {
   const rules=adventureRules(adventureId);
-  const source=Array.isArray(locations) ? locations : [];
+  const source=Array.isArray(locations) ? [...locations] : [];
+  if (String(adventureId || "").endsWith("lantern-below") && Number(worldState?.schemaVersion || 0) >= 2) {
+    const recorded=new Set(source.map((entry)=>locationRule(adventureId,entry.name)?.key));
+    for (const key of worldState.visited || []) {
+      const room=rules.locations.find((entry)=>entry.key===key);
+      if (room && !recorded.has(key)) {
+        source.push({id:`visited-${key}`,name:room.label,summary:room.summary || "A place the company has visited."});
+        recorded.add(key);
+      }
+    }
+  }
   const revealed=source.filter((location)=>locationIsRevealed(adventureId,state,location?.name));
   const revealedKeys=new Set(revealed.map((location)=>locationRule(adventureId,location?.name)?.key || location.id));
   const mapped = revealed.map((location,index)=>{
     const previous=revealed[index-1];
     const rule=locationRule(adventureId,location?.name);
     const map=rule || { key:location.id, x:65+(index%3)*345, y:70+Math.floor(index/3)*235, w:245+(index%2)*35, h:150, label:location.name, kind:"room", connectsTo:previous?[previous.id]:[] };
-    return { ...location, map:{ key:map.key, x:map.x, y:map.y, w:map.w, h:map.h, label:map.mapLabel || map.label, kind:map.kind, connectsTo:(map.connectsTo || []).filter((key)=>revealedKeys.has(key)) } };
+    const summary=worldState?.schemaVersion === 2 && String(adventureId || "").endsWith("lantern-below")
+      ? visibleLocationDescription(lanternBelowAdventure,worldState,map.key) || location.summary : location.summary;
+    return { ...location, summary, map:{ key:map.key, x:map.x, y:map.y, w:map.w, h:map.h, label:map.mapLabel || map.label, kind:map.kind, connectsTo:(map.connectsTo || []).filter((key)=>revealedKeys.has(key)) } };
   });
+  if (String(adventureId || "").endsWith("lantern-below")) mapped.sort((left,right)=>
+    rules.locations.findIndex((room)=>room.key===left.map.key)-rules.locations.findIndex((room)=>room.key===right.map.key));
   const height=Math.max(rules.mapHeight, ...mapped.map((location)=>Number(location.map.y || 0)+Number(location.map.h || 0)+45));
   return mapped.map((location)=>({ ...location, map:{ ...location.map, height } }));
 }

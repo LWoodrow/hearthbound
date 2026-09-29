@@ -119,6 +119,8 @@ test("resolved rolls cannot request another roll or add failed-check consequence
   assert.ok(result.rejected.includes("model-authored check outcome replaced by rules result"));
 });
 import { beginCombatPotion, beginCombatSpell, combatView, resetWorkshopCombat, resolveCombatRoll, startWorkshopCombat, workshopOptions } from "../server/combat.mjs";
+import { lanternBelowAdventure } from "../server/adventures/lantern-below.mjs";
+import { canonicalProjection, createCanonicalState } from "../server/interaction-engine.mjs";
 
 function fixture() {
   const folder = mkdtempSync(join(tmpdir(), "hearthbound-"));
@@ -1724,6 +1726,44 @@ test("mothglass navigation persists the opened passage and stays aligned while b
   } finally {
     item.close();
   }
+});
+
+test("guardian victory commits once to canonical rescue state and cannot restart", async () => {
+  const item=fixture();
+  try {
+    const party=buildLobby(item.db).worlds[0].parties[0];
+    const player=createPlayer(item.db,{partyId:party.id,name:"Nigel",species:"Human",className:"Fighter",abilities:{strength:15,dexterity:13,constitution:14,intelligence:8,wisdom:12,charisma:10},skills:["Athletics","Acrobatics"]});
+    const world=createCanonicalState(lanternBelowAdventure,{
+      currentLocation:"alcove",visited:["outside-inn","inn","back-room","kitchen","pantry","cellar","cellar-passage","mothglass","passage","alcove"],
+    });
+    setPartyState(item.db,party.id,"world:lantern-below",world);
+    setPartyState(item.db,party.id,"dm",{...getPartyState(item.db,party.id,"dm"),...canonicalProjection(lanternBelowAdventure,world)});
+    const mapped=getKnownLocations(item.db,party.id);
+    assert.ok(mapped.some((place)=>place.map.key==="kitchen"),"intermediate kitchen appears in the browser map projection");
+    assert.ok(mapped.some((place)=>place.map.key==="pantry"));
+    const blocked=await resolveAction(item.db,player,"act","move the loose stones for Mara");
+    assert.equal(blocked.accepted,false);
+    assert.equal(getPartyState(item.db,party.id,`pendingCheck:${player.id}`),null,"no generic roll can narrate uncommitted rubble movement");
+    const started=await resolveAction(item.db,player,"act","attack the guardian");
+    assert.equal(started.combat,true);
+    resolveCombatRoll(item.db,getPlayer(item.db,player.id),20,20);
+    resolveCombatRoll(item.db,getPlayer(item.db,player.id),6,6);
+    const won=getPartyState(item.db,party.id,"world:lantern-below");
+    assert.equal(won.flags.guardianDefeated,true);
+    assert.equal(won.revision,world.revision+1);
+    await resolveAction(item.db,player,"act","look around");
+    assert.doesNotMatch(listVisibleEvents(item.db,player).at(-1).text,/guardian bars|visible here:.*ink-dark guardian/i);
+    const status=await resolveAction(item.db,player,"ask","was the guardian defeated?");
+    assert.equal(status.rule,"dm-question");
+    assert.match(listVisibleEvents(item.db,player).at(-1).text,/has been defeated/i);
+    const again=await resolveAction(item.db,player,"act","attack the guardian again");
+    assert.notEqual(again.combat,true);
+    assert.equal(getPartyState(item.db,party.id,"world:lantern-below").revision,won.revision);
+    const rescue=await resolveAction(item.db,player,"act","move the loose stones for Mara");
+    assert.equal(rescue.rule,"authored-interaction");
+    assert.equal(getPartyState(item.db,party.id,"world:lantern-below").flags.maraRescued,true);
+    assert.equal(getPartyState(item.db,party.id,"world:lantern-below").flags.adventureComplete,true);
+  } finally { item.close(); }
 });
 
 test("live scene commands count, inspect, call out, and follow visible trails without inventing routes", async () => {

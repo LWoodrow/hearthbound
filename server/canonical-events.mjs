@@ -6,6 +6,8 @@ export function deriveCanonicalEvents(before = {}, after = {}, { interactionIds 
   const events = [];
   if (before.currentLocation !== after.currentLocation) events.push({ type:"location-entered", revision, locationId:after.currentLocation, previousLocationId:before.currentLocation || null });
   for (const id of after.discoveries || []) if (!(before.discoveries || []).includes(id)) events.push({ type:"discovery-recorded", revision, discoveryId:id });
+  for (const [flag,value] of Object.entries(after.flags || {})) if (stable(before.flags?.[flag]) !== stable(value))
+    events.push({ type:"flag-state-changed", revision, flag, value });
   for (const [objectId, value] of Object.entries(after.objects || {})) {
     const previous = before.objects?.[objectId] || {};
     const changes = Object.fromEntries(Object.entries(value || {}).filter(([key, next]) => stable(previous[key]) !== stable(next)));

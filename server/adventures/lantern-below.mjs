@@ -12,6 +12,18 @@ export const lanternBelowAdventure = assertValidAdventure({
   stateKey: "clueStage",
   startLocation: "outside-inn",
   initialFlags: { privateRoomPermission:false, pantryPermission:false, letterOpened:false, suppliesLocated:false, miteAwake:false, inkOffered:false, mapDrawn:false, guardianDefeated:false, maraRescued:false, adventureComplete:false },
+  stageFlags: [{ path:"flags.guardianDefeated", stage:9 }, { path:"flags.maraRescued", stage:10 }],
+  statusFacts: [
+    { aliases:["guardian","ink-dark guardian","loose stones","rubble"], knownAfter:"alcove", variants:[
+      { requires:[{path:"flags.guardianDefeated",equals:true}], answer:"The ink-dark guardian has been defeated. It no longer blocks the loose stones; the company can now clear them to rescue Mara." },
+      { answer:"The ink-dark guardian still bars safe access to the loose stones. It has not been defeated." },
+    ] },
+    { aliases:["stone door","cellar door"], knownAfter:"cellar", variants:[
+      { requires:[{path:"objects.keyed-stone-door.open",equals:true}], answer:"The cellar's stone door is open. Passing through it does not automatically close or relock it." },
+      { requires:[{path:"objects.keyed-stone-door.locked",equals:false}], answer:"The cellar's stone door is unlocked but not yet open." },
+      { answer:"The cellar's stone door is locked." },
+    ] },
+  ],
   initialResources: { ink:1 },
   mapHeight: 760,
   premise: "A silver-moth letter leads the company beneath an old Eldervale inn without revealing the forgotten road beyond it too early.",
@@ -78,6 +90,11 @@ export const lanternBelowAdventure = assertValidAdventure({
         sharesWhen: "Before rescue Mara can give short, urgent answers about the immediate danger. After rescue she explains this episode's findings but not the hidden series answer she does not yet know.",
         voice: "Exact, exhausted, brave, and accustomed to describing distances and physical evidence.",
         mustNotKnow: ["Chancellor Oris Vale is responsible", "The full identity or purpose of The Witness"],
+        conversation: { publicFacts:["Mara is present in the survey alcove."], conditionalFacts:[
+          {requires:[{path:"flags.maraRescued",equals:false}],fact:"Mara remains behind loose stones and needs help to get free."},
+          {requires:[{path:"flags.guardianDefeated",equals:true}],fact:"The ink-dark guardian is defeated and no longer blocks the loose stones."},
+          {requires:[{path:"flags.maraRescued",equals:true}],fact:"The company has cleared the stones and rescued Mara."},
+        ] },
       },
     },
     clues: {
@@ -288,7 +305,7 @@ export const lanternBelowAdventure = assertValidAdventure({
     },
     {
       id:"rescue-mara", idempotencyKey:"mara:rescue", location:"alcove", modes:["act"], stage:10,
-      verbs:["rescue","free","help","pull","clear"], targets:["Mara","Mara Vey","loose stones","collapsed alcove"],
+      verbs:["rescue","free","help","pull","clear","move","shift","remove"], targets:["Mara","Mara Vey","loose stones","stones","rubble","collapsed alcove"],
       requires:[{path:"flags.guardianDefeated",equals:true}], effects:[{op:"set",path:"flags.maraRescued",value:true},{op:"set",path:"flags.adventureComplete",value:true}],
       outcome:{message:"With the guardian resolved, the company clears the unstable stones and frees Mara Vey. The Lantern Below is complete, and Mara's survey of the wider old road carries forward.",publicFacts:["Mara Vey is rescued.","The adventure is complete."]},
     },
@@ -471,6 +488,10 @@ export const lanternBelowAdventure = assertValidAdventure({
     alcove: {
       name: "Collapsed Survey Alcove",
       description: "Loose stones block Mara Vey in a damaged survey alcove while an ink-dark guardian bars a safe rescue.",
+      presentations: [
+        {requires:[{path:"flags.maraRescued",equals:true}],description:"The loose stones have been cleared. Mara Vey is free, and the ink-dark guardian is gone."},
+        {requires:[{path:"flags.guardianDefeated",equals:true}],description:"Mara Vey remains behind loose stones, but the defeated guardian no longer blocks the rescue."},
+      ],
       stage: 8,
       arrivalStage: 2,
       map: { x: 35, y: 98, w: 14, h: 16, kind: "alcove" },
@@ -478,7 +499,7 @@ export const lanternBelowAdventure = assertValidAdventure({
         feature("alcove-opening", "opening to the passage", "door"),
         feature("loose-stones", "unstable loose stones", "hazard"),
         feature("mara-vey", "Mara Vey", "npc"),
-        feature("ink-guardian", "ink-dark guardian", "creature"),
+        { ...feature("ink-guardian", "ink-dark guardian", "creature"), requires:[{path:"flags.guardianDefeated",equals:false}] },
       ],
       exits: [exit("passage", "survey passage", { object: "alcove-opening" })],
     },

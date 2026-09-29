@@ -1,4 +1,4 @@
-import { createInitialWorldState, requirementsMet } from "./world-state.mjs";
+import { createInitialWorldState, requirementsMet, visibleLocationDescription } from "./world-state.mjs";
 import { interactionMatch } from "./intent-resolver.mjs";
 import { classifyWorldAction } from "./world-state.mjs";
 
@@ -60,7 +60,8 @@ export function canonicalStage(definition, state) {
   const locations = (state.visited || []).map((id) => Number(definition.locations?.[id]?.stage || 0));
   const completed = state.completedInteractions || [];
   const interactions = (definition.interactions || []).filter((entry) => completed.includes(entry.id)).map((entry) => Number(entry.stage || 0));
-  return Math.max(0, ...locations, ...interactions);
+  const milestones=(definition.stageFlags || []).filter(({path})=>readPath(state,path)===true).map(({stage})=>Number(stage || 0));
+  return Math.max(0, ...locations, ...interactions, ...milestones);
 }
 
 export function canonicalProjection(definition, state) {
@@ -70,7 +71,7 @@ export function canonicalProjection(definition, state) {
     ...(state.knowledge || {}),
     currentLocationKey:state.currentLocation,
     locationName:location?.name || state.currentLocation,
-    locationNote:location?.description || "",
+    locationNote:visibleLocationDescription(definition,state),
     clueStage:canonicalStage(definition, state),
     dangerClock:Number(state.clocks?.danger || 0),
     storyDiscoveries:[...(state.discoveries || [])],

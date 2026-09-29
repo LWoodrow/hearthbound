@@ -3,7 +3,7 @@ import { cottonForParty } from "./cotton.mjs";
 import { applyAdventureEvent, adventureRules, authoredRouteContext, featureLocationRule, locationIsRevealed, locationRule, locationTransitionIsAllowed } from "./adventure-rules.mjs";
 import { handleCombatAction } from "./combat.mjs";
 import { adventureDefinition } from "./adventure-registry.mjs";
-import { createInitialWorldState, resolveWorldAction } from "./world-state.mjs";
+import { createInitialWorldState, requirementsMet, resolveWorldAction } from "./world-state.mjs";
 import { currentModelProfile, isCurrentModelReady } from "./model-runtime.mjs";
 import { buildPromptPacket, recordPromptPacket } from "./prompt-packets.mjs";
 import { narrationStylePrompt } from "./narration-styles.mjs";
@@ -695,6 +695,11 @@ function offerGeneralAbilityCheck(db, player, mode, action) {
   const forcesObstacle = /\b(force|break|bash|shoulder|heave|wrench|pry|shove|push|pull|lift|shift|move|bend)\w*\b/.test(words)
     && /\b(door|doors|gate|gates|portcullis|lock|locks|stone|stones|rock|rocks|rubble|debris|bar|bars|obstacle|obstacles|statue|crate|crates)\b/.test(words);
   if (forcesObstacle) {
+    const adventure=getActiveAdventure(db,player.partyId);
+    const definition=adventureDefinition(adventure);
+    // A generic roll has no canonical effect. Once an authored world exists,
+    // it must never claim to move a persistent obstacle without a transition.
+    if (definition && Number(getPartyState(db,player.partyId,`world:${definition.id}`)?.schemaVersion || 0) >= 2) return false;
     const ability = "Strength";
     const skill = "Athletics";
     return queueAbilityCheck(db, player, {
@@ -1237,12 +1242,27 @@ function looksLikeWorldAction(question) {
   return /^(?:i |we |can i |could i |would i |please )?(?:attempt to |try to |try and )?(?:open|close|enter|leave|go|move|walk|run|climb|descend|follow|turn|rotate|pull|push|twist|lift|take|pick|grab|drop|give|use|light|burn|break|attack|cast|search|inspect|examine|touch|operate|help|free|rescue)\b/.test(words);
 }
 
+function canonicalStatusAnswer(db, player, question) {
+  const definition=adventureDefinition(getActiveAdventure(db,player.partyId));
+  const saved=definition && getPartyState(db,player.partyId,`world:${definition.id}`);
+  if (Number(saved?.schemaVersion || 0) < 2 || !/\b(is|was|did|has|have|why|still|already|what happened|can)\b/i.test(question)) return "";
+  const world=createCanonicalState(definition,saved);
+  const lower=String(question).toLowerCase();
+  const entry=(definition.statusFacts || []).find((fact)=>
+    (!fact.knownAfter || world.visited.includes(fact.knownAfter))
+    && fact.aliases.some((alias)=>lower.includes(alias.toLowerCase())));
+  return entry?.variants.find((variant)=>requirementsMet(world,variant.requires || []))?.answer || "";
+}
+
 async function resolveDmQuestion(db, player, action, preparedContext, playerSafeHistory) {
   const question = String(action || "").trim();
   const lower = question.toLowerCase();
   let answer = "";
 
-  if (looksLikeWorldAction(question)) {
+  const establishedStatus=canonicalStatusAnswer(db,player,question);
+  if (establishedStatus) {
+    answer=establishedStatus;
+  } else if (looksLikeWorldAction(question)) {
     const requestedAction = question.replace(/^(?:i |we |can i |could i |would i |please )?(?:attempt to |try to |try and )?/i, "").replace(/[?.!]+$/, "");
     answer = `That would be an action rather than a rules question. Switch to Act to have ${player.name} ${requestedAction}.`;
   } else if (/\b(not (?:very )?nice|that was rude|you(?:'re| are) rude|mean)\b/.test(lower)) {
@@ -1287,6 +1307,9 @@ async function resolveGeneralCheckNarration(db, player, pending, rollResult) {
   const adventure = getActiveAdventure(db, player.partyId);
   const dmState = getPartyState(db, player.partyId, "dm") || { dangerClock:0 };
   const preparedContext = prepareCampaignContext(adventure, dmState, action);
+  const definition=adventureDefinition(adventure);
+  if (definition && Number(getPartyState(db,player.partyId,`world:${definition.id}`)?.schemaVersion || 0) >= 2)
+    return { text:rollResult.success ? pending.successText : pending.failureText, preparedContext, director:null };
   if (!(await isOllamaReady())) return { text:rollResult.success ? pending.successText : pending.failureText, preparedContext, director:null };
 
   try {
@@ -1699,7 +1722,7 @@ export async function resolveAction(db, player, mode, action) {
   if (!canonicalSaveIsActive && offerLanternRescueCheck(db, player, adventure, dmState, mode, action)) return { source:"rules",rule:"lantern-rescue-check" };
   if (!canonicalSaveIsActive && offerLanternSafetyCheck(db, player, adventure, dmState, mode, action)) return { source:"rules",rule:"lantern-safety-check" };
   if (!canonicalSaveIsActive && offerLanternChamberCheck(db, player, adventure, dmState, mode, action, preparedContext)) return { source:"rules",rule:"lantern-chamber-check" };
-  if (offerGeneralAbilityCheck(db, player, mode === "ask" ? "act" : mode, action)) return { source:"rules",rule:"general-ability-check" };
+  if (mode === "act" && offerGeneralAbilityCheck(db, player, mode, action)) return { source:"rules",rule:"general-ability-check" };
   if (mode === "ask") return { ...(await resolveDmQuestion(db, player, action, preparedContext, playerSafeHistory)), rule:"dm-question" };
   if (!canonicalSaveIsActive && resolveAuthoritativeClueAction(db, player, adventure, dmState, action, preparedContext)) return { source: "rules",rule:"authoritative-clue" };
   if (!canonicalSaveIsActive && resolveBriarwatchClueAction(db, player, adventure, dmState, action, preparedContext)) return { source:"rules",rule:"briarwatch-clue" };

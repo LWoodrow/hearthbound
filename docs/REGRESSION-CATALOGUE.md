@@ -29,6 +29,9 @@ This is the minimum behaviour every adventure must preserve. The automated tests
 - Natural questions or statements about work, trouble, help, rumours, or direction reach the clear sole NPC conversational partner; an initial thanks must not swallow a substantive follow-up question.
 - Player maps show visited or explicitly discovered places only; hidden rooms and routes remain absent.
 - Combat initiative, turns, damage, resources, and defeat are resolved by the combat system rather than improvised narration.
+- A finished encounter commits its defeat to canonical story state once. Later attacks cannot restart it; rescue prerequisites and Ask DM status agree with the victory.
+- A successful generic check cannot narrate moving a persistent obstacle when no authored world transition was committed.
+- A multi-room journey reveals every visited intermediate map room, while fixed atlas plates and their route thresholds remain stable as later rooms appear.
 - The player recap is compiled from authoritative room state, accepted public facts, player actions, rolls, inventory, and known locations; unsupported narration and DM-only notes never become recap facts.
 - Narration style examples influence prose only and never enter director adjudication or become campaign people, places, objects, or outcomes.
 - Turn traces assess final narration separately from canonical state. A stale-location sentence can fail narration validation while the accepted movement and stored location remain correct.

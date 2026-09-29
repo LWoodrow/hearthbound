@@ -1010,7 +1010,9 @@ export function getKnownLocations(db, partyId) {
   const locations = getPartyState(db, partyId, "knownLocations");
   const saved = Array.isArray(locations) ? locations : [];
   const party = db.prepare("SELECT active_adventure_id FROM parties WHERE id = ?").get(partyId);
-  return enrichKnownLocations(party?.active_adventure_id, getPartyState(db, partyId, "dm") || {}, saved);
+  const adventureId=party?.active_adventure_id;
+  return enrichKnownLocations(adventureId, getPartyState(db, partyId, "dm") || {}, saved,
+    String(adventureId || "").endsWith("lantern-below") ? getPartyState(db, partyId, "world:lantern-below") : null);
 }
 
 export function rememberKnownLocation(db, partyId, location) {

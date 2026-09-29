@@ -101,6 +101,18 @@ test("mapped rooms use authored geometry without overlap as discoveries grow", (
   assert.ok(mapped[0].map.height >= Math.max(...mapped.map((place) => place.map.y+place.map.h)));
 });
 
+test("a multi-room journey reveals its intermediate kitchen on the fixed survey", () => {
+  const mapped=enrichKnownLocations("lantern-below",{clueStage:2,lanternArrivalStage:2},[
+    {id:"outside",name:"Outside the Crooked Lantern",summary:"Outside"},
+    {id:"private",name:"Private Back Room",summary:"Private room"},
+  ],{schemaVersion:2,visited:["outside-inn","inn","back-room","kitchen","pantry"],currentLocation:"pantry"});
+  const byKey=new Map(mapped.map((entry)=>[entry.map.key,entry]));
+  for (const key of ["inn","kitchen","pantry"]) assert.ok(byKey.has(key),`${key} is revealed`);
+  assert.ok(byKey.get("kitchen").map.connectsTo.includes("inn"));
+  assert.ok(byKey.get("pantry").map.connectsTo.includes("kitchen"));
+  assert.equal(byKey.has("cellar"),false,"unvisited cellar remains hidden");
+});
+
 test("a keyed door cannot use an imagined key and repeated open remains state-neutral", () => {
   const cellar = at("cellar", { schemaVersion:2 });
   const withoutKey = act(cellar, "use key in lock");

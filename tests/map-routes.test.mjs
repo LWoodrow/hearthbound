@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { routeBetweenRooms } from "../src/map-routes.ts";
+import { LANTERN_SURVEY_ROUTES, routeBetweenRooms } from "../src/map-routes.ts";
 import { ADVENTURE_RULES } from "../server/adventure-rules.mjs";
 
 const cellar={x:561,y:568,w:242,h:184};
@@ -44,5 +44,21 @@ test("every authored adventure route avoids all other revealed room interiors",(
       assert.ok(!crossesRoom(route.points[index-1],route.points[index],room),
         `${adventure.suffix}: ${area.key} → ${target.key} must avoid ${room.key}`);
     }
+  }
+});
+
+test("the published Lantern survey has every route and no overlapping room interiors",()=>{
+  const rooms=ADVENTURE_RULES.find((entry)=>entry.suffix==="lantern-below").locations;
+  const byKey=new Map(rooms.map((room)=>[room.key,room]));
+  const links=new Set();
+  for (const room of rooms) for (const target of room.connectsTo) links.add([room.key,target].sort().join(":"));
+  assert.deepEqual(Object.keys(LANTERN_SURVEY_ROUTES).sort(),[...links].sort());
+  for (const [key,path] of Object.entries(LANTERN_SURVEY_ROUTES)) {
+    const [first,second]=key.split(":").map((id)=>byKey.get(id));
+    const points=[...path.matchAll(/([ML])\s*(\d+)\s+(\d+)/g)].map((match)=>({x:Number(match[2]),y:Number(match[3])}));
+    assert.equal(points.length,2,`${key} is one clear corridor`);
+    assert.ok(!crossesRoom(points[0],points[1],first));
+    assert.ok(!crossesRoom(points[0],points[1],second));
+    for (const room of rooms.filter((room)=>room!==first&&room!==second)) assert.ok(!crossesRoom(points[0],points[1],room),`${key} avoids ${room.key}`);
   }
 });

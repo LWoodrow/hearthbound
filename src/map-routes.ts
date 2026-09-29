@@ -2,6 +2,21 @@ export type MapRect = { x:number; y:number; w:number; h:number };
 type Point = { x:number; y:number };
 export type MapRoute = { path:string; start:Point; end:Point; points:Point[] };
 
+// Published survey plates for The Lantern Below. These links are not inferred
+// from discovery order; the UI reveals one only when both authored rooms are
+// known. Their endpoints remain stable throughout the adventure.
+export const LANTERN_SURVEY_ROUTES:Record<string,string> = {
+  "inn:outside-inn":"M 210 250 L 265 250",
+  "back-room:inn":"M 505 180 L 555 180",
+  "inn:kitchen":"M 505 320 L 555 320",
+  "kitchen:pantry":"M 740 340 L 790 340",
+  "cellar:pantry":"M 870 405 L 870 465",
+  "cellar:cellar-passage":"M 790 535 L 740 535",
+  "cellar-passage:mothglass":"M 555 535 L 515 535",
+  "mothglass:passage":"M 415 620 L 415 685",
+  "alcove:passage":"M 315 730 L 270 730",
+};
+
 const center=(room:MapRect):Point=>({x:room.x+room.w/2,y:room.y+room.h/2});
 const distance=(a:Point,b:Point)=>Math.abs(a.x-b.x)+Math.abs(a.y-b.y);
 const crosses=(a:Point,b:Point,room:MapRect)=>{

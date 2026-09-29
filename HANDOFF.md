@@ -4,9 +4,9 @@ This is the shared operational record for humans and AI collaborators. Update it
 
 ## Current status
 
-- Local `main` includes the scene-affordance package (`e7af54a`); GitHub `main` still needs a separately authorized push. The original checkout has an unrelated local `.gitignore` edit that remains untouched.
-- Active development branch: `codex/map-visual-system` in an isolated worktree, based on local `main`.
-- Latest integrated package: `e7af54a` on local `main`, running on the local service. GitHub `main` has not been pushed. The map visual refresh is isolated on `codex/map-visual-system`: 186/186 tests, production build, and adventure validation pass; human visual review is pending.
+- Local `main` is at `ed267cf` (portrait and map polish); GitHub `main` is behind local `main` and still needs separately authorized publication. The original checkout's unrelated `.gitignore` edit remains untouched.
+- Active development branch: `codex/atlas-guardian-convergence` in `hearthbound-cellar-search`, based on local `main`.
+- This package fixes guardian victory/rescue state convergence and changes The Lantern Below to fixed reveal-only room and route plates, with a revised regional survey map. It is isolated from the running local service; the user has not yet reviewed its appearance in a browser.
 - Recent resolver slices received syntax checks only; human playtesting is in progress by request
 - Package 1 scene-command-surface work is complete on `codex/scene-command-surface`; commit and local merge are authorized for human retest
 - Runtime servers: do not assume a port or process is active; inspect before testing
@@ -26,6 +26,8 @@ Improve player freedom and reliable conversational interpretation without weaken
 - Every confirmed failure has a categorized regression test.
 
 ## Active work
+
+Current work package: `codex/atlas-guardian-convergence` in `hearthbound-cellar-search`, based on local `main` at `ed267cf`. Fixed route plates include the taproom→kitchen→pantry chain and all other Lantern Below links; every visited intermediate room is mapped from canonical state. Combat defeat sets the canonical guardian flag, blocks repeat fights, and permits the authored rubble-clearing rescue. Generic checks cannot claim a persistent mutation without a canonical effect; Ask DM status uses authored state facts. Full test suite 195/195, production build, and adventure validation pass. Browser visual review and human playtest are pending. No merge or push authorized in this turn. Existing original-checkout `.gitignore` edit is out of scope.
 
 | Owner | Branch/worktree | Scope | Status | Files affected |
 | --- | --- | --- | --- | --- |

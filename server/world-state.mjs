@@ -353,11 +353,18 @@ function featurePresentation(feature, state) {
 export function visibleLocationFeatures(definition, state, locationId = state.currentLocation) {
   const location = definition.locations[locationId];
   return (location?.features || []).filter((feature) => {
+    if (feature.requires && !requirementsMet(state,feature.requires)) return false;
     if (state.objects?.[feature.id]?.discovered === false) return false;
     if (state.containers?.[feature.id]?.discovered === false) return false;
     if (definition.items?.[feature.id] && state.itemOwners?.[feature.id]) return false;
     return true;
   }).map((feature) => featurePresentation(feature, state));
+}
+
+export function visibleLocationDescription(definition,state,locationId=state.currentLocation) {
+  const location=definition.locations[locationId];
+  return (location?.presentations || []).find((entry)=>requirementsMet(state,entry.requires || []))?.description
+    || location?.description || "";
 }
 
 export function visiblePortableItems(definition, state, locationId = state.currentLocation) {
@@ -414,7 +421,7 @@ function observationResult(definition, state, words, actorId) {
   // An explicit local feature such as "kitchen door" still takes precedence.
   if (genericRoomLook && !explicitlyNamedFeature) {
     const portable = portableItemList ? ` Portable items visible here: ${portableItemList}.` : "";
-    return { message:`${location.description} Visible here: ${featureList}.${portable}` };
+    return { message:`${visibleLocationDescription(definition,state)} Visible here: ${featureList}.${portable}` };
   }
   const visibleNpc = Object.values(definition.story?.npcs || {}).find((npc) =>
     (npc.locations || []).includes(state.currentLocation)
@@ -670,7 +677,7 @@ export function resolveWorldAction({ definition, state: suppliedState, action, a
     if (!next.visited.includes(exit.to)) next.visited.push(exit.to);
     const destination = definition.locations[exit.to];
     const transition = exit.message
-      || `The party passes through ${exit.via} and enters ${destination.name}. ${destination.description || ""}`.trim();
+      || `The party passes through ${exit.via} and enters ${destination.name}. ${visibleLocationDescription(definition,next,exit.to)}`.trim();
     return result({ message: transition, events: [{ type: "location-entered", locationId: exit.to }], diagnostic:{ candidateAffordances:candidates, selectedAffordance:`move:${state.currentLocation}:${exit.to}`, rejectedAlternatives:candidates.filter((item) => item.id !== `move:${state.currentLocation}:${exit.to}`).map((item) => item.id) } });
   }
 

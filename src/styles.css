@@ -535,22 +535,24 @@ h1, h2, p { margin-top: 0; }
 .world-location span { color:var(--gold); font-size:9px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
 .world-location strong { font:20px Georgia,serif; }
 .world-location small { color:var(--muted); }
-.world-map-frame { position:relative; padding:14px; border:1px solid #9f8258; background:#ddc59b; box-shadow:0 16px 34px #0008,inset 0 0 0 5px #eddcba,inset 0 0 0 6px #8f7857; }
+.world-map-frame { position:relative; padding:18px; border:1px solid #715c40; background:#c8aa78; box-shadow:0 20px 48px #0009,inset 0 0 0 5px #e9d5a8,inset 0 0 0 7px #8f7857; }
 .world-map-frame svg { display:block; width:100%; height:auto; max-height:540px; }
 .atlas-paper { fill:url(#atlas-paper); stroke:#9c8059; stroke-width:2; }
 .atlas-grain { fill:url(#atlas-grain); opacity:.25; }
 .atlas-grid { fill:url(#atlas-grid); opacity:.17; }
 #atlas-grid path { fill:none; stroke:#7d6b4f; stroke-width:.8; }
 .atlas-border { fill:none; stroke:#877050; stroke-width:1.6; }
-.atlas-coast { fill:#d9c39d; stroke:#957d57; stroke-width:2; filter:url(#atlas-shadow); }
-.atlas-contour { fill:none; stroke:#ad9470; stroke-width:2; opacity:.65; }
-.atlas-river-bank { fill:none; stroke:#ebe1c3; stroke-width:15; }
-.atlas-river { fill:none; stroke:#63878a; stroke-width:8; opacity:.8; }
-.atlas-rural-track { fill:none; stroke:#96815f; stroke-width:2; stroke-dasharray:4 7; opacity:.55; }
-.atlas-road { fill:none; stroke:#77492e; stroke-width:4; stroke-dasharray:1 0; }
+.atlas-relief { fill:url(#atlas-relief); }
+.atlas-fields { fill:url(#atlas-field); opacity:.28; }
+#atlas-field path { fill:none; stroke:#8d7856; stroke-width:1; }
+.atlas-contour { fill:none; stroke:#947b56; stroke-width:1.15; opacity:.48; }
+.atlas-river-bank { fill:none; stroke:#faf1d6; stroke-width:18; opacity:.85; }
+.atlas-river { fill:none; stroke:#65878a; stroke-width:9; opacity:.82; }
+.atlas-stream { fill:none; stroke:#719296; stroke-width:2; opacity:.56; }
+.atlas-road { fill:none; stroke:#845633; stroke-width:3; stroke-linecap:round; stroke-dasharray:7 5; }
 .atlas-mountain path { fill:none; stroke:#806b50; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; }
 .atlas-mountain .atlas-hatch { stroke-width:1; opacity:.65; }
-.atlas-tree path { fill:#75856c; stroke:#4d665c; stroke-width:1.8; stroke-linejoin:round; }
+.atlas-tree path { fill:#788069; stroke:#4d655b; stroke-width:1.25; stroke-linejoin:round; opacity:.85; }
 .atlas-region,.atlas-water-label,.atlas-cartouche,.atlas-note { fill:#6c5b43; font:10px sans-serif; letter-spacing:2px; }
 .atlas-cartouche { font:bold 11px Georgia,serif; letter-spacing:3px; }
 .atlas-note { font-size:7px; letter-spacing:1.3px; }
@@ -558,13 +560,13 @@ h1, h2, p { margin-top: 0; }
 .atlas-compass path:last-of-type { fill:#80533a; }
 .atlas-compass text { fill:#604a35; font:bold 13px Georgia,serif; }
 .atlas-scale { fill:none; stroke:#6d5942; stroke-width:2; }
-.atlas-place .place-halo { fill:#f3e2be; opacity:.85; stroke:none; }
-.atlas-place circle:not(.place-halo) { fill:#f1e1bb; stroke:#6c5038; stroke-width:2.5; }
-.atlas-place path { fill:none; stroke:#6c5038; stroke-width:2; }
+.atlas-place .place-halo { fill:#f3e2be; opacity:.7; stroke:none; }
+.atlas-place circle:not(.place-halo) { fill:#ead7ad; stroke:#674c33; stroke-width:2; }
+.atlas-place .place-settlement { fill:none; stroke:#59412d; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
 .atlas-place text { fill:#283e3c; stroke:#efe1c4; stroke-width:4; paint-order:stroke; font:bold 17px Georgia,serif; }
 .atlas-place .atlas-detail { fill:#6b5a43; font:10px sans-serif; letter-spacing:.5px; }
 .atlas-place.current circle:not(.place-halo) { fill:#a8623f; stroke:#fff1ce; stroke-width:3; filter:drop-shadow(0 0 5px #a8623f); }
-.atlas-place.current path { stroke:#fff1ce; }
+.atlas-place.current .place-settlement { stroke:#fff1ce; }
 .atlas-legend { display:flex; gap:20px; padding:10px 5px 1px; color:#514d41; font-size:10px; }
 .atlas-legend span { display:flex; align-items:center; gap:7px; }
 .atlas-legend i { width:9px; height:9px; border:2px solid #76523b; border-radius:50%; }

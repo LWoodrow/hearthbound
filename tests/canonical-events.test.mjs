@@ -14,3 +14,11 @@ test("a state-neutral response produces no canonical transition record", () => {
   const state = { revision:4,currentLocation:"cellar",discoveries:[],objects:{},outcomes:[] };
   assert.deepEqual(recordCanonicalTransition(state, structuredClone(state)).canonicalEvents, []);
 });
+
+test("combat and other subsystem flags are represented in canonical events", () => {
+  const before={revision:4,flags:{guardianDefeated:false},outcomes:[]};
+  const after={revision:5,flags:{guardianDefeated:true},outcomes:[]};
+  assert.deepEqual(deriveCanonicalEvents(before,after),[
+    {type:"flag-state-changed",revision:5,flag:"guardianDefeated",value:true},
+  ]);
+});
