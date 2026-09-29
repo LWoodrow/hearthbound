@@ -4,6 +4,8 @@ This is the shared operational record for humans and AI collaborators. Update it
 
 ## Current status
 
+- 2026-09-29 handoff: the user supplied three richly illustrated fantasy-map references for a later Eldervale world-map redesign. The deferred, reveal-only atlas work is recorded in `BACKLOG.md`; no art or map redesign was attempted in this package. The user requested that the current convergence package be merged to local `main` for final testing, without requesting a GitHub push.
+
 - Local `main` is at `ed267cf` (portrait and map polish); GitHub `main` is behind local `main` and still needs separately authorized publication. The original checkout's unrelated `.gitignore` edit remains untouched.
 - Active development branch: `codex/atlas-guardian-convergence` in `hearthbound-cellar-search`, based on local `main`.
 - This package fixes guardian victory/rescue state convergence and changes The Lantern Below to fixed reveal-only room and route plates, with a revised regional survey map. It is isolated from the running local service; the user has not yet reviewed its appearance in a browser.
