@@ -110,6 +110,7 @@ export type GameView = {
   campaign: { title: string; chapter: string; scene: string; minLevel: number; maxLevel: number };
   player: Player;
   party: Player[];
+  npcPortraits: Record<string, string>;
   events: StoryEvent[];
   recap: {
     version:number; title:string; currentLocation:string; visibleFeatures:string[]; establishedFacts:string[];

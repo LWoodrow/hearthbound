@@ -253,7 +253,7 @@ Location
   features, exits, map treatment
 
 NPC
-  identity, role, appearance, locations
+  identity, role, appearance, portraitId, locations
   goals, voice, public facts
   conditional facts and requirements
   must-not-know list
@@ -290,3 +290,11 @@ Whenever human playtesting, a replay, or implementation work reveals a systemic 
 A story-engine slice is not complete until code, schema validation, regression coverage, this authoring ruleset, the AI contract, and roadmap status agree. Reviews should treat a missing ruleset update—or a missing explanation of why none was needed—as unfinished work.
 
 Before claiming a phase or story complete, search recent playtest fixes for new aliases, occupants, entry beats, feature semantics, NPC disclosures, interaction prerequisites, clue routes, map visibility rules, or model boundaries that have not yet been generalized here.
+
+## 12. Visual identity and maps
+
+- Player portraits are chosen at character creation and stored as stable avatar IDs. The same portrait must identify the character in the party roster, action history, sheet, and combat controls.
+- Authored NPCs choose `portraitId` from the reviewed catalogue in `shared/portrait-catalogue.mjs`. Current catalogue: `tamsin`, `mara`, `cotton`, `ink-guardian`. Do not generate an NPC's face during a play session or assign a random player portrait to an unknown NPC. Expanding the catalogue requires review of the art and the story identity together.
+- The client may receive an NPC portrait assignment only once that NPC has appeared in the player's visible event history. Portrait metadata must never reveal a future character.
+- Map room geometry and connections come from authored, revealed locations. Route lines are a visual projection: they join room thresholds and route around other discovered rooms, but cannot imply an exit absent from canonical state. Room symbols are decorative survey marks rather than authoritative inventories.
+- Regional maps may illustrate general terrain, but names and marked routes appear only when the adventure establishes them.

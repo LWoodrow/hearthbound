@@ -43,6 +43,7 @@ export const lanternBelowAdventure = assertValidAdventure({
     npcs: {
       "tamsin-reed": {
         name: "Tamsin Reed",
+        portraitId: "tamsin",
         role: "Innkeeper of the Crooked Lantern",
         appearance: "Tamsin Reed is a broad-shouldered woman in her middle years, with iron-grey hair braided close at the nape. She wears a clean cream shirt beneath a dark green wool waistcoat, with a practical brown apron tied at her waist.",
         locations: ["inn", "kitchen"],
@@ -69,6 +70,7 @@ export const lanternBelowAdventure = assertValidAdventure({
       },
       "mara-vey": {
         name: "Mara Vey",
+        portraitId: "mara",
         role: "Surveyor of the old roads",
         locations: ["alcove"],
         goals: ["Survive the collapse", "Prevent the awakened road from harming Eldervale", "Learn who is disturbing the old anchors"],

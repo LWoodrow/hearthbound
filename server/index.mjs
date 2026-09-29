@@ -17,6 +17,7 @@ import { buildHearthboundPlaytestStatus, playtestToolsEnabled } from "./playtest
 import { adventureDefinition } from "./adventure-registry.mjs";
 import { appendTurnTrace, captureTurnState, completeTurnTrace, createTurnTrace, listTurnTraces, redactedTurnTraces } from "./turn-traces.mjs";
 import { readRunningBuildInfo } from "./build-info.mjs";
+import { visibleNpcPortraits } from "../shared/portrait-catalogue.mjs";
 
 const dev = process.argv.includes("--dev");
 const port = Number(process.env.PORT || 4173);
@@ -134,6 +135,7 @@ export async function handleApi(request, response, url) {
       const humanParty = listPlayers(db, player.partyId);
       const dmState = getPartyState(db, player.partyId, "dm") || {};
       const structuredAdventureId = adventureDefinition(adventure)?.id || String(adventure?.id || "");
+      const npcPortraits = visibleNpcPortraits(adventureDefinition(adventure), events);
       const worldState = getPartyState(db, player.partyId, `world:${structuredAdventureId}`) || {};
       const roomAuthority = authoredRouteContext(adventure?.id, dmState, worldState);
       // Guided cards are a projection of the current canonical scene, not a
@@ -150,6 +152,7 @@ export async function handleApi(request, response, url) {
         campaign: { title: adventure?.title || "Untitled Adventure", chapter: adventure?.chapter || "A new beginning", scene: adventure?.scene || "At the threshold", minLevel: adventure?.minLevel || 1, maxLevel: adventure?.maxLevel || 1 },
         player,
         party: [...humanParty, cottonForParty(db, player.partyId)],
+        npcPortraits,
         events,
         knownLocations,
         recap:buildAuthoritativeRecap({ campaign:{ title:adventure?.title, scene:adventure?.scene }, events, knownLocations, party:humanParty, roomAuthority, pendingCheck }),

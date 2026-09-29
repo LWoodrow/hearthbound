@@ -51,6 +51,8 @@ h1, h2, p { margin-top: 0; }
 .portrait, .party-portrait, .large-portrait { display: grid; place-items: center; background: linear-gradient(145deg, #49371e, #251d14); border: 1px solid #725831; color: var(--gold-bright); font-family: Georgia, "Times New Roman", serif; border-radius: 50%; }
 .portrait { width: 48px; height: 48px; font-size: 24px; }
 .character-avatar { display:grid; place-items:center; flex:0 0 auto; color:var(--gold-bright); border:1px solid #725831; border-radius:50%; background:linear-gradient(145deg,#49371e,#251d14); }
+.painted-portrait { background-repeat:no-repeat; background-color:#392b20; box-shadow:inset 0 0 0 2px #17120e,0 1px 4px #0008; }
+.portrait-fallback { font-size:18px; }
 .character-avatar svg { width:68%; height:68%; overflow:visible; }
 .avatar-lobby { width:48px; height:48px; }
 .avatar-party { width:29px; height:29px; }
@@ -67,11 +69,11 @@ h1, h2, p { margin-top: 0; }
 .avatar-field-copy { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
 .avatar-field-copy > span { color:var(--cream); font-weight:700; }
 .avatar-field-copy small { color:var(--muted); }
-.avatar-picker { display:grid; grid-template-columns:repeat(8,minmax(58px,1fr)); gap:8px; margin-top:11px; }
-.avatar-choice { min-height:76px; display:grid; place-items:center; gap:4px; padding:8px; color:var(--muted); border:1px solid var(--line); background:#15120e; }
+.avatar-picker { display:grid; grid-template-columns:repeat(4,minmax(90px,1fr)); gap:10px; margin-top:11px; }
+.avatar-choice { min-height:106px; display:grid; place-items:center; gap:5px; padding:8px; color:var(--muted); border:1px solid var(--line); background:#15120e; }
 .avatar-choice:hover { color:var(--cream); border-color:var(--gold); }
 .avatar-choice[aria-pressed="true"] { color:var(--gold-bright); border-color:var(--gold); background:#302615; box-shadow:inset 0 0 0 1px #d1a95555; }
-.avatar-choice-preview { width:38px; height:38px; }
+.avatar-choice-preview { width:70px; height:70px; }
 .avatar-choice small { font-size:10px; font-weight:700; }
 .form-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .form-actions button, .send { border: 1px solid var(--gold); background: var(--gold); color: #1b160e; padding: 11px 18px; font-weight: 700; border-radius: 3px; }
@@ -345,6 +347,9 @@ h1, h2, p { margin-top: 0; }
 .narration.private > span { color: #d8c18f; }
 .player-event { margin: 12px 0 12px auto; max-width: 72%; padding: 12px 15px; border-left: 2px solid var(--gold); background: #221d16; }
 .player-event p { margin: 5px 0 0; color: #cfc5b5; font-size:14px; line-height: 1.5; }
+.event-speaker { display:flex; align-items:center; gap:9px; color:var(--gold); text-transform:uppercase; letter-spacing:.14em; font-size:10px; font-weight:700; }
+.event-speaker .character-avatar { width:31px; height:31px; }
+.narration>.event-speaker + p { margin-top:8px; }
 .roll-event { display: flex; align-items: center; gap: 12px; color: #b8ad9d; font-size: 13px; margin: 12px 0; }
 .roll-event p { margin: 0; }
 .die { color: var(--gold); border: 1px solid #6c5430; width: 28px; height: 28px; display: grid; place-items: center; transform: rotate(45deg); }
@@ -419,7 +424,17 @@ h1, h2, p { margin-top: 0; }
 .combat-roll button { min-width:112px; min-height:42px; border:1px solid var(--gold); border-radius:3px; background:var(--gold); color:#19130c; font-weight:700; }
 .combat-actions { padding:10px 12px 12px; }
 .combat-actions > div { display:flex; flex-wrap:wrap; gap:7px; }
-.combat-actions button { min-height:54px; display:grid; align-content:center; gap:3px; padding:8px 12px; border:1px solid #58452f; border-radius:3px; background:#271e14; color:var(--cream); text-align:left; }
+.combat-actions button { min-height:58px; display:grid; grid-template-columns:34px auto; align-content:center; column-gap:9px; row-gap:3px; padding:8px 12px; border:1px solid #58452f; border-radius:3px; background:#271e14; color:var(--cream); text-align:left; }
+.combat-actions button::before { content:""; grid-row:1 / 3; width:34px; height:34px; border:1px solid #806943; border-radius:50%; background-image:url(/art/portraits/player-portraits-v1.png); background-size:400% 200%; background-position:var(--portrait-x,0%) var(--portrait-y,0%); }
+.combat-actions button strong,.combat-actions button small { grid-column:2; }
+.game-shell[data-avatar="guardian"] { --portrait-x:0%; --portrait-y:0%; }
+.game-shell[data-avatar="wanderer"] { --portrait-x:33.333%; --portrait-y:0%; }
+.game-shell[data-avatar="mystic"] { --portrait-x:66.667%; --portrait-y:0%; }
+.game-shell[data-avatar="shadow"] { --portrait-x:100%; --portrait-y:0%; }
+.game-shell[data-avatar="wild"] { --portrait-x:0%; --portrait-y:100%; }
+.game-shell[data-avatar="scholar"] { --portrait-x:33.333%; --portrait-y:100%; }
+.game-shell[data-avatar="minstrel"] { --portrait-x:66.667%; --portrait-y:100%; }
+.game-shell[data-avatar="noble"] { --portrait-x:100%; --portrait-y:100%; }
 .combat-actions button:hover { border-color:var(--gold); }
 .combat-actions button strong { color:var(--gold-bright); font-size:11px; }
 .combat-actions button small { color:#aaa092; font-size:9px; }
@@ -520,27 +535,41 @@ h1, h2, p { margin-top: 0; }
 .world-location span { color:var(--gold); font-size:9px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
 .world-location strong { font:20px Georgia,serif; }
 .world-location small { color:var(--muted); }
-.world-map-frame { position:relative; padding:14px; border:1px solid #5d4829; background:#17120e; box-shadow:inset 0 0 55px #0009; }
+.world-map-frame { position:relative; padding:14px; border:1px solid #9f8258; background:#ddc59b; box-shadow:0 16px 34px #0008,inset 0 0 0 5px #eddcba,inset 0 0 0 6px #8f7857; }
 .world-map-frame svg { display:block; width:100%; height:auto; max-height:540px; }
-.atlas-paper { fill:#17130f; stroke:#5e492d; stroke-width:2; }
-.atlas-land { fill:url(#atlas-land); stroke:#b28a4e; stroke-width:3; }
-.atlas-river { fill:none; stroke:#536b6d; stroke-width:12; opacity:.72; }
-.atlas-road { fill:none; stroke:#d0a653; stroke-width:4; stroke-dasharray:8 7; opacity:.85; }
-.atlas-road.faint { opacity:.36; }
-.atlas-mountains path { fill:none; stroke:#8b7047; stroke-width:5; }
-.atlas-woods path { fill:#263828; stroke:#819064; stroke-width:2; }
-.atlas-region,.atlas-water-label { fill:#b49a70; font:10px sans-serif; letter-spacing:2px; }
-.atlas-place circle { fill:#231b11; stroke:#d2a754; stroke-width:3; }
-.atlas-place path { fill:none; stroke:#d2a754; stroke-width:2; }
-.atlas-place text { fill:#f0e5d1; stroke:#17120e; stroke-width:4; paint-order:stroke; font:bold 16px Georgia,serif; }
-.atlas-place .atlas-detail { fill:#c5ae83; font:10px sans-serif; letter-spacing:.5px; }
-.atlas-place.current circle { fill:#d2a754; stroke:#f5d789; stroke-width:4; filter:drop-shadow(0 0 8px #d2a754); }
-.atlas-place.current path { stroke:#241a0d; }
-.atlas-legend { display:flex; gap:20px; padding:10px 5px 1px; color:var(--muted); font-size:10px; }
+.atlas-paper { fill:url(#atlas-paper); stroke:#9c8059; stroke-width:2; }
+.atlas-grain { fill:url(#atlas-grain); opacity:.25; }
+.atlas-grid { fill:url(#atlas-grid); opacity:.17; }
+#atlas-grid path { fill:none; stroke:#7d6b4f; stroke-width:.8; }
+.atlas-border { fill:none; stroke:#877050; stroke-width:1.6; }
+.atlas-coast { fill:#d9c39d; stroke:#957d57; stroke-width:2; filter:url(#atlas-shadow); }
+.atlas-contour { fill:none; stroke:#ad9470; stroke-width:2; opacity:.65; }
+.atlas-river-bank { fill:none; stroke:#ebe1c3; stroke-width:15; }
+.atlas-river { fill:none; stroke:#63878a; stroke-width:8; opacity:.8; }
+.atlas-rural-track { fill:none; stroke:#96815f; stroke-width:2; stroke-dasharray:4 7; opacity:.55; }
+.atlas-road { fill:none; stroke:#77492e; stroke-width:4; stroke-dasharray:1 0; }
+.atlas-mountain path { fill:none; stroke:#806b50; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; }
+.atlas-mountain .atlas-hatch { stroke-width:1; opacity:.65; }
+.atlas-tree path { fill:#75856c; stroke:#4d665c; stroke-width:1.8; stroke-linejoin:round; }
+.atlas-region,.atlas-water-label,.atlas-cartouche,.atlas-note { fill:#6c5b43; font:10px sans-serif; letter-spacing:2px; }
+.atlas-cartouche { font:bold 11px Georgia,serif; letter-spacing:3px; }
+.atlas-note { font-size:7px; letter-spacing:1.3px; }
+.atlas-compass circle,.atlas-compass path { fill:none; stroke:#776044; stroke-width:1.4; }
+.atlas-compass path:last-of-type { fill:#80533a; }
+.atlas-compass text { fill:#604a35; font:bold 13px Georgia,serif; }
+.atlas-scale { fill:none; stroke:#6d5942; stroke-width:2; }
+.atlas-place .place-halo { fill:#f3e2be; opacity:.85; stroke:none; }
+.atlas-place circle:not(.place-halo) { fill:#f1e1bb; stroke:#6c5038; stroke-width:2.5; }
+.atlas-place path { fill:none; stroke:#6c5038; stroke-width:2; }
+.atlas-place text { fill:#283e3c; stroke:#efe1c4; stroke-width:4; paint-order:stroke; font:bold 17px Georgia,serif; }
+.atlas-place .atlas-detail { fill:#6b5a43; font:10px sans-serif; letter-spacing:.5px; }
+.atlas-place.current circle:not(.place-halo) { fill:#a8623f; stroke:#fff1ce; stroke-width:3; filter:drop-shadow(0 0 5px #a8623f); }
+.atlas-place.current path { stroke:#fff1ce; }
+.atlas-legend { display:flex; gap:20px; padding:10px 5px 1px; color:#514d41; font-size:10px; }
 .atlas-legend span { display:flex; align-items:center; gap:7px; }
-.atlas-legend i { width:9px; height:9px; border:2px solid var(--gold); border-radius:50%; }
-.atlas-legend i.current { background:var(--gold); box-shadow:0 0 7px var(--gold); }
-.atlas-legend b { width:25px; border-top:2px dashed var(--gold); }
+.atlas-legend i { width:9px; height:9px; border:2px solid #76523b; border-radius:50%; }
+.atlas-legend i.current { background:#a8623f; box-shadow:0 0 0 2px #f3e2be; }
+.atlas-legend b { width:25px; border-top:2px dashed #76523b; }
 .found-map-shelf { width:min(1170px,calc(100% - 3rem)); margin:28px auto 0; padding:18px; border:1px solid #5d4829; background:#18130e; }
 .found-map-heading { display:flex; align-items:end; justify-content:space-between; gap:16px; padding-bottom:12px; border-bottom:1px solid var(--line); }
 .found-map-heading h2 { margin:4px 0 0; font:27px Georgia,serif; }
@@ -570,8 +599,9 @@ h1, h2, p { margin-top: 0; }
 #floor-grid path { fill:none; stroke:#9a8668; stroke-width:.75; }
 .map-ornament { fill:none; stroke:#786a51; stroke-width:1.5; opacity:.7; }
 .map-imprint { fill:#756a56; font:600 10px sans-serif; letter-spacing:2.6px; }
-.map-route-bed { fill:none; stroke:#9d8a6c; stroke-width:19; stroke-linecap:round; opacity:.54; }
-.map-route-line { fill:none; stroke:#53615b; stroke-width:2; stroke-dasharray:5 5; stroke-linecap:round; }
+.map-route-bed { fill:none; stroke:#b39a72; stroke-width:14; stroke-linecap:round; stroke-linejoin:round; opacity:.7; }
+.map-route-line { fill:none; stroke:#596e67; stroke-width:2; stroke-dasharray:4 5; stroke-linecap:round; stroke-linejoin:round; }
+.map-route-threshold { fill:#efe2c4; stroke:#596e67; stroke-width:2; }
 .floor-room { cursor:pointer; outline:none; }
 .room-floor { stroke:none; transition:filter .15s ease; }
 #tile-wood rect { fill:#d7be96; } #tile-wood path { fill:none; stroke:#ad936f; stroke-width:.9; opacity:.7; }
@@ -591,6 +621,10 @@ h1, h2, p { margin-top: 0; }
 .tile-objects .survey-hearth path { stroke:#94694b; }
 .tile-objects .survey-cask ellipse,.tile-objects .survey-shelf path { stroke:#78654d; }
 .tile-objects .survey-passage path { stroke-width:1.2; opacity:.7; }
+.tile-objects .survey-trail { stroke:#9b7753; stroke-width:2; stroke-dasharray:3 5; }
+.tile-objects .survey-private path { stroke:#856954; stroke-width:2.5; }
+.tile-objects .survey-scuffs { opacity:.42; }
+.tile-objects .survey-scuffs path,.tile-objects .survey-scuffs circle { stroke-width:1.3; }
 .tile-objects .survey-rubble path { stroke-width:3; }
 .room-label-plate { fill:#f0e5cc; fill-opacity:.94; stroke:#89775b; stroke-width:1; pointer-events:none; }
 .room-label { fill:#263c3a; font:bold 17px Georgia,serif; pointer-events:none; }
