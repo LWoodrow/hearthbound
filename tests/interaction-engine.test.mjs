@@ -120,7 +120,7 @@ test("canonical projections derive legacy location and stage without a second mu
   assert.deepEqual(canonicalProjection(lanternBelowAdventure, state), {
     privateRoomPermission:false, pantryPermission:false, letterOpened:true, suppliesLocated:false, miteAwake:true, inkOffered:true, mapDrawn:true, guardianDefeated:false, maraRescued:false, adventureComplete:false,
     currentLocationKey:"back-room", locationName:"Private Back Room", locationNote:lanternBelowAdventure.locations["back-room"].description,
-    clueStage:2, dangerClock:0, storyDiscoveries:["mara-sent-message","mite-awake","pantry-destination"],
+    clueStage:2, dangerClock:0, storyDiscoveries:["mara-sent-message","mite-awake"],
     lanternArrivalStage:2,
   });
 });

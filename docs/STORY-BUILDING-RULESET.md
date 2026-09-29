@@ -174,6 +174,8 @@ Use the model for:
 
 Derive one scene command surface from canonical state for every turn. It contains only the current location, visible features, revealed exits, present NPCs, carried items, eligible authored interactions, and a still-valid pending offer. Guidance, diagnostics, and later reference resolution must consume this same surface; they may not keep their own stage-based or narrator-invented list of available actions.
 
+Interpret the player's literal turn once against that surface before attempting authored or ordinary world actions. Both paths must share the primary intent and room-local reference; an observation's purpose clause (for example, "look for items to open a door") is not an additional attempted action. A weak shared word is not enough to redirect an exact physical target to another exit. On a schema-v2 save, derive room and stage projections from canonical state, never from an older DM snapshot. If no structured action resolves, leave the scene unchanged rather than asking a model to invent a world consequence. NPC wording that promises an escort must have a recorded, currently valid authored offer.
+
 ## 9. Authoring validation checklist
 
 Before a story can be called playable, verify:

@@ -4,9 +4,9 @@ This is the shared operational record for humans and AI collaborators. Update it
 
 ## Current status
 
-- Integrated GitHub baseline: `main` at `03fb588` (`docs: add shared project handoff workflow`)
-- Active development branch: `codex/conversation-commitments` at `839dca9` before this documentation update
-- Latest verification for the build-marker/conversation-continuity package: 168 of 172 tests pass; the four failures are pre-existing stale projection/narration expectations; production build and adventure validation pass
+- Integrated GitHub baseline: `main` at `5d60a19` before this convergence package; the user's original checkout has an unrelated local `.gitignore` edit that must be preserved.
+- Active development branch: `codex/turn-convergence`, based on the committed Cellar search fix (`0593740`). This is an isolated worktree, not the running checkout.
+- Latest verification: 179/179 automated tests pass; production build and all adventure validations pass. Human playtesting has not yet been run on this branch.
 - Recent resolver slices received syntax checks only; human playtesting is in progress by request
 - Package 1 scene-command-surface work is complete on `codex/scene-command-surface`; commit and local merge are authorized for human retest
 - Runtime servers: do not assume a port or process is active; inspect before testing
@@ -37,6 +37,7 @@ Improve player freedom and reliable conversational interpretation without weaken
 | Codex | `codex/build-marker-conversation-continuity` / `hearthbound-final-defects` | Show the exact running branch/commit/start time and retain the active NPC for direct conversational replies | Complete; targeted regressions, production build, and adventure validation pass; user authorized merge, push, and restart | `server/build-info.mjs`, `server/index.mjs`, `server/dm.mjs`, `src/App.tsx`, styles, tests, ruleset, `HANDOFF.md` |
 | Codex | `codex/follow-authored-interactions` / `hearthbound-follow-interactions` | Make generic scene inspection authoritative before fuzzy references and expose local portable items through the canonical scene surface | Complete; focused regressions pass, full suite remains 169/173 with the four documented stale expectations, build and adventure validation pass | `server/world-state.mjs`, `server/scene-command-surface.mjs`, tests, ruleset, `HANDOFF.md` |
 | Codex | `codex/cellar-search-intent` / `hearthbound-cellar-search` | Scope observation references to the object of inspection, not a purpose clause; retest generic wall inspection | Complete on branch; awaiting user review and authorization before any merge or push | `server/intent-resolver.mjs`, `server/scene-reference-resolver.mjs`, `server/world-state.mjs`, resolver and integration tests, ruleset, `HANDOFF.md` |
+| Codex | `codex/turn-convergence` / `hearthbound-cellar-search` | Shared room-local turn interpretation for authored/generic actions, canonical room projection, safe unresolved-action boundary, grounded NPC offers, and full-turn regressions; includes committed Cellar fix | Implemented; 179/179 tests, build, and adventure validation pass; pending commit/integration and human retest | Turn resolver, canonical projection, integration tests, ruleset, `HANDOFF.md` |
 | Unassigned | — | Select the next item from `BACKLOG.md` | Ready | — |
 
 Workers must add a row before beginning substantial work and remove or archive it in the handoff log when finished.

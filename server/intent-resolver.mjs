@@ -79,20 +79,21 @@ export function resolveEntityReferences(action, entities = []) {
   return { selected, candidates, rejected:candidates.filter((candidate) => candidate.id !== selected?.id) };
 }
 
-export function interactionMatch(interaction, action, mode = "act") {
-  const parsed = parseLiteralIntent(action, mode);
+export function interactionMatch(interaction, action, mode = "act", turn = null) {
+  const scopedAction = turn?.worldIntent === "observe" ? turn.referenceText : action;
+  const parsed = turn?.parsed || parseLiteralIntent(action, mode);
   const verbs = interaction.verbs || [];
   const modeMatch = !interaction.modes?.length || interaction.modes.includes(mode);
-  const verbMatch = verbs.some((verb) => words(verb).every((word) => words(action).includes(word))
-    || equivalentVerbPresent(action, verb));
+  const verbMatch = verbs.some((verb) => words(verb).every((word) => words(scopedAction).includes(word))
+    || equivalentVerbPresent(scopedAction, verb));
   const targets = [...(interaction.targets || []), ...(interaction.representations || [])];
-  const target = resolveEntityReferences(action, targets.map((name, index) => ({ id:`target:${index}`, name })));
+  const target = resolveEntityReferences(scopedAction, targets.map((name, index) => ({ id:`target:${index}`, name })));
   const instrument = interaction.instruments?.length
-    ? resolveEntityReferences(action, interaction.instruments.map((name, index) => ({ id:`instrument:${index}`, name })))
+    ? resolveEntityReferences(scopedAction, interaction.instruments.map((name, index) => ({ id:`instrument:${index}`, name })))
     : { selected:{ id:"instrument:none", confidence:1 }, candidates:[], rejected:[] };
-  const matchAll = (interaction.matchAll || []).every((group) => group.some((alias) => phrasePresent(action, alias)));
-  const exactTargetMatch = targets.some((targetName) => phrasePresent(action, targetName));
-  const exactInstrumentMatch = (interaction.instruments || []).some((instrumentName) => phrasePresent(action, instrumentName));
+  const matchAll = (interaction.matchAll || []).every((group) => group.some((alias) => phrasePresent(scopedAction, alias)));
+  const exactTargetMatch = targets.some((targetName) => phrasePresent(scopedAction, targetName));
+  const exactInstrumentMatch = (interaction.instruments || []).some((instrumentName) => phrasePresent(scopedAction, instrumentName));
   // These lists are aliases for one authored role, not separate world
   // entities. A tie between aliases must not make the interaction ambiguous.
   // A single weak overlap (for example "some" in "some drinks" versus

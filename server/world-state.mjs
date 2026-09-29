@@ -228,9 +228,13 @@ function inventoryNames(inventory = []) {
   return inventory.flatMap((entry) => [entry.name, entry.itemName, entry.label]).filter(Boolean).map(normalise);
 }
 
-function objectForAction(definition, state, words) {
+function objectForAction(definition, state, words, selected = null) {
   const location = definition.locations[state.currentLocation];
   const exits = location?.exits || [];
+  if (selected?.confidence >= 1 && (selected.entityType === "feature" || selected.entityType === "exit")) {
+    const chosen = exits.find((exit) => exit.object && exit.object === (selected.objectId || selected.id));
+    if (chosen) return { id:chosen.object, exit:chosen };
+  }
   const candidates = exits.filter((exit) => exit.object && matches(words, exit.object, exit.via));
   if (candidates.length === 1) return { id: candidates[0].object, exit: candidates[0] };
   if (/\bkey\b/.test(words) && /\block\b/.test(words)) {
@@ -264,7 +268,7 @@ function requestedVerticalDirection(words) {
   return "";
 }
 
-function exitForMovement(definition, state, words) {
+function exitForMovement(definition, state, words, selected = null) {
   const location = definition.locations[state.currentLocation];
   const authoredExits = location?.exits || [];
   const requestedDirection = requestedVerticalDirection(words);
@@ -275,6 +279,10 @@ function exitForMovement(definition, state, words) {
   const exits = requestedDirection && directionalExits.length
     ? authoredExits.filter((exit) => exit.direction === requestedDirection)
     : authoredExits;
+  if (selected?.entityType === "exit" && selected.confidence >= 1) {
+    const chosen = exits.find((exit) => exit.to === selected.destinationId);
+    if (chosen) return chosen;
+  }
   const matchesTarget = exits.map((exit) => {
     const destination = definition.locations[exit.to];
     const destinationScore = namedThingScore(words, exit.to, destination?.name, ...(destination?.aliases || []));
@@ -463,11 +471,12 @@ function observationResult(definition, state, words) {
   return { message:`No feature matching that description is established in ${location.name}. Visible here: ${featureList}.` };
 }
 
-export function resolveWorldAction({ definition, state: suppliedState, action, actorId, inventory = [], mode = "act" }) {
+export function resolveWorldAction({ definition, state: suppliedState, action, actorId, inventory = [], mode = "act", turn = null }) {
   const state = createInitialWorldState(definition, suppliedState);
   const next = clone(state);
   const words = normalise(action);
-  const intent = classifyWorldAction(action, mode);
+  const intent = turn?.worldIntent || classifyWorldAction(action, mode);
+  const selected = turn?.sceneReference?.selected || null;
   const candidates = candidateAffordances(definition, state, intent, inventory);
   const result = (values = {}) => ({ handled: true, accepted: true, state: next, intent, events: [], diagnostic:{ candidateAffordances:candidates, selectedAffordance:"", rejectedAlternatives:[] }, ...values });
   if (!words || intent === "speech") return result({ handled: false });
@@ -475,12 +484,14 @@ export function resolveWorldAction({ definition, state: suppliedState, action, a
   if (intent === "observe") {
     const check = abilityCheckForAction(action);
     if (check) return result({ handled:false, check });
-    return result({ ...observationResult(definition, next, words), diagnostic:{ candidateAffordances:candidates, selectedAffordance:`observe:${state.currentLocation}`, rejectedAlternatives:[] } });
+    return result({ ...observationResult(definition, next, turn?.referenceText || words), diagnostic:{ candidateAffordances:candidates, selectedAffordance:`observe:${selected?.id || state.currentLocation}`, rejectedAlternatives:[] } });
   }
 
   if (intent === "pickup") {
     if (/\bcotton\b/.test(words)) return result({ accepted: false, reason: "companion-not-item", message: "Cotton is a companion, not an inventory item." });
-    const itemEntry = Object.entries(definition.items || {}).find(([id, item]) => mentionsNamedThing(words, id, item.name, ...(item.aliases || [])));
+    const itemEntry = selected?.entityType === "local-item" && definition.items?.[selected.id]
+      ? [selected.id, definition.items[selected.id]]
+      : Object.entries(definition.items || {}).find(([id, item]) => mentionsNamedThing(words, id, item.name, ...(item.aliases || [])));
     if (!itemEntry) return result({ handled: false });
     const [itemId, item] = itemEntry;
     const container = item.container ? definition.containers?.[item.container] : null;
@@ -515,7 +526,7 @@ export function resolveWorldAction({ definition, state: suppliedState, action, a
         diagnostic:{ candidateAffordances:candidates, selectedAffordance:`container:${containerId}`, rejectedAlternatives:candidates.filter((item) => item.id !== `container:${containerId}`).map((item) => item.id) },
       });
     }
-    const target = objectForAction(definition, next, words);
+    const target = objectForAction(definition, next, words, selected);
     if (!target) return result({ handled: false });
     const objectDefinition = definition.objects?.[target.id] || {};
     const objectState = next.objects[target.id] ||= clone(objectDefinition.initial || {});
@@ -573,7 +584,7 @@ export function resolveWorldAction({ definition, state: suppliedState, action, a
         diagnostic:{ candidateAffordances:candidates, selectedAffordance:"blocked:direction-mismatch", rejectedAlternatives:candidates.map((item) => item.id) },
       });
     }
-    const exit = exitForMovement(definition, next, words);
+    const exit = exitForMovement(definition, next, words, selected);
     if (!exit) {
       const namedOtherLocation = Object.entries(definition.locations).find(([id, location]) => id !== next.currentLocation && matches(words, id, location.name));
       if (namedOtherLocation) return result({ accepted: false, reason: "not-adjacent", message: `That location is not directly reachable from ${definition.locations[next.currentLocation].name}.` });

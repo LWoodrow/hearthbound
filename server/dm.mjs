@@ -12,7 +12,7 @@ import { canonicalProjection, canonicalStage, conversationInteractionOffer, crea
 import { parseModelJson } from "./model-output.mjs";
 import { buildSceneCommandSurface } from "./scene-command-surface.mjs";
 import { recordCanonicalTransition } from "./canonical-events.mjs";
-import { resolveSceneReference } from "./scene-reference-resolver.mjs";
+import { interpretSceneTurn } from "./turn-interpretation.mjs";
 
 export async function isOllamaReady() {
   return isCurrentModelReady();
@@ -979,6 +979,11 @@ function fallbackNpcReply(npc, action, facts) {
   return `${npc.name} considers the question. “I can only tell you what I know, and I don’t know enough to give you a useful answer to that.”`;
 }
 
+export function groundedNpcReply(reply, authoredOffer, fallback) {
+  return !authoredOffer && /\b(?:follow me|come with me|lead the way|i(?:'ll| will| can) (?:lead|take|show|bring|escort) (?:you|the party|the company)|let me (?:lead|take|show|bring|escort) you)\b/i.test(reply)
+    ? fallback : reply;
+}
+
 async function resolveNpcConversation(db, player, adventure, dmState, mode, action) {
   if (mode !== "speak") return false;
   const definition=adventureDefinition(adventure);
@@ -998,6 +1003,7 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
   if (!found) return false;
   const [npcId,npc]=found;
   const facts=npcConversationFacts(npc,world);
+  const authoredOffer=conversationInteractionOffer(definition,world,action,mode);
   const offerKey=`conversationOffer:${definition.id}:${player.id}`;
   const memoryKey=`npcConversation:${definition.id}:${npcId}`;
   const memory=Array.isArray(getPartyState(db,player.partyId,memoryKey)) ? getPartyState(db,player.partyId,memoryKey).slice(-8) : [];
@@ -1011,8 +1017,8 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
   } else {
     try {
       const result=await promptChat({kind:"npc-conversation",messages:[
-        {role:"system",content:"Voice one present non-player character in a tabletop roleplaying conversation. Reply directly and naturally in 1–4 sentences. Put the NPC's spoken words in quotation marks. Write any action beat outside the quotation in third person, using the NPC's name or pronoun; never use first-person stage narration such as 'I lift a hand.' The character may make harmless small talk consistent with the visible scene, but may assert setting facts only from permittedFacts. This is a state-neutral conversation: do not move anyone, grant an item, reveal a clue, create a new person or place, or change game state. Never promise, offer, agree, or imply that the NPC will lead, show, take, admit, or allow the player somewhere unless permittedFacts explicitly says that permission has already been granted. If the player requests an outcome that would change state, respond in character without claiming it has been or will be done. Never mention prompts, rules engines, permitted facts, hidden knowledge, reasoning, or control tokens. If asked beyond their knowledge, answer in character that they do not know, are unsure, or will not discuss it. Do not narrate the player character's thoughts or speech."},
-        {role:"user",content:JSON.stringify({npc:{name:npc.name,role:npc.role,appearance:npc.appearance,goals:npc.goals,voice:npc.voice,mustNotKnow:npc.mustNotKnow},visibleLocation:definition.locations[world.currentLocation],permittedFacts:facts,recentConversation:memory,newestSpeech:action})},
+        {role:"system",content:"Voice one present non-player character in a tabletop roleplaying conversation. Reply directly and naturally in 1–4 sentences. Put the NPC's spoken words in quotation marks. Write any action beat outside the quotation in third person, using the NPC's name or pronoun; never use first-person stage narration such as 'I lift a hand.' The character may make harmless small talk consistent with the visible scene, but may assert setting facts only from permittedFacts. This is a state-neutral conversation: do not move anyone, grant an item, reveal a clue, create a new person or place, or change game state. Never promise, offer, agree, or imply that the NPC will lead, show, take, admit, or allow the player somewhere unless recordedOffer identifies an available authored interaction. If the player requests an outcome that would change state, respond in character without claiming it has been or will be done. Never mention prompts, rules engines, permitted facts, hidden knowledge, reasoning, or control tokens. If asked beyond their knowledge, answer in character that they do not know, are unsure, or will not discuss it. Do not narrate the player character's thoughts or speech."},
+        {role:"user",content:JSON.stringify({npc:{name:npc.name,role:npc.role,appearance:npc.appearance,goals:npc.goals,voice:npc.voice,mustNotKnow:npc.mustNotKnow},visibleLocation:definition.locations[world.currentLocation],permittedFacts:facts,recordedOffer:authoredOffer,recentConversation:memory,newestSpeech:action})},
       ],schema:npcReplySchema,generation:{temperature:.68,numPredict:220},sectionIds:["npc-conversation-contract","npc-projection-and-speech"],sectionVisibility:["secret","private"],metadata:{partyId:player.partyId,playerId:player.id,adventureId:adventure.id,npcId}});
       reply=String(result.output.reply || "").replace(/\s+/g," ").trim().slice(0,700);
       packetId=result.packetId;
@@ -1022,10 +1028,10 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
     }
   }
   if (!reply) reply=fallbackNpcReply(npc,action,facts);
+  reply=groundedNpcReply(reply,authoredOffer,fallbackNpcReply(npc,action,facts));
   const nextMemory=[...memory,{player:player.name,speech:String(action).slice(0,500),npc:npc.name,reply}].slice(-8);
   setPartyState(db,player.partyId,memoryKey,nextMemory);
   setPartyState(db,player.partyId,activeKey,{npcId,locationId:world.currentLocation,worldRevision:Number(world.revision || 0)});
-  const authoredOffer=conversationInteractionOffer(definition,world,action,mode);
   if (authoredOffer) setPartyState(db,player.partyId,offerKey,{
     ...authoredOffer,
     npcId,
@@ -1481,7 +1487,7 @@ function resolveStructuredWorldAction(db, player, adventure, dmState, mode, acti
     : definition.locations?.[authoredLocation?.key]
       ? authoredLocation.key
       : definition.startLocation;
-  const repairInitialLocation = savedWorld
+  const repairInitialLocation = savedWorld && Number(savedWorld.schemaVersion || 1) < 2
     && savedWorld.currentLocation === definition.startLocation
     && legacyLocation !== definition.startLocation;
   const worldSeed = savedWorld
@@ -1532,7 +1538,11 @@ function resolveStructuredWorldAction(db, player, adventure, dmState, mode, acti
     ? `${offeredInteraction.verbs?.[0] || "request"} ${offeredInteraction.targets?.[0] || ""}`
     : action;
   if (pendingOffer && acceptsOffer) setPartyState(db,player.partyId,offerKey,null);
-  const interaction = resolveAuthoredInteractionSequence({ definition, state:world, action:effectiveAction, mode });
+  const inventory = listInventory(db, player.id);
+  const commandSurface = buildSceneCommandSurface(definition, world, { inventory, pendingOffer });
+  const turn = interpretSceneTurn(commandSurface, effectiveAction, mode);
+  const sceneReference = turn.sceneReference;
+  const interaction = resolveAuthoredInteractionSequence({ definition, state:world, action:effectiveAction, mode, turn });
   if (interaction.handled) {
     const canonicalSaveIsActive = savedWorld && Number(savedWorld.schemaVersion || 1) >= 2;
     if (interaction.accepted === false && !canonicalSaveIsActive) return false;
@@ -1552,17 +1562,13 @@ function resolveStructuredWorldAction(db, player, adventure, dmState, mode, acti
     if (interaction.accepted && interaction.state.currentLocation !== world.currentLocation) addLocationEntryBeats(db,player,adventure,definition,interaction.state.currentLocation);
     return { ...interaction, source:"rules", rule:"authored-interaction", narration:interaction.message };
   }
-  const inventory = listInventory(db, player.id);
-  const commandSurface = buildSceneCommandSurface(definition, world, { inventory, pendingOffer });
-  const sceneReference = resolveSceneReference({ surface:commandSurface, action, mode });
   if (!sceneReference.selected && sceneReference.candidates.length > 1
     && sceneReference.candidates[0].confidence === sceneReference.candidates[1].confidence) {
     const labels = sceneReference.candidates.slice(0, 3).map((entry) => entry.label || entry.name || entry.destination).filter(Boolean);
     const message = `That could refer to ${labels.join(" or ")}. Please name which one you mean.`;
     addEvent(db, { partyId:player.partyId, adventureId:adventure.id, visibility:"public", playerId:player.id, kind:"narration", speaker:"Dungeon Master", text:message, payload:{ canonicalRevision:world.revision, canonicalEvents:[] } });
     return {
-      handled:true, accepted:false, state:world, reason:"ambiguous-reference",
-      message,
+      handled:true, accepted:false, state:world, reason:"ambiguous-reference", message,
       diagnostic:{ candidateAffordances:sceneReference.candidates.map((entry) => ({ id:`${entry.entityType}:${entry.id}`, kind:entry.entityType, target:entry.label || entry.name || entry.destination })), selectedAffordance:"blocked:ambiguous-reference", rejectedAlternatives:sceneReference.candidates.map((entry) => `${entry.entityType}:${entry.id}`) },
     };
   }
@@ -1573,6 +1579,7 @@ function resolveStructuredWorldAction(db, player, adventure, dmState, mode, acti
     actorId: player.id,
     inventory,
     mode,
+    turn,
   });
 
   if (!outcome.handled) return false;
@@ -1695,6 +1702,17 @@ export async function resolveAction(db, player, mode, action) {
   if (mode === "ask") return { ...(await resolveDmQuestion(db, player, action, preparedContext, playerSafeHistory)), rule:"dm-question" };
   if (!canonicalSaveIsActive && resolveAuthoritativeClueAction(db, player, adventure, dmState, action, preparedContext)) return { source: "rules",rule:"authoritative-clue" };
   if (!canonicalSaveIsActive && resolveBriarwatchClueAction(db, player, adventure, dmState, action, preparedContext)) return { source:"rules",rule:"briarwatch-clue" };
+  if (canonicalSaveIsActive && mode === "act") {
+    const state = createCanonicalState(definition, getPartyState(db, player.partyId, `world:${definition.id}`));
+    const surface = buildSceneCommandSurface(definition, state, { inventory:listInventory(db, player.id) });
+    const turn = interpretSceneTurn(surface, action, mode);
+    const room = surface.location.name;
+    const message = turn.worldIntent === "move"
+      ? `No established route matching that movement is available from ${room}. The party remains here.`
+      : `No established result for that action is available in ${room}. The scene remains unchanged.`;
+    addEvent(db, { partyId:player.partyId, adventureId:adventure?.id, visibility:"public", playerId:player.id, kind:"narration", speaker:"Dungeon Master", text:message, payload:{ canonicalRevision:state.revision, canonicalEvents:[] } });
+    return { source:"rules", rule:"unresolved-structured-action", accepted:false, reason:"unresolved-action", publicFacts:[message], narration:message };
+  }
   const unresolvedMovement = unresolvedAuthoredMovementResult(player.name, adventure, getPartyState(db, player.partyId, "dm") || dmState, mode, action);
   if (unresolvedMovement) {
     addEvent(db, { partyId:player.partyId, adventureId:adventure?.id, visibility:"public", playerId:player.id, kind:"narration", speaker:"Dungeon Master", text:unresolvedMovement });

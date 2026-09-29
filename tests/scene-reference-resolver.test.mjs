@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { resolveSceneReference } from "../server/scene-reference-resolver.mjs";
+import { interpretSceneTurn } from "../server/turn-interpretation.mjs";
 
 const surface = {
   visibleFeatures:[{id:"cellar-hatch",label:"concealed cellar hatch",kind:"object"},{id:"barrels",label:"old barrels",kind:"scenery"}],
@@ -39,4 +40,20 @@ test("observation ignores a purpose clause when resolving the search subject", (
   assert.equal(generic.selected, null);
   const specific = resolveSceneReference({ surface:cellarSurface, action:"look at the locked stone door for markings" });
   assert.equal(specific.selected?.id, "keyed-stone-door");
+});
+
+test("one scene turn keeps the primary search separate from a purpose clause", () => {
+  const cellarSurface = {
+    ...surface,
+    visibleFeatures:[{ id:"keyed-stone-door", label:"locked stone door", kind:"door" }],
+    localPortableItems:[{ id:"cellar-key", name:"Cellar key", quantity:1 }],
+    exits:[],
+  };
+  const turn = interpretSceneTurn(cellarSurface, "look for hidden items to open door");
+  assert.equal(turn.worldIntent, "observe");
+  assert.equal(turn.referenceText, "look for hidden items");
+  assert.equal(turn.sceneReference.selected, null);
+  const pickup = interpretSceneTurn(cellarSurface, "take the cellar key");
+  assert.equal(pickup.sceneReference.selected?.id, "cellar-key");
+  assert.equal(pickup.sceneReference.selected?.entityType, "local-item");
 });

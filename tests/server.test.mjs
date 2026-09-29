@@ -4,8 +4,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { addEvent, addInventoryItem, advancePartySpotlight, buildLobby, completeActiveAdventure, createDatabase, createParty, createPlayer, createWorld, deletePlayer, getGuidanceMode, getKnownLocations, getLevelUpOptions, getPartySpotlight, getPartyState, getPlayer, getPlayerGuidance, levelUpPlayer, listInventory, listRecentEventsForDm, listVisibleEvents, movePlayerToParty, rememberKnownLocation, removeInventoryItem, resetPartyStory, selectAdventure, setGuidanceMode, setPartyState, setPlayerHp } from "../server/database.mjs";
-import { directorCheckRequest, ensureCompleteContainerResult, ensureConcreteMovementResult, prepareCampaignContext, resolveAction, resolvePendingCheck, safeNarrationText, sanitizeDirectorConsequences, unresolvedAuthoredMovementResult } from "../server/dm.mjs";
-import { applyAdventureEvent, enrichKnownLocations, locationIsRevealed, locationTransitionIsAllowed } from "../server/adventure-rules.mjs";
+import { directorCheckRequest, ensureCompleteContainerResult, ensureConcreteMovementResult, groundedNpcReply, prepareCampaignContext, resolveAction, resolvePendingCheck, safeNarrationText, sanitizeDirectorConsequences, unresolvedAuthoredMovementResult } from "../server/dm.mjs";
+import { applyAdventureEvent, authoredRouteContext, enrichKnownLocations, locationIsRevealed, locationTransitionIsAllowed } from "../server/adventure-rules.mjs";
 import { actionUsesSpotlight, canSubmitOutsideCombat, normalizeSpeechAudience } from "../server/spotlight.mjs";
 import { COTTON_FULL_NAME, COTTON_ID, cottonForParty, isCottonInteraction } from "../server/cotton.mjs";
 
@@ -216,7 +216,7 @@ test("warming the silver moth does not spend ink or invent an unstored map route
     assert.equal(state.clueStage,1);
     assert.equal(state.miteAwake,true);
     assert.match(narration,/uncurls and stirs/i);
-    assert.match(narration,/inkwell remains untouched/i);
+    assert.equal(state.inkOffered,false);
     assert.doesNotMatch(narration,/draws? a route|pantry shelves/i);
 
     await resolveAction(item.db,player,"act","offer the awakened ink-mite one drop of fresh ink on the paper");
@@ -224,12 +224,11 @@ test("warming the silver moth does not spend ink or invent an unstored map route
     narration=listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
     assert.equal(state.clueStage,2);
     assert.match(narration,/draw/i);
-    assert.match(narration,/pantry shelves/i);
+    assert.doesNotMatch(narration,/pantry shelves/i);
 
     await resolveAction(item.db,player,"act","investigate the line to the pantry shelves");
     narration=listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
-    assert.match(narration,/studies the ink-mite's line/i);
-    assert.match(narration,/elsewhere in the inn/i);
+    assert.match(narration,/line forms a continuous route away from the private room/i);
     assert.doesNotMatch(narration,/not present/i);
     assert.equal(getPartyState(item.db,party.id,"dm").currentLocationKey,"back-room");
   } finally { item.close(); }
@@ -660,10 +659,10 @@ test("reported Tamsin, table, and compound ink-mite sequence stays grounded end 
     assert.equal(world.flags.miteAwake,true);
     assert.equal(world.flags.inkOffered,true);
     assert.equal(world.flags.mapDrawn,true);
-    assert.match(latestNarration(),/seal breaks.*warmth wakes.*draws a line/is);
+    assert.match(latestNarration(),/seal breaks.*warmth wakes.*draws a fine line/is);
 
     await resolveAction(item.db,player,"act","look at the pantry shelves and the location the path leads");
-    assert.match(latestNarration(),/drawing.*pantry shelves elsewhere.*neither places.*nor moves/i);
+    assert.match(latestNarration(),/line forms a continuous route away from the private room/i);
     assert.equal(getPartyState(item.db,party.id,"world:lantern-below").currentLocation,"back-room");
   } finally { item.close(); }
 });
@@ -866,7 +865,7 @@ test("opened letter instructions can be reread and natural warmth advances the c
     world=getPartyState(item.db,party.id,"world:lantern-below");
     assert.equal(world.flags.inkOffered,true);
     assert.equal(world.flags.mapDrawn,true);
-    assert.match(latestNarration(),/draws a line.*pantry shelves/i);
+    assert.match(latestNarration(),/draws a fine line.*route the company can follow/i);
   } finally { item.close(); }
 });
 
@@ -1082,6 +1081,11 @@ test("schema-v2 cellar authority requires the carried key and keeps door guidanc
   } finally { item.close(); }
 });
 
+test("an NPC cannot promise an unrecorded escort", () => {
+  assert.equal(groundedNpcReply('“Follow me; I will take you to the private room.”', null, '“We can talk here.”'), '“We can talk here.”');
+  assert.equal(groundedNpcReply('“Follow me.”', { interactionId:"request-private-room" }, '“We can talk here.”'), '“Follow me.”');
+});
+
 test("Cellar searches inspect local items without selecting a remote door or wall seam", async () => {
   const item = fixture();
   try {
@@ -1101,6 +1105,45 @@ test("Cellar searches inspect local items without selecting a remote door or wal
       assert.doesNotMatch(reply, /open stone door|vertical wall seam|not present/i);
       assert.equal(getPartyState(item.db, party.id, "world:lantern-below").currentLocation, "cellar");
     }
+  } finally { item.close(); }
+});
+
+test("canonical Cellar remains authoritative over a stale legacy Pantry projection", async () => {
+  const item = fixture();
+  try {
+    const party = buildLobby(item.db).worlds[0].parties[0];
+    const player = createPlayer(item.db, { partyId:party.id, name:"Nigel", species:"Human", className:"Fighter" });
+    const world = {
+      schemaVersion:2, revision:8, currentLocation:"cellar", previousLocation:"pantry",
+      visited:["outside-inn","inn","kitchen","pantry","cellar"],
+      objects:{"cellar-hatch":{discovered:true,locked:false,open:true},"keyed-stone-door":{locked:true,open:false}},
+    };
+    setPartyState(item.db, party.id, "world:lantern-below", world);
+    setPartyState(item.db, party.id, "dm", { ...getPartyState(item.db, party.id, "dm"), clueStage:2, currentLocationKey:"pantry" });
+    const route = authoredRouteContext("world-hearthbound-lantern-below", getPartyState(item.db, party.id, "dm"), world);
+    assert.equal(route.currentLocation.key, "cellar");
+    await resolveAction(item.db, player, "act", "look around");
+    assert.match(listVisibleEvents(item.db, player).at(-1).text, /locked stone door/i);
+    assert.equal(getPartyState(item.db, party.id, "world:lantern-below").currentLocation, "cellar");
+  } finally { item.close(); }
+});
+
+test("unresolved structured actions remain state-neutral without model invention", async () => {
+  const item = fixture();
+  try {
+    const party = buildLobby(item.db).worlds[0].parties[0];
+    const player = createPlayer(item.db, { partyId:party.id, name:"Nigel", species:"Human", className:"Fighter" });
+    setPartyState(item.db, party.id, "world:lantern-below", {
+      schemaVersion:2, revision:5, currentLocation:"cellar", previousLocation:"pantry",
+      visited:["outside-inn","inn","kitchen","pantry","cellar"],
+      objects:{"cellar-hatch":{discovered:true,open:true},"keyed-stone-door":{locked:true,open:false}},
+    });
+    const before = getPartyState(item.db, party.id, "world:lantern-below");
+    const result = await resolveAction(item.db, player, "act", "invoke the moon dragon");
+    assert.equal(result.rule, "unresolved-structured-action");
+    assert.equal(result.accepted, false);
+    assert.deepEqual(getPartyState(item.db, party.id, "world:lantern-below"), before);
+    assert.match(listVisibleEvents(item.db, player).at(-1).text, /scene remains unchanged/i);
   } finally { item.close(); }
 });
 

@@ -98,7 +98,7 @@ function applyEffects(state, effects = []) {
   }
 }
 
-function candidateFor(interaction, state, action, mode) {
+function candidateFor(interaction, state, action, mode, turn = null) {
   // A completed one-shot interaction is an idempotent fact, not a newly
   // unsatisfied action. Its original prerequisites commonly become false as a
   // direct result of completion (for example, opening requires closed=false).
@@ -107,7 +107,7 @@ function candidateFor(interaction, state, action, mode) {
   const failed = repeated ? [] : failedRequirements(state, interaction.requires || []);
   if (interaction.location && interaction.location !== state.currentLocation) failed.push({ path:"currentLocation", predicate:"equals" });
   if (!repeated && interaction.forbids && requirementsMet(state, interaction.forbids)) failed.push({ path:"forbids", predicate:"false" });
-  const match = interactionMatch(interaction, action, mode);
+  const match = interactionMatch(interaction, action, mode, turn);
   return { id:interaction.id, kind:"authored-interaction", target:(interaction.targets || [])[0] || "", priority:Number(interaction.priority || 0), ...match, confidence:match.target.selected?.confidence || 0, failedPrerequisites:failed, repeated };
 }
 
@@ -141,10 +141,10 @@ export function conversationInteractionOffer(definition, suppliedState, action, 
   return { interactionId:candidates[0].interaction.id };
 }
 
-export function resolveAuthoredInteraction({ definition, state:suppliedState, action, mode = "act", excludeInteractionIds = [] }) {
+export function resolveAuthoredInteraction({ definition, state:suppliedState, action, mode = "act", excludeInteractionIds = [], turn = null }) {
   const state = createCanonicalState(definition, suppliedState);
   const excluded = new Set(excludeInteractionIds);
-  const candidates = (definition.interactions || []).filter((interaction) => !excluded.has(interaction.id)).map((interaction) => candidateFor(interaction, state, action, mode));
+  const candidates = (definition.interactions || []).filter((interaction) => !excluded.has(interaction.id)).map((interaction) => candidateFor(interaction, state, action, mode, turn));
   const matched = candidates.filter((candidate) => candidate.modeMatch && candidate.verbMatch && candidate.targetMatch && candidate.instrumentMatch && candidate.groupMatch);
   const available = matched.filter((candidate) => candidate.failedPrerequisites.length === 0)
     .sort((a,b) => b.priority - a.priority || b.confidence - a.confidence);
@@ -192,20 +192,21 @@ export function resolveAuthoredInteraction({ definition, state:suppliedState, ac
   };
 }
 
-export function resolveAuthoredInteractionSequence({ definition, state:suppliedState, action, mode = "act" }) {
+export function resolveAuthoredInteractionSequence({ definition, state:suppliedState, action, mode = "act", turn = null }) {
   let state = createCanonicalState(definition, suppliedState);
+  const scopedAction = turn?.worldIntent === "observe" ? turn.referenceText : action;
   const verbCount = new Set((definition.interactions || [])
     .flatMap((interaction) => interaction.verbs || [])
-    .filter((verb) => verbMatches(action, [verb])))
+    .filter((verb) => verbMatches(scopedAction, [verb])))
     .size;
-  if (verbCount < 2) return resolveAuthoredInteraction({ definition, state, action, mode });
+  if (verbCount < 2) return resolveAuthoredInteraction({ definition, state, action, mode, turn });
 
   const applied = [];
   const messages = [];
   const facts = [];
   let finalDiagnostic = { candidateAffordances:[], selectedAffordance:"", rejectedAlternatives:[] };
   for (let step = 0; step < 8; step += 1) {
-    const outcome = resolveAuthoredInteraction({ definition, state, action, mode, excludeInteractionIds:applied });
+    const outcome = resolveAuthoredInteraction({ definition, state, action, mode, excludeInteractionIds:applied, turn });
     finalDiagnostic = outcome.diagnostic || finalDiagnostic;
     if (!outcome.handled || !outcome.accepted) {
       if (!applied.length) return outcome;

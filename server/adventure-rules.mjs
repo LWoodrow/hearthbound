@@ -1,5 +1,6 @@
 import { lanternBelowAdventure } from "./adventures/lantern-below.mjs";
 import { visibleLocationFeatures } from "./world-state.mjs";
+import { canonicalStage } from "./interaction-engine.mjs";
 
 const legacyLanternLocations = [
   { key:"outside-inn", names:["outside the crooked lantern"], minimumStage:0, minimumArrivalStage:0, x:45, y:115, w:230, h:130, label:"Outside the Crooked Lantern", mapLabel:"Inn frontage", kind:"road", connectsTo:["inn"], features:["inn sign","front door","taproom windows"] },
@@ -106,10 +107,15 @@ export function locationTransitionIsAllowed(adventureId, state, currentNameOrKey
 export function authoredRouteContext(adventureId, state, worldState = null) {
   const rules=adventureRules(adventureId);
   if (!rules.locations.length) return null;
-  const stage=Number(state?.[rules.stateKey] || 0);
-  const revealed=rules.locations.filter((item)=>locationIsRevealed(adventureId,state,item.key));
+  const canonical = worldState && Number(worldState.schemaVersion || 1) >= 2
+    && String(adventureId || "").endsWith("lantern-below") ? worldState : null;
+  const projectedState = canonical
+    ? { ...state, currentLocationKey:canonical.currentLocation, [rules.stateKey]:canonicalStage(lanternBelowAdventure, canonical) }
+    : state;
+  const stage=Number(projectedState?.[rules.stateKey] || 0);
+  const revealed=rules.locations.filter((item)=>locationIsRevealed(adventureId,projectedState,item.key));
   const revealedKeys=new Set(revealed.map((item)=>item.key));
-  const current=locationRule(adventureId,state?.currentLocationKey) || revealed.at(-1);
+  const current=locationRule(adventureId,projectedState?.currentLocationKey) || revealed.at(-1);
   const connectedKeys=(room)=>rules.locations
     .filter((item)=>revealedKeys.has(item.key) && (room.connectsTo.includes(item.key) || item.connectsTo.includes(room.key)))
     .map((item)=>item.key);
