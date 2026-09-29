@@ -1,3 +1,5 @@
+import { tokenEquivalent } from "./semantic-tokens.mjs";
+
 const normalise = (value) => String(value || "").toLowerCase().replace(/[’']/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 const words = (value) => normalise(value).split(" ").filter(Boolean);
 const LOW_SIGNAL_WORDS = new Set(["some","somewhere","thing","things","place","places","area","areas","room","rooms"]);
@@ -34,7 +36,7 @@ function phrasePresent(action, phrase) {
   if (haystack.includes(needle)) return true;
   const actionWords = new Set(words(action));
   const meaningful = meaningfulWords(phrase);
-  return meaningful.length > 0 && meaningful.every((word) => actionWords.has(word));
+  return meaningful.length > 0 && meaningful.every((word) => [...actionWords].some((item) => tokenEquivalent(item, word)));
 }
 
 function entityScore(action, entity) {
@@ -45,7 +47,7 @@ function entityScore(action, entity) {
     else {
       const aliasWords = meaningfulWords(alias);
       const actionWords = new Set(meaningfulWords(action));
-      const overlap = aliasWords.filter((word) => actionWords.has(word)).length;
+      const overlap = aliasWords.filter((word) => [...actionWords].some((item) => tokenEquivalent(item, word))).length;
       if (overlap) score = Math.max(score, Math.min(.9, overlap / Math.max(1, aliasWords.length)));
     }
   }

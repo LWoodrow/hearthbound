@@ -25,6 +25,9 @@ const lanternLocations = Object.entries(lanternBelowAdventure.locations).map(([k
   ]);
   return {
     ...legacy,
+    // The adventure's own map grid is authoritative. Legacy pixel positions
+    // predate the later rooms and can overlap when more places are revealed.
+    ...(location.map ? { x:location.map.x*11, y:location.map.y*8, w:(location.map.w || 18)*11, h:(location.map.h || 18)*8 } : {}),
     key,
     names: [...names],
     minimumStage: legacy.minimumStage ?? location.stage ?? 0,
@@ -135,12 +138,14 @@ export function enrichKnownLocations(adventureId, state, locations) {
   const source=Array.isArray(locations) ? locations : [];
   const revealed=source.filter((location)=>locationIsRevealed(adventureId,state,location?.name));
   const revealedKeys=new Set(revealed.map((location)=>locationRule(adventureId,location?.name)?.key || location.id));
-  return revealed.map((location,index)=>{
+  const mapped = revealed.map((location,index)=>{
     const previous=revealed[index-1];
     const rule=locationRule(adventureId,location?.name);
     const map=rule || { key:location.id, x:65+(index%3)*345, y:70+Math.floor(index/3)*235, w:245+(index%2)*35, h:150, label:location.name, kind:"room", connectsTo:previous?[previous.id]:[] };
-    return { ...location, map:{ key:map.key, x:map.x, y:map.y, w:map.w, h:map.h, label:map.mapLabel || map.label, kind:map.kind, connectsTo:(map.connectsTo || []).filter((key)=>revealedKeys.has(key)), height:rules.mapHeight } };
+    return { ...location, map:{ key:map.key, x:map.x, y:map.y, w:map.w, h:map.h, label:map.mapLabel || map.label, kind:map.kind, connectsTo:(map.connectsTo || []).filter((key)=>revealedKeys.has(key)) } };
   });
+  const height=Math.max(rules.mapHeight, ...mapped.map((location)=>Number(location.map.y || 0)+Number(location.map.h || 0)+45));
+  return mapped.map((location)=>({ ...location, map:{ ...location.map, height } }));
 }
 
 export function applyAdventureEvent(adventureId, state, eventName) {

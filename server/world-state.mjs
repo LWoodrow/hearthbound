@@ -1,4 +1,5 @@
 import { observationReferenceText } from "./intent-resolver.mjs";
+import { tokenEquivalent } from "./semantic-tokens.mjs";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -172,13 +173,20 @@ export function abilityCheckForAction(action) {
 export function classifyWorldAction(action, mode = "act") {
   const words = normalise(action);
   if (mode === "speak") return "speech";
-  if (/\b(is there|are there|what|which)\b/.test(words)) return "observe";
-  if (/\b(check|search|look|inspect|examine|scan|sweep|investigate|study|read)\b/.test(words)) return "observe";
-  if (/\buse\b.*\bkey\b.*\b(door|lock|hatch|gate)\b/.test(words)) return "object";
-  // Treat "open the door and walk in" as the requested crossing. The
-  // movement resolver safely opens an unlocked route object while entering.
+  if (/\b(?:call out|shout|yell|cry out)\b/.test(words)) return "call-out";
+  // In a compound sentence the first explicit step determines the primary
+  // intent; a later "inspect" must not turn "walk there and inspect" into a
+  // remote observation. Opening and crossing one doorway remains a move.
   if (/\b(open|unfasten|push)\b/.test(words)
     && /\b(go|move|enter|cross|walk|run|travel|proceed|step|sneak|slip|creep|crawl|head)\b/.test(words)) return "move";
+  const clauses = words.split(/\b(?:and|then)\b/);
+  if (clauses.length > 1) {
+    const first = classifyWorldAction(clauses[0], mode);
+    if (first !== "other") return first;
+  }
+  if (/\b(is there|are there|what|which|how many)\b/.test(words)) return "observe";
+  if (/\b(check|search|look|inspect|examine|scan|sweep|investigate|study|read)\b/.test(words)) return "observe";
+  if (/\buse\b.*\bkey\b.*\b(door|lock|hatch|gate)\b/.test(words)) return "object";
   if (/\b(unlock|lock|open|close|shut|unfasten)\b|\blift (?:the )?lid\b/.test(words)) return "object";
   if (/\b(pick up|pickup|take|collect|grab)\b/.test(words)) return "pickup";
   if (/\b(go|move|enter|cross|follow|descend|ascend|leave|return|walk|run|travel|proceed|advance|continue|step|sneak|slip|creep|crawl|head)\b|\bmake (?:my|our|your|their) way\b/.test(words)) return "move";
@@ -194,33 +202,33 @@ function matches(words, ...candidates) {
 
 function singularToken(token) {
   if (token.endsWith("ies") && token.length > 4) return `${token.slice(0, -3)}y`;
-  if (token.endsWith("es") && token.length > 4) return token.slice(0, -2);
+  if (/(?:ches|shes|xes|zes|sses)$/.test(token)) return token.slice(0, -2);
   if (token.endsWith("s") && token.length > 3) return token.slice(0, -1);
   return token;
 }
 
 function mentionsNamedThing(words, ...candidates) {
   if (matches(words, ...candidates)) return true;
-  const actionTokens = new Set(normalise(words).split(" ").filter(Boolean).flatMap((token) => [token, singularToken(token)]));
+  const actionTokens = normalise(words).split(" ").filter(Boolean);
   const generic = new Set(["area", "door", "item", "place", "room", "thing"]);
   return candidates.some((candidate) => normalise(candidate)
     .split(" ")
-    .some((token) => token.length >= 4 && !generic.has(token) && actionTokens.has(singularToken(token))));
+    .some((token) => token.length >= 4 && !generic.has(token) && actionTokens.some((item) => tokenEquivalent(item, token))));
 }
 
 function namedThingScore(words, ...candidates) {
   if (matches(words, ...candidates)) return 100;
-  const actionTokens = new Set(normalise(words).split(" ").filter(Boolean).flatMap((token) => [token, singularToken(token)]));
+  const actionTokens = normalise(words).split(" ").filter(Boolean);
   const generic = new Set(["area", "door", "item", "place", "room", "thing"]);
   return Math.max(0, ...candidates.map((candidate) => {
     const candidateTokens = normalise(candidate).split(" ").filter(Boolean);
     const meaningful = candidateTokens.filter((token) => token.length >= 4 && !generic.has(token));
-    const overlap = meaningful.filter((token) => actionTokens.has(singularToken(token))).length;
+    const overlap = meaningful.filter((token) => actionTokens.some((item) => tokenEquivalent(item, token))).length;
     // The final meaningful noun is normally the entity being named. Weight it
     // above incidental modifiers: "note ... writing" should select the note,
     // not a writing desk; "cellar hatch" should not select a cellar key.
     const head = meaningful.at(-1);
-    return overlap + (head && actionTokens.has(singularToken(head)) ? 10 : 0);
+    return overlap + (head && actionTokens.some((item) => tokenEquivalent(item, head)) ? 10 : 0);
   }));
 }
 
@@ -279,6 +287,17 @@ function exitForMovement(definition, state, words, selected = null) {
   const exits = requestedDirection && directionalExits.length
     ? authoredExits.filter((exit) => exit.direction === requestedDirection)
     : authoredExits;
+  const requestedKind = normalise(words).match(/\b(door|hatch|stairs|gate|entrance)\b/)?.[1];
+  if (requestedKind) {
+    const matchingKind = exits.filter((exit) => normalise(`${exit.via} ${definition.objects?.[exit.object]?.name || ""}`)
+      .split(" ").some((token) => tokenEquivalent(token, requestedKind)));
+    if (matchingKind.length === 1) {
+      const namedDestinations = exits.filter((exit) => matches(words, exit.to,
+        definition.locations[exit.to]?.name, ...(definition.locations[exit.to]?.aliases || [])));
+      if (namedDestinations.length === 1 && namedDestinations[0] !== matchingKind[0]) return null;
+      return matchingKind[0];
+    }
+  }
   if (selected?.entityType === "exit" && selected.confidence >= 1) {
     const chosen = exits.find((exit) => exit.to === selected.destinationId);
     if (chosen) return chosen;
@@ -286,7 +305,9 @@ function exitForMovement(definition, state, words, selected = null) {
   const matchesTarget = exits.map((exit) => {
     const destination = definition.locations[exit.to];
     const destinationScore = namedThingScore(words, exit.to, destination?.name, ...(destination?.aliases || []));
-    const routeScore = namedThingScore(words, exit.via);
+    const signpostLabels = (exit.leadsFrom || []).map((id) =>
+      visibleLocationFeatures(definition, state).find((feature) => feature.id === id)?.label).filter(Boolean);
+    const routeScore = namedThingScore(words, exit.via, ...signpostLabels);
     return { exit, score:(destinationScore * 10) + routeScore };
   }).filter((candidate) => candidate.score > 0)
     .sort((left, right) => right.score - left.score);
@@ -350,7 +371,7 @@ export function visiblePortableItems(definition, state, locationId = state.curre
   }).map(([id, item]) => ({ id, ...item }));
 }
 
-function observationResult(definition, state, words) {
+function observationResult(definition, state, words, actorId) {
   words = normalise(observationReferenceText(words));
   const location = definition.locations[state.currentLocation];
   if (!location) return { handled:false };
@@ -358,6 +379,19 @@ function observationResult(definition, state, words) {
   const featureList = visibleFeatures.map((feature) => feature.label).join(", ") || "the established surroundings";
   const portableItems = visiblePortableItems(definition, state);
   const portableItemList = portableItems.map((item) => item.name).join(", ");
+  const quantityQuestion = words.match(/\bhow many\s+(doors?|hatches?|entrances?|exits?|items?|objects?|features?)\b/);
+  if (quantityQuestion) {
+    const kind = singularToken(quantityQuestion[1]);
+    const matchesKind = kind === "exit"
+      ? (location.exits || []).filter((exit) => !exit.object || state.objects?.[exit.object]?.discovered !== false)
+        .map((exit) => exit.via)
+      : kind === "item" || kind === "object"
+        ? portableItems.map((item) => item.name)
+        : visibleFeatures.filter((feature) => kind === "feature" || feature.kind === kind
+          || (kind === "door" && feature.kind === "door"))
+          .map((feature) => feature.label);
+    return { message:`${matchesKind.length} visible ${quantityQuestion[1]} in ${location.name}${matchesKind.length ? `: ${matchesKind.join(", ")}` : ""}.` };
+  }
   // A search for unspecified useful objects describes the current scene's
   // available items; it cannot nominate a remote feature or discover a hidden
   // item merely because the player names the goal of the search.
@@ -453,6 +487,7 @@ function observationResult(definition, state, words) {
     .sort((left,right) => right.score-left.score)[0];
   if (namedItem) {
     const { id:itemId, item } = namedItem;
+    if (state.itemOwners[itemId] === actorId) return { message:item.description || `${item.name} is in the character's possession. No additional details are established.` };
     const container = item.container ? definition.containers?.[item.container] : null;
     const present = item.container
       ? container?.location === state.currentLocation && state.containers[item.container]?.open
@@ -475,16 +510,36 @@ export function resolveWorldAction({ definition, state: suppliedState, action, a
   const state = createInitialWorldState(definition, suppliedState);
   const next = clone(state);
   const words = normalise(action);
+  // Compose two explicit ordinary actions in order. Do not split route
+  // crossings: their destination and doorway must be resolved as one action.
+  const compound = mode === "act" && !turn?.compoundStep
+    ? String(action || "").match(/^(.*?)\s+(?:and|then)\s+((?:look|inspect|examine|study|read|check|search|investigate|take|pick up|pickup|collect|grab|open|close|shut|unlock)\b.*)$/i)
+    : null;
+  if (compound) {
+    const firstIntent = classifyWorldAction(compound[1], mode);
+    const secondIntent = classifyWorldAction(compound[2], mode);
+    if (firstIntent !== secondIntent && ["observe", "pickup", "object"].includes(firstIntent) && ["observe", "pickup", "object"].includes(secondIntent)) {
+      const first = resolveWorldAction({ definition, state, action:compound[1], actorId, inventory, mode, turn:{ compoundStep:true } });
+      if (!first.handled || !first.accepted) return first;
+      const acquired = first.events?.find((event) => event.type === "item-acquired");
+      const referent = acquired && definition.items?.[acquired.itemId]?.name;
+      const secondAction = referent ? compound[2].replace(/\b(?:it|them)\b/i, referent) : compound[2];
+      const second = resolveWorldAction({ definition, state:first.state, action:secondAction, actorId, inventory, mode, turn:{ compoundStep:true } });
+      if (!second.handled || !second.accepted) return { ...first, message:`${first.message} ${second.message || "The second action has no established result."}` };
+      return { ...second, intent:`${first.intent}+${second.intent}`, message:`${first.message} ${second.message}`, events:[...(first.events || []), ...(second.events || [])] };
+    }
+  }
   const intent = turn?.worldIntent || classifyWorldAction(action, mode);
   const selected = turn?.sceneReference?.selected || null;
   const candidates = candidateAffordances(definition, state, intent, inventory);
   const result = (values = {}) => ({ handled: true, accepted: true, state: next, intent, events: [], diagnostic:{ candidateAffordances:candidates, selectedAffordance:"", rejectedAlternatives:[] }, ...values });
   if (!words || intent === "speech") return result({ handled: false });
+  if (intent === "call-out") return result({ message:`${actorId ? "The character" : "Someone"} calls out. The call carries into the established surroundings; no reply is established.`, diagnostic:{ candidateAffordances:candidates, selectedAffordance:"call-out", rejectedAlternatives:[] } });
 
   if (intent === "observe") {
     const check = abilityCheckForAction(action);
     if (check) return result({ handled:false, check });
-    return result({ ...observationResult(definition, next, turn?.referenceText || words), diagnostic:{ candidateAffordances:candidates, selectedAffordance:`observe:${selected?.id || state.currentLocation}`, rejectedAlternatives:[] } });
+    return result({ ...observationResult(definition, next, turn?.referenceText || words, actorId), diagnostic:{ candidateAffordances:candidates, selectedAffordance:`observe:${selected?.id || state.currentLocation}`, rejectedAlternatives:[] } });
   }
 
   if (intent === "pickup") {

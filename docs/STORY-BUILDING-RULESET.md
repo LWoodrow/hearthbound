@@ -24,6 +24,7 @@ Every location needs:
 - Natural aliases: `inn`, `tavern`, `taproom`, `inside the inn`.
 - A grounded description containing only immediately visible information.
 - Explicit exits and the objects or requirements controlling them.
+- If a visible trail or marking leads to an exit, record its local feature ID in that exit's `leadsFrom` list. The engine can then resolve natural references to the signpost without adding command-specific phrases; the signpost must remain visible before it can guide movement.
 - Visible features with stable identifiers.
 - Authored occupants: named NPCs plus relevant ordinary groups.
 - Map coordinates and a spoiler-safe map label.
@@ -57,6 +58,8 @@ A visible feature should define enough information for common interactions:
 - Object state: discovered, open, locked, used, depleted, or altered.
 
 Looking, inspecting, reading, opening, taking, using, and moving are different actions. Finding supplies does not use them. Inspecting a letter does not open it. A route drawn on paper represents a destination; it does not place that destination in the current room.
+
+Observing a mechanism may reveal how to operate it, but must not set an object's `open` or `locked` state or change location. Author deliberate operation as a separate interaction. Ordinary compound actions execute their explicit steps in order; a take followed by inspection transfers the item first, while a failed first step stops the sequence.
 
 ## 4. Important NPCs need bounded conversational lives
 
@@ -147,6 +150,7 @@ Spoken words may cause only an explicitly authored `Speak` interaction or a boun
 - Entering through an authored interaction and entering through ordinary movement must both update current location, visited locations, map, recap, and model context.
 - A represented or mentioned destination is not automatically visited.
 - Hidden and unrevealed locations never appear on the map.
+- Map rooms use the adventure's authored coordinates; furniture and labels must be positioned relative to their own room rather than fixed canvas coordinates. Check the complete discovered map for room overlap and sufficient canvas height.
 - Backtracking stays available unless an authored consequence removes it.
 - A revealed multi-room route that players can reasonably traverse in one declaration should be an authored journey interaction. Record every intermediate visited location and opened physical threshold, and stop if any genuine physical prerequisite is unmet.
 - Keep social permission separate from physical topology. A staff-only door may carry social consequences, but it is not physically locked unless the story authors a lock or obstruction. If permission is required by the intended scene, author both the permission route and any legitimate alternative approach.

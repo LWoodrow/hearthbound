@@ -8,6 +8,8 @@ function visibleExit(definition, state, sourceId, route) {
   if (objectState?.discovered === false) return null;
   const destination = definition.locations?.[route.to];
   if (!destination) return null;
+  const signposts = (route.leadsFrom || []).map((id) =>
+    visibleLocationFeatures(definition, state, sourceId).find((feature) => feature.id === id)?.label).filter(Boolean);
   return {
     id:`exit:${sourceId}:${route.to}`,
     kind:"exit",
@@ -17,6 +19,9 @@ function visibleExit(definition, state, sourceId, route) {
     via:route.via,
     direction:route.direction || null,
     objectId:route.object || null,
+    objectName:definition.objects?.[route.object]?.name || null,
+    objectOpen:objectState?.open === true,
+    signposts,
     available:requirementsMet(state, route.requires || []) && !objectState?.locked,
   };
 }

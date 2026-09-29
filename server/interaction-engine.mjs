@@ -1,5 +1,6 @@
 import { createInitialWorldState, requirementsMet } from "./world-state.mjs";
 import { interactionMatch } from "./intent-resolver.mjs";
+import { classifyWorldAction } from "./world-state.mjs";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const normalise = (value) => String(value || "").toLowerCase().replace(/[’']/g, "").replace(/[^a-z0-9]+/g, " ").trim();
@@ -108,7 +109,13 @@ function candidateFor(interaction, state, action, mode, turn = null) {
   if (interaction.location && interaction.location !== state.currentLocation) failed.push({ path:"currentLocation", predicate:"equals" });
   if (!repeated && interaction.forbids && requirementsMet(state, interaction.forbids)) failed.push({ path:"forbids", predicate:"false" });
   const match = interactionMatch(interaction, action, mode, turn);
-  return { id:interaction.id, kind:"authored-interaction", target:(interaction.targets || [])[0] || "", priority:Number(interaction.priority || 0), ...match, confidence:match.target.selected?.confidence || 0, failedPrerequisites:failed, repeated };
+  // An observation may reveal a mechanism, but cannot itself cross a route or
+  // physically open/lock an object, even if authored verb aliases are broad.
+  const intent = turn?.worldIntent || classifyWorldAction(action, mode);
+  const physicalEffect = (interaction.effects || []).some((effect) => effect.path === "currentLocation"
+    || /^objects\.[^.]+\.(?:open|locked)$/.test(effect.path || ""));
+  const safeMatch = intent === "observe" && physicalEffect ? { ...match, verbMatch:false } : match;
+  return { id:interaction.id, kind:"authored-interaction", target:(interaction.targets || [])[0] || "", priority:Number(interaction.priority || 0), ...safeMatch, confidence:safeMatch.target.selected?.confidence || 0, failedPrerequisites:failed, repeated };
 }
 
 export function availableInteractions(definition, suppliedState, mode = "act") {

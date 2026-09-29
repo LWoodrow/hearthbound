@@ -1562,7 +1562,8 @@ function resolveStructuredWorldAction(db, player, adventure, dmState, mode, acti
     if (interaction.accepted && interaction.state.currentLocation !== world.currentLocation) addLocationEntryBeats(db,player,adventure,definition,interaction.state.currentLocation);
     return { ...interaction, source:"rules", rule:"authored-interaction", narration:interaction.message };
   }
-  if (!sceneReference.selected && sceneReference.candidates.length > 1
+    if (!["observe", "call-out"].includes(turn.worldIntent)
+      && !sceneReference.selected && sceneReference.candidates.length > 1
     && sceneReference.candidates[0].confidence === sceneReference.candidates[1].confidence) {
     const labels = sceneReference.candidates.slice(0, 3).map((entry) => entry.label || entry.name || entry.destination).filter(Boolean);
     const message = `That could refer to ${labels.join(" or ")}. Please name which one you mean.`;

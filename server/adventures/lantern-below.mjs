@@ -262,8 +262,13 @@ export const lanternBelowAdventure = assertValidAdventure({
       outcome:{message:"Mara's fresh survey marks and boot scuffs establish that she continued through the locked stone door; they do not reveal her fate.",publicFacts:["Mara continued through the cellar's stone door."]},
     },
     {
+      id:"study-spindle", idempotencyKey:"mothglass:study-spindle", location:"mothglass", modes:["act"], stage:6, once:false,
+      verbs:["inspect","study","investigate","examine","look"], targets:["brass lantern","spindle","counterweight","wall seam"],
+      outcome:{message:"The brass lantern rests on a counterweighted spindle beside the wall seam. Its mounting can be turned, but has not moved.",publicFacts:["The brass lantern's spindle can be turned deliberately."]},
+    },
+    {
       id:"discover-spindle-passage", idempotencyKey:"mothglass:spindle", location:"mothglass", modes:["act"], stage:7,
-      verbs:["inspect","study","operate","turn","pull","use"], targets:["brass lantern","spindle","counterweight","wall seam"],
+      verbs:["operate","turn","pull","use"], targets:["brass lantern","spindle","counterweight","wall seam"],
       effects:[{op:"set",path:"objects.spindle-door.discovered",value:true},{op:"set",path:"objects.spindle-door.open",value:true},{op:"add",path:"discoveries",value:"spindle-passage"}],
       outcome:{message:"The brass lantern turns on its counterweight. The wall seam opens into a concealed survey passage and remains open for backtracking.",publicFacts:["The spindle opens a concealed survey passage.","The passage remains open."]},
     },
@@ -458,7 +463,7 @@ export const lanternBelowAdventure = assertValidAdventure({
       ],
       exits: [
         exit("mothglass", "concealed door", { object: "spindle-door" }),
-        exit("alcove", "collapsed survey alcove", { object: "alcove-opening" }),
+        exit("alcove", "collapsed survey alcove", { object: "alcove-opening", leadsFrom:["recent-bootprints", "dried-black-ink"] }),
       ],
     },
     alcove: {

@@ -1,11 +1,12 @@
 import { observationReferenceText, parseLiteralIntent, resolveEntityReferences } from "./intent-resolver.mjs";
+import { textTokens, tokenEquivalent } from "./semantic-tokens.mjs";
 
 function typed(entity, entityType, aliases = []) {
   return { ...entity, entityType, aliases:[...(entity.aliases || []), ...aliases].filter(Boolean) };
 }
 
 export function sceneEntityPool(surface, intent) {
-  const exits = (surface.exits || []).map((entry) => typed(entry, "exit", [entry.destination, entry.via, entry.direction]));
+  const exits = (surface.exits || []).map((entry) => typed(entry, "exit", [entry.destination, entry.via, entry.direction, entry.objectName, ...(entry.signposts || [])]));
   const features = (surface.visibleFeatures || []).map((entry) => typed(entry, "feature"));
   const npcs = (surface.presentNpcs || []).map((entry) => typed({ ...entry, label:entry.name }, "npc"));
   const inventory = (surface.carriedItems || []).map((entry) => typed({ ...entry, label:entry.name }, "inventory-item"));
@@ -20,7 +21,20 @@ export function sceneEntityPool(surface, intent) {
 
 export function resolveSceneReference({ surface, action, mode = "act", intent = null, parsed:preparsed = null }) {
   const parsed = intent ? { ...(preparsed || parseLiteralIntent(action, mode)), verb:intent } : (preparsed || parseLiteralIntent(action, mode));
-  const pool = sceneEntityPool(surface, parsed.verb);
+  let pool = sceneEntityPool(surface, parsed.verb);
+  if (parsed.verb === "move") {
+    const words = textTokens(action);
+    const kind = ["door", "hatch", "stairs", "gate", "entrance"].find((word) => words.includes(word));
+    if (kind) {
+      const matching = pool.filter((exit) => textTokens(`${exit.via} ${exit.objectName || ""}`)
+        .some((word) => tokenEquivalent(word, kind)));
+      if (matching.length) pool = matching;
+    }
+    if (words.some((word) => tokenEquivalent(word, "opened"))) {
+      const opened = pool.filter((exit) => exit.objectOpen);
+      if (opened.length) pool = opened;
+    }
+  }
   const referenceText = parsed.verb === "observe" ? observationReferenceText(action) : action;
   const resolution = resolveEntityReferences(referenceText, pool);
   const priority = parsed.verb === "observe"

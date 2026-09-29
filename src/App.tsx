@@ -683,8 +683,6 @@ function KnownMap({ campaign, locations, theme }: { campaign:string; locations:G
   const [zoom,setZoom]=useState(1);
   useEffect(()=>setSelected(Math.max(0,locations.length-1)),[locations.length]);
   const active=locations[Math.min(selected,Math.max(0,locations.length-1))];
-  // Decorations are selected by stable map keys supplied by the adventure rules, never by campaign prose.
-  const lantern=campaign.toLowerCase().includes("lantern");
   const discovered:MapArea[]=locations.map((location,index)=>({
     key:location.map?.key||location.id,index,
     x:location.map?.x??65+(index%3)*345,y:location.map?.y??70+Math.floor(index/3)*235,
@@ -693,22 +691,23 @@ function KnownMap({ campaign, locations, theme }: { campaign:string; locations:G
   }));
   const byKey=new Map(discovered.map((area)=>[area.key,area]));
   const selectArea=(index:number)=>setSelected(index);
-  const mapHeight=Math.max(locations[0]?.map?.height||0,540,Math.ceil(locations.length/3)*235+90);
+  const mapHeight=Math.max(locations[0]?.map?.height||0,540,...discovered.map((area)=>area.y+area.h+45));
+  const labelLines=(area:MapArea)=>{
+    const words=area.label.split(/\s+/);
+    const limit=Math.max(9,Math.floor((area.w-20)/10));
+    const lines:string[]=[];
+    for(const word of words){const last=lines.length-1;if(last>=0&&`${lines[last]} ${word}`.length<=limit)lines[last]+=` ${word}`;else lines.push(word)}
+    return lines;
+  };
   return <section className="map-view"><header><span className="eyebrow">{theme.terms.party} knowledge</span><h1>{theme.terms.map}</h1><p>A record of places the {theme.terms.party.toLowerCase()} has explored or clearly seen. Hidden rooms, secret routes, and unrevealed locations are never drawn.</p></header><div className="map-canvas"><div className="map-caption"><span>{campaign}</span><div className="map-tools"><strong>{locations.length} mapped place{locations.length===1?"":"s"}</strong><button type="button" aria-label="Zoom map out" onClick={()=>setZoom((value)=>Math.max(.75,value-.25))}>−</button><button type="button" onClick={()=>setZoom(1)}>{Math.round(zoom*100)}%</button><button type="button" aria-label="Zoom map in" onClick={()=>setZoom((value)=>Math.min(1.75,value+.25))}>+</button></div></div>{locations.length ? <><div className="floor-map-scroll"><svg className="floor-map" style={{width:`${zoom*100}%`}} viewBox={`0 0 1100 ${mapHeight}`} role="img" aria-label={`${theme.terms.map} for ${campaign}`}>
     <defs><pattern id="floor-grid" width="25" height="25" patternUnits="userSpaceOnUse"><path d="M 25 0 L 0 0 0 25"/></pattern><pattern id="tile-wood" width="38" height="14" patternUnits="userSpaceOnUse"><rect width="38" height="14"/><path d="M0 1H38 M0 13H38 M11 1V13 M30 1V13"/></pattern><pattern id="tile-stone" width="42" height="28" patternUnits="userSpaceOnUse"><rect width="42" height="28"/><path d="M0 1H42 M0 27H42 M21 1V14 M8 14V27 M36 14V27 M0 14H42"/></pattern><pattern id="tile-earth" width="34" height="34" patternUnits="userSpaceOnUse"><rect width="34" height="34"/><circle cx="7" cy="10" r="1.5"/><circle cx="25" cy="22" r="2"/><path d="M12 29l6-3"/></pattern><filter id="map-shadow"><feDropShadow dx="0" dy="5" stdDeviation="5" floodOpacity=".55"/></filter></defs>
     <rect className="map-paper" x="1" y="1" width="1098" height={mapHeight-2}/><rect className="map-grid" x="1" y="1" width="1098" height={mapHeight-2}/>
     {discovered.flatMap((area)=>area.connectsTo.map((key)=>{const prior=byKey.get(key);return prior?<path className="map-corridor wide" key={`${key}-${area.key}`} d={`M ${prior.x+prior.w/2} ${prior.y+prior.h/2} L ${area.x+area.w/2} ${area.y+area.h/2}`}/>:null}))}
     {discovered.map((area)=><g key={area.key} className={`floor-room ${area.index===selected?"selected":""} ${area.index===locations.length-1?"current":""}`} role="button" tabIndex={0} aria-label={area.label} onClick={()=>selectArea(area.index)} onKeyDown={(event)=>{if(event.key==="Enter"||event.key===" ")selectArea(area.index)}}>
-      <rect className={`room-floor tile-${area.kind}`} x={area.x} y={area.y} width={area.w} height={area.h}/><path className="room-walls" d={`M ${area.x} ${area.y+area.h} V ${area.y} H ${area.x+area.w} V ${area.y+area.h} H ${area.x} Z`}/><MapTileObjects area={area} bespoke={lantern&&["inn","cellar","mothglass","passage","alcove"].includes(area.key)}/>
-      {lantern&&area.key==="inn"&&<g className="map-furniture"><rect x="82" y="92" width="92" height="58"/><path d="M 94 121 H 162 M 128 103 V 139"/><rect x="350" y="90" width="100" height="36"/><circle cx="300" cy="185" r="27"/><circle cx="390" cy="205" r="27"/><circle cx="300" cy="185" r="4"/><circle cx="390" cy="205" r="4"/><path d="M 455 210 h20 M 455 230 h20"/><text className="map-feature-label" x="128" y="165" textAnchor="middle">HEARTH</text><text className="map-feature-label" x="400" y="145" textAnchor="middle">BAR</text><text className="map-feature-label" x="345" y="252" textAnchor="middle">TABLES</text><text className="map-feature-label" x="448" y="275" textAnchor="end">ENTRANCE</text></g>}
-      {lantern&&area.key==="cellar"&&<g className="map-furniture"><path d="M 575 105 h75 v42 h-75z M 720 105 h72 v42 h-72z M 575 235 h217"/><circle cx="625" cy="205" r="22"/><circle cx="750" cy="205" r="22"/><text className="map-feature-label" x="612" y="162" textAnchor="middle">STORAGE</text><text className="map-feature-label" x="750" y="162" textAnchor="middle">OLD TOOLS</text><text className="map-feature-label" x="688" y="273" textAnchor="middle">BARRELS</text></g>}
-      {lantern&&area.key==="mothglass"&&<g className="map-furniture"><circle cx="685" cy="500" r="52"/><path d="M 685 448 V552 M633 500 H737 M648 463 L722 537 M722 463 L648 537"/><text className="map-feature-label" x="685" y="574" textAnchor="middle">BRASS LANTERN MECHANISM</text></g>}
-      {lantern&&area.key==="passage"&&<g className="map-furniture"><path d="M 910 185 V510 M 955 185 V510 M 995 185 V510"/><text className="map-feature-label" x="932" y="350" textAnchor="middle" transform="rotate(-90 932 350)">NARROW STONE PASSAGE</text></g>}
-      {lantern&&area.key==="alcove"&&<g className="map-furniture rubble"><path d="M 885 642 l18-26 14 18 17-35 18 32 17-24 21 34 18-17 20 18"/><text className="map-feature-label" x="955" y="594" textAnchor="middle">COLLAPSED STONES</text></g>}
-      <text className="room-number" x={area.x+18} y={area.y+27}>{area.index+1}</text><text className="room-label" x={area.x+area.w/2} y={area.y+area.h/2+5} textAnchor="middle">{area.label}</text>
+      <rect className={`room-floor tile-${area.kind}`} x={area.x} y={area.y} width={area.w} height={area.h}/><path className="room-walls" d={`M ${area.x} ${area.y+area.h} V ${area.y} H ${area.x+area.w} V ${area.y+area.h} H ${area.x} Z`}/><MapTileObjects area={area} bespoke={false}/>
+      <text className="room-number" x={area.x+18} y={area.y+27}>{area.index+1}</text><text className="room-label" x={area.x+area.w/2} y={area.y+area.h/2-(labelLines(area).length-1)*12+5} textAnchor="middle">{labelLines(area).map((line,index)=><tspan key={index} x={area.x+area.w/2} dy={index?24:0}>{line}</tspan>)}</text>
       {area.index===locations.length-1&&<circle className="current-marker" cx={area.x+area.w-18} cy={area.y+18} r="7"/>}
     </g>)}
-    {lantern&&discovered.some((area)=>area.key==="cellar")&&<g className="map-stairs"><path d="M485 195 h60 M485 205 h60 M485 215 h60 M485 225 h60 M485 235 h60 M485 245 h60"/><text x="515" y="268" textAnchor="middle">STAIRS DOWN</text></g>}
   </svg></div><article className="map-place-detail"><span className="eyebrow">{selected===locations.length-1?"Latest known location":`Mapped location ${selected+1}`}</span><h2>{active.name}</h2><p>{active.summary}</p></article></> : <div className="empty-map"><strong>The parchment is blank</strong><p>Known locations will be drawn as the party explores.</p></div>}</div></section>;
 }
 

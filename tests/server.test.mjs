@@ -1725,3 +1725,24 @@ test("mothglass navigation persists the opened passage and stays aligned while b
     item.close();
   }
 });
+
+test("live scene commands count, inspect, call out, and follow visible trails without inventing routes", async () => {
+  const item=fixture();
+  try {
+    const party=buildLobby(item.db).worlds[0].parties[0];
+    const player=createPlayer(item.db,{partyId:party.id,name:"Nigel",species:"Human",className:"Fighter"});
+    setPartyState(item.db,party.id,"dm",{...getPartyState(item.db,party.id,"dm"),lanternArrivalStage:2,clueStage:4,currentLocationKey:"cellar-passage"});
+    setPartyState(item.db,party.id,"world:lantern-below",{currentLocation:"cellar-passage",previousLocation:"cellar",visited:["outside-inn","inn","back-room","kitchen","pantry","cellar","cellar-passage"]});
+    await resolveAction(item.db,player,"act","how many doors are there?");
+    assert.match(listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text,/2 visible doors/i);
+    setPartyState(item.db,party.id,"dm",{...getPartyState(item.db,party.id,"dm"),lanternArrivalStage:2,clueStage:7,currentLocationKey:"passage"});
+    setPartyState(item.db,party.id,"world:lantern-below",{currentLocation:"passage",previousLocation:"mothglass",visited:["outside-inn","inn","back-room","kitchen","pantry","cellar","cellar-passage","mothglass","passage"],objects:{"spindle-door":{discovered:true,open:true}}});
+    const latest=()=>listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text;
+    await resolveAction(item.db,player,"act","investigate the collapse");
+    assert.match(latest(),/collapsed survey alcove/i);
+    await resolveAction(item.db,player,"act","call out for anyone close");
+    assert.match(latest(),/calls out/i);
+    await resolveAction(item.db,player,"act","follow boot prints");
+    assert.equal(getPartyState(item.db,party.id,"world:lantern-below").currentLocation,"alcove");
+  } finally { item.close(); }
+});

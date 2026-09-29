@@ -168,6 +168,10 @@ export function validateAdventure(adventure) {
       }
       if (!exit?.via) errors.push(`locations.${locationId}.exits[${index}].via is required.`);
       if (exit?.direction && !["up","down"].includes(exit.direction)) errors.push(`locations.${locationId}.exits[${index}].direction must be up or down when supplied.`);
+      if (exit?.leadsFrom != null && (!Array.isArray(exit.leadsFrom)
+        || exit.leadsFrom.some((id) => !location.features?.some((feature) => feature.id === id)))) {
+        errors.push(`locations.${locationId}.exits[${index}].leadsFrom must reference local feature IDs.`);
+      }
       validateRequirements(exit?.requires, `locations.${locationId}.exits[${index}].requires`, errors);
     }
   }

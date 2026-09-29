@@ -4,6 +4,10 @@ import assert from "node:assert/strict";
 import { validateAdventure } from "../server/adventure-schema.mjs";
 import { lanternBelowAdventure } from "../server/adventures/lantern-below.mjs";
 import { buildStoryAuthority } from "../server/story-authority.mjs";
+import { buildSceneCommandSurface } from "../server/scene-command-surface.mjs";
+import { interpretSceneTurn } from "../server/turn-interpretation.mjs";
+import { resolveAuthoredInteraction } from "../server/interaction-engine.mjs";
+import { enrichKnownLocations } from "../server/adventure-rules.mjs";
 import {
   abilityCheckForAction,
   createInitialWorldState,
@@ -35,6 +39,66 @@ test("The Lantern Below definition is valid and every location is reachable", ()
   const result = validateAdventure(lanternBelowAdventure);
   assert.equal(result.valid, true, result.errors?.join("\n"));
   assert.deepEqual(result.unreachable, []);
+});
+
+test("visible routes resolve physical doorway and nearby trail references without a phrase list", () => {
+  const cellar = at("cellar", { previousLocation:"pantry", objects:{"cellar-hatch":{discovered:true,open:true,locked:false},"keyed-stone-door":{open:true,locked:false}} });
+  for (const command of ["go through the opened door", "go through the cellar door"]) {
+    const outcome = act(cellar, command);
+    assert.equal(outcome.state.currentLocation, "cellar-passage", command);
+  }
+  const passage = at("passage", { previousLocation:"mothglass", objects:{"spindle-door":{discovered:true,open:true}} });
+  for (const command of ["walk towards the collapse", "follow boot prints"]) {
+    const outcome = act(passage, command);
+    assert.equal(outcome.state.currentLocation, "alcove", command);
+  }
+});
+
+test("local observations count visible feature kinds and recognise inflected labels", () => {
+  const cellarPassage = at("cellar-passage", { previousLocation:"cellar" });
+  assert.match(act(cellarPassage, "how many doors are there?").message, /2 visible doors.*stone door.*mothglass chamber entrance/i);
+  const passage = at("passage", { previousLocation:"mothglass", objects:{"spindle-door":{discovered:true,open:true}} });
+  assert.match(act(passage, "investigate the collapse").message, /collapsed survey alcove/i);
+  assert.match(act(passage, "call out for anyone close").message, /calls out|call carries/i);
+});
+
+test("scene references use visible route kinds and signposts before weak shared nouns", () => {
+  const cellar = at("cellar", { previousLocation:"pantry", objects:{"cellar-hatch":{discovered:true,open:true},"keyed-stone-door":{open:true,locked:false}} });
+  const surface = buildSceneCommandSurface(lanternBelowAdventure, cellar);
+  const resolved = interpretSceneTurn(surface, "go through the opened door");
+  assert.equal(resolved.sceneReference.selected?.destinationId, "cellar-passage");
+  const passage = at("passage", { objects:{"spindle-door":{discovered:true,open:true}} });
+  const trail = interpretSceneTurn(buildSceneCommandSurface(lanternBelowAdventure, passage), "follow boot prints");
+  assert.equal(trail.sceneReference.selected?.destinationId, "alcove");
+});
+
+test("inspection does not operate a physical puzzle, but deliberate operation does", () => {
+  const chamber = at("mothglass");
+  const inspection = resolveAuthoredInteraction({ definition:lanternBelowAdventure, state:chamber, action:"investigate counterweighted spindle" });
+  assert.equal(inspection.handled, true);
+  assert.equal(inspection.state.objects["spindle-door"].open, false);
+  assert.match(inspection.message, /can be turned/i);
+  const operation = resolveAuthoredInteraction({ definition:lanternBelowAdventure, state:inspection.state, action:"turn counterweighted spindle" });
+  assert.equal(operation.state.objects["spindle-door"].open, true);
+});
+
+test("compound ordinary actions acquire before inspecting a local item", () => {
+  const state = at("cellar-passage");
+  const outcome = act(state, "pick up map and look at it");
+  assert.equal(outcome.state.itemOwners.map, actorId);
+  assert.deepEqual(outcome.events.map((event) => event.type), ["item-acquired"]);
+  assert.match(outcome.message, /inventory.*possession/i);
+});
+
+test("mapped rooms use authored geometry without overlap as discoveries grow", () => {
+  const places = Object.values(lanternBelowAdventure.locations).map((location, index) => ({ id:`place-${index}`, name:location.name, summary:location.description }));
+  const mapped = enrichKnownLocations("lantern-below", { clueStage:10, lanternArrivalStage:2 }, places);
+  assert.equal(mapped.length, places.length);
+  for (const [index, first] of mapped.entries()) for (const second of mapped.slice(index + 1)) {
+    const a=first.map, b=second.map;
+    assert.equal(a.x < b.x+b.w && b.x < a.x+a.w && a.y < b.y+b.h && b.y < a.y+a.h, false, `${first.name} overlaps ${second.name}`);
+  }
+  assert.ok(mapped[0].map.height >= Math.max(...mapped.map((place) => place.map.y+place.map.h)));
 });
 
 test("a keyed door cannot use an imagined key and repeated open remains state-neutral", () => {
