@@ -151,6 +151,7 @@ Spoken words may cause only an explicitly authored `Speak` interaction or a boun
 - A represented or mentioned destination is not automatically visited.
 - Hidden and unrevealed locations never appear on the map.
 - Map rooms use the adventure's authored coordinates; furniture and labels must be positioned relative to their own room rather than fixed canvas coordinates. Check the complete discovered map for room overlap and sufficient canvas height.
+- Treat the known map as a field sketch, not an exact battle grid. Use shared material fills, restrained architectural marks, and readable room labels; visual stamps must stay clipped to their room and may not imply an actionable clue absent from the visible scene. Keep route lines and the current-position marker visually distinct from decorative marks.
 - Backtracking stays available unless an authored consequence removes it.
 - A revealed multi-room route that players can reasonably traverse in one declaration should be an authored journey interaction. Record every intermediate visited location and opened physical threshold, and stop if any genuine physical prerequisite is unmet.
 - Keep social permission separate from physical topology. A staff-only door may carry social consequences, but it is not physically locked unless the story authors a lock or obstruction. If permission is required by the intended scene, author both the permission route and any legitimate alternative approach.

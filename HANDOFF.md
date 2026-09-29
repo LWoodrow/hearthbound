@@ -4,9 +4,9 @@ This is the shared operational record for humans and AI collaborators. Update it
 
 ## Current status
 
-- GitHub and local `main` include the Cellar search fix (`0593740`) and the convergence package (`4ba65d5`), with handoff update `01eb153`. The original checkout has an unrelated local `.gitignore` edit that remains untouched.
-- Active development branch: `codex/scene-affordance-semantics` in an isolated worktree, based on pushed `main`.
-- Latest verification on `codex/scene-affordance-semantics`: 186/186 automated tests, production build, TypeScript check, and all adventure validations pass. Human playtesting has not yet been run on this branch.
+- Local `main` includes the scene-affordance package (`e7af54a`); GitHub `main` still needs a separately authorized push. The original checkout has an unrelated local `.gitignore` edit that remains untouched.
+- Active development branch: `codex/map-visual-system` in an isolated worktree, based on local `main`.
+- Latest integrated package: `e7af54a` on local `main`, running on the local service. GitHub `main` has not been pushed. The map visual refresh is isolated on `codex/map-visual-system`: 186/186 tests, production build, and adventure validation pass; human visual review is pending.
 - Recent resolver slices received syntax checks only; human playtesting is in progress by request
 - Package 1 scene-command-surface work is complete on `codex/scene-command-surface`; commit and local merge are authorized for human retest
 - Runtime servers: do not assume a port or process is active; inspect before testing
@@ -39,6 +39,7 @@ Improve player freedom and reliable conversational interpretation without weaken
 | Codex | `codex/cellar-search-intent` / `hearthbound-cellar-search` | Scope observation references to the object of inspection, not a purpose clause; retest generic wall inspection | Complete on branch; awaiting user review and authorization before any merge or push | `server/intent-resolver.mjs`, `server/scene-reference-resolver.mjs`, `server/world-state.mjs`, resolver and integration tests, ruleset, `HANDOFF.md` |
 | Codex | `codex/turn-convergence` / `hearthbound-cellar-search` | Shared room-local turn interpretation for authored/generic actions, canonical room projection, safe unresolved-action boundary, grounded NPC offers, and full-turn regressions; includes committed Cellar fix | Committed and fast-forwarded to local `main`; 179/179 tests, build, and adventure validation pass; service restart and human retest remain | Turn resolver, canonical projection, integration tests, ruleset, `HANDOFF.md` |
 | Codex | `codex/scene-affordance-semantics` / `hearthbound-cellar-search` | Generalize intent scope, room-local route/feature resolution, multi-step item actions, observation-versus-operation, and map layout from the latest human playtest | Implemented on isolated branch; 186/186 tests, build, and adventure validation pass; human retest pending; no merge or push authorized this turn | Scene/world/authored resolvers, map projection/UI, cross-scene regressions, ruleset, `HANDOFF.md` |
+| Codex | `codex/map-visual-system` / `hearthbound-cellar-search` | Replace flat gold-box known map with a reusable parchment survey visual system, material fills, room-local landmarks, legible labels, and restrained current-position emphasis | Implemented on isolated branch; 186/186 tests, production build, and adventure validation pass; browser visual review pending, no merge/push authorized | `src/App.tsx`, `src/styles.css`, ruleset, `HANDOFF.md` |
 | Unassigned | — | Select the next item from `BACKLOG.md` | Ready | — |
 
 Workers must add a row before beginning substantial work and remove or archive it in the handoff log when finished.
@@ -147,6 +148,7 @@ For human testing, record:
 
 | Date | Worker | Branch/commit | Completed | Verification | Next step |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-29 | Codex | `codex/map-visual-system` | Replaced the known map's gold-on-black boxes with a reusable parchment survey palette, wood/stone/earth fills, room-clipped symbols, deduplicated inked routes, readable label plates, and a restrained current-location seal | 186/186 tests, production build/TypeScript, and all adventure validations pass; no browser visual review yet | Review visual direction on the isolated branch, then merge/push only if authorized; kitchen omission noted in prior human screenshot remains a separate discovery/projection issue |
 | 2026-09-29 | Codex | `codex/scene-affordance-semantics` | Added generic route-kind and visible-signpost resolution, inflected local feature matching, count questions, bounded call-out, compound ordinary actions, observation/operation separation, and authored-coordinate map layout without fixed decorations | 186/186 automated tests, production build, TypeScript check, and all adventure validations pass; no human retest yet | Review the isolated branch, then merge/push only if authorized; restart the service from the integrated code and replay the reported path |
 | 2026-09-29 | Codex | `codex/cellar-search-intent` / pending commit | Scoped observational references to their subject, handled unspecified item searches from canonical visible items, and added direct and end-to-end Cellar regressions | New end-to-end regression passes; full suite 171/175 with the same four pre-existing stale expectations; production build and all adventure validations pass | Review branch diff, then merge/push only if authorized; restart from the integrated branch and human-retest both phrasings |
 | 2026-08-18 | Codex | `main` / pending documentation commit | Added shared collaboration rules and operational handoff structure | Documentation-only change | Select next backlog item in a dedicated branch/worktree |
