@@ -62,6 +62,13 @@ export function parseLiteralIntent(action, mode = "act") {
   return { mode, verb:explicit, literal:String(action || "").trim(), quantity, compound };
 }
 
+// In an observation, "to open the door" describes why the player searches;
+// it is not another entity being inspected. Keep the primary subject intact.
+export function observationReferenceText(action) {
+  const literal = String(action || "");
+  return literal.split(/\b(?:to|in order to|so (?:i|we|they) can)\s+(?=(?:open|unlock|use|enter|reach|find|get|access)\b)/i)[0].trim();
+}
+
 export function resolveEntityReferences(action, entities = []) {
   const candidates = entities.map((entity) => ({ ...entity, confidence:entityScore(action, entity) }))
     .filter((entity) => entity.confidence > 0)

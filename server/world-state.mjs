@@ -1,3 +1,5 @@
+import { observationReferenceText } from "./intent-resolver.mjs";
+
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
 const normalise = (value) => String(value || "")
@@ -341,12 +343,22 @@ export function visiblePortableItems(definition, state, locationId = state.curre
 }
 
 function observationResult(definition, state, words) {
+  words = normalise(observationReferenceText(words));
   const location = definition.locations[state.currentLocation];
   if (!location) return { handled:false };
   const visibleFeatures = visibleLocationFeatures(definition, state);
   const featureList = visibleFeatures.map((feature) => feature.label).join(", ") || "the established surroundings";
   const portableItems = visiblePortableItems(definition, state);
   const portableItemList = portableItems.map((item) => item.name).join(", ");
+  // A search for unspecified useful objects describes the current scene's
+  // available items; it cannot nominate a remote feature or discover a hidden
+  // item merely because the player names the goal of the search.
+  const genericItemSearch = /\b(?:look|search|scan|check)(?:\s+around)?\s+for\s+(?:(?:a|an|any|some|hidden|concealed|useful|spare|loose)\s+)*(?:items?|objects?|tools?|supplies|something|anything)\b/.test(words);
+  if (genericItemSearch) {
+    return portableItemList
+      ? { message:`Portable items currently visible in ${location.name}: ${portableItemList}. Searching does not take or use them, and establishes no additional hidden item.` }
+      : { message:`No unattended portable item is currently visible in ${location.name}. Searching does not establish an unspecified hidden item.` };
+  }
   const genericRoomLook = /\b(look around|what is (?:in|inside) (?:the )?(?:room|area|here)|what can (?:i|we) see|describe (?:the )?(room|area|surroundings))\b/.test(words);
   const actionTokens = new Set(normalise(words).split(" ").filter(Boolean));
   const explicitlyNamedFeature = visibleFeatures.some((feature) => {
@@ -395,6 +407,11 @@ function observationResult(definition, state, words) {
     return portableItems.length
       ? { message:`Portable items currently established here: ${portableItems.join(", ")}. Nothing is taken until a character explicitly takes a named item.` }
       : { message:`No unattended portable item is established in ${location.name}. The visible scenery is not automatically available as inventory.` };
+  }
+  const explicitlyNamedPortableItem = portableItems.find((item) =>
+    matches(words, item.id, item.name, ...(item.aliases || [])));
+  if (explicitlyNamedPortableItem) {
+    return { message:`${explicitlyNamedPortableItem.name} is visible in ${location.name}. Examining it does not move or take it.` };
   }
   const namedFeature = visibleFeatures
     .map((feature) => {

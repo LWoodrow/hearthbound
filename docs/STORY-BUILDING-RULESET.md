@@ -37,6 +37,8 @@ Keep mechanically eligible interactions separate from player-visible guidance. A
 
 Resolve references through an intent-typed scene pool: movement searches current exits, speech searches present NPCs, observation searches visible local entities before carried items, and object use searches visible operable objects plus carried instruments. A generic scene inspection (for example, “look around”) describes the complete current surface before fuzzy reference matching; include visible portable items so a required item never has to be guessed. Do not rank absent story entities beside local visible ones.
 
+For observation requests, distinguish the thing being sought from the player's purpose: “look for items to open the door” searches the current scene for available items; “to open the door” does not nominate an opened door as the inspection target. An unspecified search may report only canonically visible portable items and cannot invent or reveal a hidden item. An explicitly named, visible item takes precedence over a weak token overlap with local scenery.
+
 Every accepted mutation must produce revision-linked canonical transition events. Guidance, maps, recaps, and narration payloads consume that accepted revision; prose never creates a parallel transition.
 
 An authored interaction that names an instrument must validate actual canonical ownership or carried inventory before applying its effects. Merely typing an instrument's name never establishes possession.

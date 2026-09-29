@@ -1081,6 +1081,29 @@ test("schema-v2 cellar authority requires the carried key and keeps door guidanc
     assert.equal(world.currentLocation,"cellar-passage");
   } finally { item.close(); }
 });
+
+test("Cellar searches inspect local items without selecting a remote door or wall seam", async () => {
+  const item = fixture();
+  try {
+    const party = buildLobby(item.db).worlds[0].parties[0];
+    const player = createPlayer(item.db, { partyId:party.id, name:"Nigel", species:"Human", className:"Fighter" });
+    setPartyState(item.db, party.id, "world:lantern-below", {
+      schemaVersion:2, revision:8, currentLocation:"cellar", previousLocation:"pantry",
+      visited:["outside-inn","inn","kitchen","pantry","cellar"],
+      objects:{"cellar-hatch":{discovered:true,locked:false,open:true},"keyed-stone-door":{locked:true,open:false}},
+    });
+    setPartyState(item.db, party.id, "dm", { ...getPartyState(item.db, party.id, "dm"), currentLocationKey:"cellar" });
+
+    for (const action of ["look for hidden items to open door", "look around the walls"]) {
+      await resolveAction(item.db, player, "act", action);
+      const reply = listVisibleEvents(item.db, player).filter((event) => event.kind === "narration").at(-1).text;
+      assert.match(reply, /Cellar key/);
+      assert.doesNotMatch(reply, /open stone door|vertical wall seam|not present/i);
+      assert.equal(getPartyState(item.db, party.id, "world:lantern-below").currentLocation, "cellar");
+    }
+  } finally { item.close(); }
+});
+
 test("Briarwatch rejects locations from another adventure and non-adjacent jumps", () => {
   const item=fixture();
   try{

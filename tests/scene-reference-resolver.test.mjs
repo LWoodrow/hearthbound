@@ -28,3 +28,15 @@ test("speech searches present NPCs only", () => {
   assert(result.pool.every((entry) => entry.entityType === "npc"));
   assert.equal(result.selected?.id, "tamsin");
 });
+
+test("observation ignores a purpose clause when resolving the search subject", () => {
+  const cellarSurface = {
+    ...surface,
+    visibleFeatures:[{ id:"keyed-stone-door", label:"locked stone door", kind:"door" }],
+    exits:[],
+  };
+  const generic = resolveSceneReference({ surface:cellarSurface, action:"look for hidden items to open door" });
+  assert.equal(generic.selected, null);
+  const specific = resolveSceneReference({ surface:cellarSurface, action:"look at the locked stone door for markings" });
+  assert.equal(specific.selected?.id, "keyed-stone-door");
+});

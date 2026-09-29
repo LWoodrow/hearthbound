@@ -45,6 +45,15 @@ test("generic scene inspection lists the canonical room surface before fuzzy fea
   assert.match(cellarLook.message, /Cellar key/);
   assert.doesNotMatch(cellarLook.message, /vertical wall seam/i);
 
+  const search = resolveWorldAction({ definition:lanternBelowAdventure, state:cellar, action:"look for hidden items to open door", actorId:"nigel" });
+  assert.match(search.message, /Cellar key/);
+  assert.doesNotMatch(search.message, /open stone door|vertical wall seam|not present/i);
+  assert.deepEqual(search.state, cellar);
+
+  const specificSearch = resolveWorldAction({ definition:lanternBelowAdventure, state:cellar, action:"look for a cellar key to unlock the door", actorId:"nigel" });
+  assert.match(specificSearch.message, /Cellar key is visible in Cellar/);
+  assert.deepEqual(specificSearch.state, cellar);
+
   const passage = createInitialWorldState(lanternBelowAdventure, {
     currentLocation:"cellar-passage",
     visited:["outside-inn", "inn", "kitchen", "pantry", "cellar", "cellar-passage"],

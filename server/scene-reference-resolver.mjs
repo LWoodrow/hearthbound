@@ -1,4 +1,4 @@
-import { parseLiteralIntent, resolveEntityReferences } from "./intent-resolver.mjs";
+import { observationReferenceText, parseLiteralIntent, resolveEntityReferences } from "./intent-resolver.mjs";
 
 function typed(entity, entityType, aliases = []) {
   return { ...entity, entityType, aliases:[...(entity.aliases || []), ...aliases].filter(Boolean) };
@@ -20,7 +20,8 @@ export function sceneEntityPool(surface, intent) {
 export function resolveSceneReference({ surface, action, mode = "act", intent = null }) {
   const parsed = intent ? { ...parseLiteralIntent(action, mode), verb:intent } : parseLiteralIntent(action, mode);
   const pool = sceneEntityPool(surface, parsed.verb);
-  const resolution = resolveEntityReferences(action, pool);
+  const referenceText = parsed.verb === "observe" ? observationReferenceText(action) : action;
+  const resolution = resolveEntityReferences(referenceText, pool);
   const priority = parsed.verb === "observe"
     ? { feature:4, npc:3, "inventory-item":2, exit:1 }
     : (parsed.verb === "open" || parsed.verb === "use")
