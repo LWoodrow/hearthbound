@@ -1,5 +1,7 @@
 # Local startup and project handoff
 
+Single-runtime policy (2026-10-04): the agreed Hearthbound app is **http://127.0.0.1:4173**, launched from **C:/Users/Lee/Documents/GitHub/hearthbound** on main. Do not start alternate-port worktree previews without explicit user approval. The user authorised clearing all characters, saves and history for a fresh start; keep AI configuration and model files. llama.cpp's 8080 endpoint is an inference service, not another game app.
+
 ## Start Hearthbound on Windows
 
 From the repository folder, run:

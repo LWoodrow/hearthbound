@@ -238,7 +238,6 @@ Finally return to Eldervale City and resume the paused main adventure. Character
 
 ## Runtime and verification policy
 
-Work is isolated in `codex/eldervale-city` at `C:/Users/Lee/Documents/Codex/hearthbound-eldervale-city`. No merge, push or installation into the main checkout is included in this task. The only game runtime remains the main checkout on port 4173. No new preview application, save reset or machine configuration change is needed.
+The user authorised merge and publication after the isolated package passed its checks. Implementation c3187a0 was fast-forwarded into `C:/Users/Lee/Documents/GitHub/hearthbound` on main. The only game runtime remains that main checkout on port 4173. No new preview application, save reset or machine configuration change is needed.
 
-Deterministic coverage checks the fixed graph, preserved original content, all descents, observations versus operations, gate persistence, hidden-room disclosure, optional survey, actual city travel and actual sentinel combat. Production build and full adventure validation are required before deployment. Human visual and conversational playtesting remains necessary; automated passage checks do not establish that every district feels fully inhabited.
-
+Deterministic coverage checks the fixed graph, preserved original content, all descents, observations versus operations, gate persistence, hidden-room disclosure, optional survey, actual city travel and actual sentinel combat. The package passed 324 tests, production build/typecheck, 36 portrait asset checks and all four adventure validations before integration. Human visual and conversational playtesting remains necessary; automated passage checks do not establish that every district feels fully inhabited.
