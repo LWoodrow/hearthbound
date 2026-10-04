@@ -18,7 +18,7 @@ This is the shared operational record for humans and AI collaborators. Update it
 
 ## Current priority
 
-AI preview follow-up: a live Ollama probe hit the original 30-second JSON-test timeout during cold loading. The probe now allows 150 seconds, shows first-load guidance and distinguishes a slow/loading model from an unreachable endpoint; focused connection tests and the rebuilt UI pass. Actual llama.cpp inference remains the next hardware-dependent test.
+AI preview follow-up: a live Ollama probe hit the original 30-second JSON-test timeout during cold loading. The probe now allows 150 seconds, shows first-load guidance and distinguishes a slow/loading model from an unreachable endpoint; focused connection tests and the rebuilt UI pass. The repeated live probe against `hermes3:8b` succeeded through the new HTTP settings API and structured transport, without saving a new default. Actual llama.cpp inference remains the next hardware-dependent test.
 
 Improve player freedom and reliable conversational interpretation without weakening canonical state authority. Human play transcripts are the primary discovery tool; automated replays preserve confirmed failures and prevent regressions.
 
