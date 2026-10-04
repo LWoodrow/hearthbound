@@ -11,7 +11,7 @@ import { currentModelProfile, modelRuntimeView, resetModelRuntime, selectAndLoad
 import { canManageAi, mergeAiSettings, publicAiSettings, readAiSettings, saveAiSettings } from "./ai-settings.mjs";
 import { aiRequest, discoverAi } from "./ai-transport.mjs";
 import { localAiService, localServerCommand, localSetupStatus } from "./ai-service.mjs";
-import { isGgufFile, listLocalModels, modelDownloader } from "./model-library.mjs";
+import { isGgufFile, listLocalModels, modelDownloader, resolveLocalModelSelection } from "./model-library.mjs";
 import { cottonForParty, isCottonInteraction, maybeCottonInterjection } from "./cotton.mjs";
 import { beginCombatAttack, beginCombatPotion, beginCombatSpell, combatView, isCombatActive, resetWorkshopCombat, resolveCombatRoll, startWorkshopCombat, takeCombatDodge, workshopOptions } from "./combat.mjs";
 import { authoredRouteContext } from "./adventure-rules.mjs";
@@ -80,8 +80,9 @@ export async function handleApi(request, response, url) {
         if (request.method === "POST" && url.pathname === "/api/ai/download/cancel") return json(response, 200, await modelDownloader.cancel());
         if (request.method === "POST" && ["/api/ai/library", "/api/ai/download", "/api/ai/load"].includes(url.pathname)) {
           const input = await readJson(request);
-          const settings = mergeAiSettings(input);
+          let settings = mergeAiSettings(input);
           if (settings.provider !== "llamacpp" || settings.mode !== "local") throw new Error("The local model library is for llama.cpp on this computer. Remote models are managed on their server.");
+          if (input.selectionKey) settings=resolveLocalModelSelection(settings,input.selectionKey);
           if (url.pathname === "/api/ai/library") return json(response, 200, { models:listLocalModels(settings.modelsDirectory) });
           if (url.pathname === "/api/ai/download") {
             if (localLoadBusy) return json(response, 409, { error:"Wait for the model load to finish." });

@@ -160,7 +160,7 @@ export type GameView = {
     connected:boolean; model:string; profile:string; displayName:string; promptInspectorEnabled:boolean;
     status:"checking"|"available"|"ready"|"loading"|"unavailable"|"offline"|"error";
     pendingModel:string; loadProgress:number|null; loaded:boolean; error:string; loadDurationMs:number|null;
-    models:Array<{name:string;size:number;parameterSize:string;quantization:string;family:string;modifiedAt:string;loaded:boolean;selected:boolean}>;
+    models:Array<{name:string;selectionKey?:string;size:number;parameterSize:string;quantization:string;family:string;modifiedAt:string;loaded:boolean;selected:boolean}>;
   };
   speech: { transcriptionConfigured: boolean };
   art: { imageConfigured: boolean };

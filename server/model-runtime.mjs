@@ -2,6 +2,7 @@ import { activeModelProfile, listModelProfiles } from "./model-profiles.mjs";
 import { readAiSettings, saveAiSettings } from "./ai-settings.mjs";
 import { discoverAi, generateStructured } from "./ai-transport.mjs";
 import { localAiService } from "./ai-service.mjs";
+import { localModelCatalogue } from "./model-library.mjs";
 
 let cachedDiscovery = null;
 let cachedAt = 0;
@@ -33,6 +34,10 @@ export async function testAiConnection(settings) {
 
 export async function modelRuntimeView({ force = false } = {}) {
   let profile;
+  const settings=(()=>{try {return readAiSettings();}catch {return {};}})();
+  const local=settings.provider === "llamacpp" && settings.mode === "local";
+  let libraryError="";
+  const catalogue=advertised=>{try {return local ? localModelCatalogue(settings,advertised) : advertised.map(item=>({...item,selected:item.name===settings.model}));}catch(error){libraryError=error.message;return advertised.map(item=>({...item,selected:item.name===settings.model}));}};
   try {
     profile = currentModelProfile();
     const key = JSON.stringify(profile);
@@ -42,11 +47,16 @@ export async function modelRuntimeView({ force = false } = {}) {
     const models = cachedDiscovery;
     const selected = models.find(item => item.name === profile.model);
     if (selected?.loaded) localAiService.markReady();
-    const status = loading ? "loading" : selectionError ? "error" : !selected ? "unavailable" : selected.loaded ? "ready" : "available";
-    return { connected:Boolean(selected), model:profile.model, profile:profile.id, provider:profile.provider, displayName:profile.displayName, status, pendingModel:loading, loadProgress:loading ? null : selected?.loaded ? 100 : 0, loaded:Boolean(selected?.loaded), error:selectionError || (selected ? "" : "The configured model is not advertised by this AI server."), loadDurationMs:null, models:models.map(item => ({ ...item, selected:item.name === profile.model })) };
+    const options=catalogue(models);
+    const process=localAiService.view();
+    const pending=loading || (local && process.phase === "starting" ? settings.model : "");
+    const status = pending ? "loading" : selectionError || (local && process.phase === "error") ? "error" : !selected ? "unavailable" : selected.loaded ? "ready" : "available";
+    return { connected:Boolean(selected), model:profile.model, profile:profile.id, provider:profile.provider, displayName:profile.displayName, status, pendingModel:pending, loadProgress:pending ? null : selected?.loaded ? 100 : 0, loaded:Boolean(selected?.loaded), error:selectionError || (local ? process.error : "") || libraryError || (selected ? "" : "The configured model is not advertised by this AI server."), loadDurationMs:null, models:options };
   } catch (error) {
-    const settings = (() => { try { return readAiSettings(); } catch { return {}; } })();
-    return { connected:false, model:settings.model || "", profile:profile?.id || "", provider:settings.provider || "llamacpp", displayName:settings.model || "AI", status:loading || localAiService.view().phase === "starting" ? "loading" : "offline", pendingModel:loading, loadProgress:0, loaded:false, error:error instanceof Error ? error.message : "The AI server is unavailable.", loadDurationMs:null, models:[] };
+    const process=localAiService.view();
+    const pending=loading || (local && process.phase === "starting" ? settings.model : "");
+    const options=catalogue([]);
+    return { connected:false, model:settings.model || "", profile:profile?.id || "", provider:settings.provider || "llamacpp", displayName:settings.model || "AI", status:pending ? "loading" : local && process.phase === "error" ? "error" : "offline", pendingModel:pending, loadProgress:pending ? null : 0, loaded:false, error:(local ? process.error : "") || libraryError || (error instanceof Error ? error.message : "The AI server is unavailable."), loadDurationMs:null, models:options };
   }
 }
 

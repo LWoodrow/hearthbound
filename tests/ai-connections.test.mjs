@@ -59,8 +59,15 @@ test("library settings work before login, test a remote AI and persist across ap
     assert.equal(saved.status,200);
     await stop(); await launch();
     const after=await (await fetch(`${base}/api/ai/settings`)).json(); assert.equal(after.settings.contextTokens,4096); assert.equal(after.settings.apiKey,undefined);
+    writeFileSync(modelPath,gguf);
+    const configured=await fetch(`${base}/api/ai/settings`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(localDraft)});assert.equal(configured.status,200);
+    const localView=await (await fetch(`${base}/api/ai/settings`)).json();
+    assert.equal(localView.runtime.models[0].name,"downloaded");assert.match(localView.runtime.models[0].selectionKey,/^gguf:/);assert.equal(localView.runtime.models[0].loaded,true);
+    const pickerLoad=await post("load",{selectionKey:localView.runtime.models[0].selectionKey});assert.equal(pickerLoad.status,400);assert.match((await pickerLoad.json()).error,/started elsewhere/);
+    const missingChoice=await post("load",{selectionKey:"gguf:removed"});assert.equal(missingChoice.status,400);assert.match((await missingChoice.json()).error,/no longer/);
     await new Promise(done=>fake.close(done));
     const offline=await (await fetch(`${base}/api/ai/settings`)).json(); assert.equal(offline.runtime.status,"offline");
+    assert.equal(offline.runtime.models.length,1);assert.equal(offline.runtime.models[0].loaded,false);
     assert.equal((await fetch(`${base}/api/lobby`)).status,200);
   } finally { await stop(); if(fake.listening) await new Promise(done=>fake.close(done)); rmSync(directory,{recursive:true,force:true}); }
 });

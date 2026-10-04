@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createModelDownloader, huggingFaceDownload, isGgufFile, listLocalModels } from "../server/model-library.mjs";
+import { createModelDownloader, huggingFaceDownload, isGgufFile, listLocalModels, localModelCatalogue, resolveLocalModelSelection } from "../server/model-library.mjs";
 
 const source = "https://huggingface.co/example/instruct/resolve/main/model.gguf";
 const model = () => { const bytes=Buffer.alloc(32); bytes.write("GGUF"); bytes.writeUInt32LE(3,4); return bytes; };
@@ -83,4 +83,27 @@ test("insufficient disk space cancels the response without creating a file",()=>
 test("a destination created during download is preserved",()=>fixture(async folder=>{
   const transfer=downloader(async()=>{writeFileSync(join(folder,"example--instruct--model.gguf"),"existing");return fileResponse();});
   transfer.start(source,folder);await transfer.wait();assert.equal(transfer.view().phase,"error");assert.equal(readFileSync(transfer.view().path,"utf8"),"existing");assert.equal(readdirSync(folder).length,1);
+}));
+
+test("local picker lists offline files, keeps duplicate names distinct, and never exposes paths",()=>fixture(folder=>{
+  mkdirSync(join(folder,"nested"));
+  const first=join(folder,"same.gguf"),second=join(folder,"nested","same.gguf");writeFileSync(first,model());writeFileSync(second,model());
+  const settings={modelsDirectory:folder,modelPath:first,model:"server-alias"};
+  const offline=localModelCatalogue(settings);
+  assert.equal(offline.length,2);assert.notEqual(offline[0].selectionKey,offline[1].selectionKey);
+  assert.equal(offline.filter(item=>item.selected).length,1);assert.equal(offline.some(item=>item.loaded),false);
+  assert.equal(JSON.stringify(offline).includes(folder.replaceAll("\\","\\\\")),false);
+  assert.equal(offline.some(item=>"path" in item),false);
+  assert.equal(localModelCatalogue(settings,[{name:"server-alias",loaded:true}]).filter(item=>item.loaded).length,1);
+  const alternative=offline.find(item=>!item.selected);
+  assert.equal(resolveLocalModelSelection(settings,alternative.selectionKey).modelPath,second);
+  assert.throws(()=>resolveLocalModelSelection(settings,"gguf:unknown"),/no longer/);
+}));
+
+test("configured external GGUF is retained without importing arbitrary selection paths",()=>fixture(folder=>{
+  const external=join(folder,"outside.gguf");writeFileSync(external,model());
+  const settings={modelsDirectory:join(folder,"empty"),modelPath:external,model:"alias"};
+  const catalogue=localModelCatalogue(settings);assert.equal(catalogue.length,1);assert.equal(catalogue[0].selected,true);
+  assert.equal(resolveLocalModelSelection(settings,catalogue[0].selectionKey).modelPath,external);
+  assert.throws(()=>resolveLocalModelSelection(settings,external),/no longer/);
 }));

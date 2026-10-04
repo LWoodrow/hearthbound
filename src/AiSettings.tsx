@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { GameView } from "./types";
+import { ModelLoadProgress } from "./ModelLoadProgress";
 
 type Settings = { provider:"llamacpp"|"ollama"; mode:"local"|"remote"; baseUrl:string; model:string; contextTokens:number; executablePath:string; modelPath:string; modelsDirectory:string; gpuLayers:number; autoStart:boolean; hasApiKey:boolean };
 type LocalModel = { name:string; path:string; size:number };
@@ -80,7 +81,7 @@ export function AiSettings({ close }:{close:()=>void}) {
   return <main className="ai-setup-page">
     <header className="ai-setup-header"><button type="button" onClick={close}>← Game library</button><span>Settings · Applies to every adventure</span></header>
     <section className="ai-setup-card"><span className="eyebrow">Your storyteller</span><h1>AI connection</h1><p>Run your model on this computer, or connect Hearthbound to an AI server elsewhere.</p>
-      {snapshot && <div ref={statusRef} className={`ai-setup-status ${status === "Ready" ? "ready" : ""}`} role="status"><strong>{status}</strong><span>{snapshot.runtime.model} · {snapshot.settings.provider === "llamacpp" ? "llama.cpp" : "Ollama"}</span><small>{detail}</small>{starting && <><progress aria-label="Model startup in progress"/><small>{snapshot.process.elapsedMs != null ? `${Math.floor(snapshot.process.elapsedMs/1000)} seconds elapsed · ` : ""}{snapshot.process.pid ? `Process ${snapshot.process.pid} · ` : ""}Checking every 3 seconds. No reliable percentage is available.</small></>}</div>}
+      {snapshot && <div ref={statusRef} className={`ai-setup-status ${status === "Ready" ? "ready" : ""}`} role="status"><strong>{status}</strong><span>{snapshot.runtime.model} · {snapshot.settings.provider === "llamacpp" ? "llama.cpp" : "Ollama"}</span><small>{detail}</small><ModelLoadProgress loading={Boolean(starting)} progress={starting ? null : snapshot.runtime.loaded ? 100 : 0}/>{starting && <><small>{snapshot.process.elapsedMs != null ? `${Math.floor(snapshot.process.elapsedMs/1000)} seconds elapsed · ` : ""}{snapshot.process.pid ? `Process ${snapshot.process.pid} · ` : ""}Checking every 3 seconds. No reliable percentage is available.</small></>}</div>}
       {snapshot?.setup && !snapshot.setup.valid && <p className="ai-setup-error" role="alert">Saved local setup needs attention: {snapshot.setup.error}</p>}
       {snapshot?.setup?.valid && settings?.mode === "local" && <p className="ai-setup-hint">Executable found: {snapshot.setup.executablePath}</p>}
       {settings?.mode === "local" && <details className="ai-startup-log" open={starting || snapshot?.process.phase === "error"}><summary>Local AI startup diagnostics</summary><p>Recent loading and error messages from this Hearthbound-started process. API keys are redacted; prompts and conversation logs are not shown.</p><pre>{snapshot?.process.logLines?.length ? snapshot.process.logLines.join("\n") : "No startup messages yet. Use Load selected model to start llama.cpp. A server launched in a terminal writes its messages there instead."}</pre></details>}

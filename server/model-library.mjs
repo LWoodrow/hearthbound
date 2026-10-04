@@ -1,7 +1,7 @@
 import { closeSync, existsSync, linkSync, mkdirSync, openSync, readSync, readdirSync, statfsSync, statSync, unlinkSync } from "node:fs";
 import { open } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 export function isGgufFile(filename, requireExtension = true) {
   let file;
@@ -31,6 +31,25 @@ export function listLocalModels(directory) {
   }
   scan(root, 0);
   return models.sort((left,right)=>left.name.localeCompare(right.name));
+}
+
+export const localModelKey = filename => "gguf:" + createHash("sha256").update(resolve(filename)).digest("hex").slice(0,24);
+
+export function localModelCatalogue(settings, advertised = []) {
+  const files=listLocalModels(settings.modelsDirectory);
+  if (settings.modelPath && isGgufFile(settings.modelPath) && !files.some(file=>resolve(file.path)===resolve(settings.modelPath))) files.push({name:basename(settings.modelPath).replace(/\.gguf$/i,""),path:resolve(settings.modelPath),size:statSync(settings.modelPath).size});
+  return files.map(file=>{
+    const selected=Boolean(settings.modelPath) && resolve(file.path)===resolve(settings.modelPath);
+    return {name:file.name,selectionKey:localModelKey(file.path),size:file.size,family:"GGUF",parameterSize:"",quantization:"",modifiedAt:"",selected,loaded:selected && advertised.some(item=>item.name===settings.model && item.loaded)};
+  });
+}
+
+export function resolveLocalModelSelection(settings, selectionKey) {
+  const files=listLocalModels(settings.modelsDirectory);
+  if (settings.modelPath && isGgufFile(settings.modelPath)) files.push({path:settings.modelPath,name:basename(settings.modelPath).replace(/\.gguf$/i,"")});
+  const chosen=files.find(file=>localModelKey(file.path)===selectionKey);
+  if (!chosen) throw new Error("This model is no longer in the configured library. Refresh the model list.");
+  return {...settings,modelPath:chosen.path,model:chosen.name.slice(0,200)};
 }
 
 export function huggingFaceDownload(source) {
