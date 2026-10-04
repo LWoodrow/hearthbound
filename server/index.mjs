@@ -10,7 +10,7 @@ import { generateCharacterDetail, refreshPlayerGuidance, resolveAction, resolveP
 import { currentModelProfile, modelRuntimeView, resetModelRuntime, selectAndLoadModel, testAiConnection } from "./model-runtime.mjs";
 import { canManageAi, mergeAiSettings, publicAiSettings, readAiSettings, saveAiSettings } from "./ai-settings.mjs";
 import { aiRequest, discoverAi } from "./ai-transport.mjs";
-import { localAiService, localServerCommand } from "./ai-service.mjs";
+import { localAiService, localServerCommand, localSetupStatus } from "./ai-service.mjs";
 import { isGgufFile, listLocalModels, modelDownloader } from "./model-library.mjs";
 import { cottonForParty, isCottonInteraction, maybeCottonInterjection } from "./cotton.mjs";
 import { beginCombatAttack, beginCombatPotion, beginCombatSpell, combatView, isCombatActive, resetWorkshopCombat, resolveCombatRoll, startWorkshopCombat, takeCombatDodge, workshopOptions } from "./combat.mjs";
@@ -88,7 +88,7 @@ export async function handleApi(request, response, url) {
             return json(response, 202, modelDownloader.start(input.url, settings.modelsDirectory));
           }
           if (localLoadBusy || modelDownloader.active()) return json(response, 409, { error:"Wait for the current model operation to finish." });
-          localServerCommand(settings);
+          const command=localServerCommand(settings);
           if (!isGgufFile(settings.modelPath)) throw new Error("Select a complete supported GGUF model file before loading.");
           localLoadBusy = true;
           try {
@@ -97,11 +97,11 @@ export async function handleApi(request, response, url) {
               try { await aiRequest(profileForSettings(settings), "/health"); external = true; } catch { /* No external server responding. */ }
               if (external) throw new Error("A server started elsewhere is using this address. Stop it there or use a different local port.");
             } else await localAiService.stop();
-            saveAiSettings({ ...settings, clearApiKey:!settings.apiKey }); resetModelRuntime();
+            saveAiSettings({ ...settings, executablePath:command.executable, clearApiKey:!settings.apiKey }); resetModelRuntime();
             return json(response, 202, { settings:publicAiSettings(), process:await localAiService.start() });
           } finally { localLoadBusy = false; }
         }
-        if (request.method === "GET" && url.pathname === "/api/ai/settings") return json(response, 200, { settings:publicAiSettings(), runtime:await modelRuntimeView({force:true}), process:localAiService.view() });
+        if (request.method === "GET" && url.pathname === "/api/ai/settings") return json(response, 200, { settings:publicAiSettings(), runtime:await modelRuntimeView({force:true}), process:localAiService.view(), setup:localSetupStatus() });
         if (request.method === "PUT" && url.pathname === "/api/ai/settings") {
           if (localLoadBusy || modelDownloader.active()) return json(response, 409, { error:"Wait for the current model operation to finish before saving settings." });
           if (localAiService.view().managed) return json(response, 409, { error:"Stop the local AI server before changing its settings." });

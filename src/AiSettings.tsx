@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { GameView } from "./types";
 
 type Settings = { provider:"llamacpp"|"ollama"; mode:"local"|"remote"; baseUrl:string; model:string; contextTokens:number; executablePath:string; modelPath:string; modelsDirectory:string; gpuLayers:number; autoStart:boolean; hasApiKey:boolean };
 type LocalModel = { name:string; path:string; size:number };
 type Download = { phase:string; received:number; total:number|null; progress:number|null; filename:string; path:string; error:string };
 const fileSize = (size:number) => size >= 1024 ** 3 ? `${(size/1024**3).toFixed(1)} GB` : `${(size/1024**2).toFixed(1)} MB`;
-type Snapshot = { settings:Settings; runtime:GameView["ai"]; process:{ managed:boolean; phase:string; error:string } };
+type Snapshot = { settings:Settings; runtime:GameView["ai"]; process:{ managed:boolean; phase:string; error:string; pid?:number|null; elapsedMs?:number|null; logLines?:string[] }; setup?:{valid:boolean;executablePath:string;error:string}|null };
 async function request<T>(url:string, body?:unknown, method = "POST"):Promise<T> {
   const response = await fetch(url, { method:body === undefined ? "GET" : method, headers:{"Content-Type":"application/json"}, ...(body === undefined ? {} : { body:JSON.stringify(body) }) });
   const result = await response.json();
@@ -14,6 +14,7 @@ async function request<T>(url:string, body?:unknown, method = "POST"):Promise<T>
 }
 
 export function AiSettings({ close }:{close:()=>void}) {
+  const statusRef=useRef<HTMLDivElement>(null);
   const [settings, setSettings] = useState<Settings|null>(null);
   const [snapshot, setSnapshot] = useState<Snapshot|null>(null);
   const [key, setKey] = useState("");
@@ -40,7 +41,8 @@ export function AiSettings({ close }:{close:()=>void}) {
   const update = (change:Partial<Settings>) => { if (change.provider || change.baseUrl) setModels([]); setSettings(previous => previous ? {...previous,...change} : previous); setNotice(""); setError(""); };
   const draft = () => ({ ...settings, apiKey:key, clearApiKey:clearKey });
   const action = async (name:string) => {
-    setBusy(name); setError(""); setNotice(name === "test" ? "Testing the server and structured JSON. Loading a model for the first time can take a few minutes." : "");
+    setBusy(name); setError(""); setNotice(name === "test" ? "Testing the server and structured JSON. Loading a model for the first time can take a few minutes." : name === "load" ? "Checking files and starting llama.cpp…" : "");
+    if(name === "load" || name === "test") statusRef.current?.scrollIntoView({behavior:"smooth",block:"start"});
     try {
       if (name === "load") {
         const loaded = await request<{settings:Settings}>("/api/ai/load",draft());
@@ -72,11 +74,16 @@ export function AiSettings({ close }:{close:()=>void}) {
   };
   const managed = Boolean(snapshot?.process.managed);
   const downloading = Boolean(download && ["connecting","downloading","cancelling"].includes(download.phase));
-  const status = snapshot?.process.phase === "error" ? "Failed" : snapshot?.runtime.status === "ready" ? "Ready" : snapshot?.runtime.status === "loading" ? "Starting" : settings?.mode === "local" ? "Stopped" : "Not connected";
+  const starting=busy === "load" || snapshot?.process.phase === "starting" || snapshot?.runtime.status === "loading";
+  const status = busy === "load" ? "Starting model" : snapshot?.process.phase === "error" ? "Failed to start" : snapshot?.runtime.status === "ready" ? "Ready" : starting ? "Loading model" : settings?.mode === "local" ? "Stopped" : "Not connected";
+  const detail = snapshot?.process.error || (starting ? "llama.cpp is starting or loading the model into memory. Large models can take several minutes; updates appear here automatically." : snapshot?.runtime.status === "ready" ? snapshot.process.managed ? "Started by Hearthbound. You can stop or switch it here." : "Server started outside Hearthbound. Saved launch settings do not control this process." : snapshot?.runtime.error || "No AI server is responding. Choose a model and use Load selected model; Save settings alone does not start it.");
   return <main className="ai-setup-page">
     <header className="ai-setup-header"><button type="button" onClick={close}>← Game library</button><span>Settings · Applies to every adventure</span></header>
     <section className="ai-setup-card"><span className="eyebrow">Your storyteller</span><h1>AI connection</h1><p>Run your model on this computer, or connect Hearthbound to an AI server elsewhere.</p>
-      {snapshot && <div className={`ai-setup-status ${status === "Ready" ? "ready" : ""}`} role="status"><strong>{status}</strong><span>{snapshot.runtime.model} · {snapshot.settings.provider === "llamacpp" ? "llama.cpp" : "Ollama"}</span><small>{snapshot.process.error || snapshot.runtime.error || "The configured AI server is responding."}</small></div>}
+      {snapshot && <div ref={statusRef} className={`ai-setup-status ${status === "Ready" ? "ready" : ""}`} role="status"><strong>{status}</strong><span>{snapshot.runtime.model} · {snapshot.settings.provider === "llamacpp" ? "llama.cpp" : "Ollama"}</span><small>{detail}</small>{starting && <><progress aria-label="Model startup in progress"/><small>{snapshot.process.elapsedMs != null ? `${Math.floor(snapshot.process.elapsedMs/1000)} seconds elapsed · ` : ""}{snapshot.process.pid ? `Process ${snapshot.process.pid} · ` : ""}Checking every 3 seconds. No reliable percentage is available.</small></>}</div>}
+      {snapshot?.setup && !snapshot.setup.valid && <p className="ai-setup-error" role="alert">Saved local setup needs attention: {snapshot.setup.error}</p>}
+      {snapshot?.setup?.valid && settings?.mode === "local" && <p className="ai-setup-hint">Executable found: {snapshot.setup.executablePath}</p>}
+      {settings?.mode === "local" && <details className="ai-startup-log" open={starting || snapshot?.process.phase === "error"}><summary>Local AI startup diagnostics</summary><p>Recent loading and error messages from this Hearthbound-started process. API keys are redacted; prompts and conversation logs are not shown.</p><pre>{snapshot?.process.logLines?.length ? snapshot.process.logLines.join("\n") : "No startup messages yet. Use Load selected model to start llama.cpp. A server launched in a terminal writes its messages there instead."}</pre></details>}
       {error && <p className="ai-setup-error" role="alert">{error}</p>}
       {notice && <p className="ai-setup-notice" role="status">{notice}</p>}
       {!settings && !error && <p>Reading connection settings…</p>}
@@ -96,7 +103,7 @@ export function AiSettings({ close }:{close:()=>void}) {
           <button type="button" onClick={()=>void action("library")}>Refresh model library</button>
           {!localModels.length && <p>No complete single-file GGUF models are listed yet. Add models to this folder or use Download a model below.</p>}
         </fieldset><fieldset disabled={Boolean(busy) || managed || downloading}><legend>Local llama.cpp setup</legend><p>Select the installed llama.cpp executable. The model file follows your dropdown selection.</p>
-          <label>llama-server executable<input value={settings.executablePath} onChange={event => update({executablePath:event.target.value})} placeholder="C:\\AI\\llama.cpp\\llama-server.exe"/></label>
+          <label>llama-server executable or installation folder<input value={settings.executablePath} onChange={event => update({executablePath:event.target.value})} placeholder="C:\\AI\\llama.cpp\\llama-server.exe"/><small>You may enter the installation folder; Hearthbound finds llama-server.exe inside it.</small></label>
           <details><summary>Use a model file outside the library</summary><label>GGUF model file<input value={settings.modelPath} onChange={event => update({modelPath:event.target.value})} placeholder="C:\\AI\\models\\your-model.gguf"/></label></details>
           <label>GPU layers<input type="number" min={0} max={999} value={settings.gpuLayers} onChange={event => update({gpuLayers:Number(event.target.value)})}/><small>Start with 99 for GPU offload. Use 0 for CPU; lower this if the model exceeds available GPU memory.</small></label>
           <label className="ai-setup-checkbox"><input type="checkbox" checked={settings.autoStart} onChange={event => update({autoStart:event.target.checked})}/>Start this AI server when Hearthbound opens</label>
@@ -106,8 +113,8 @@ export function AiSettings({ close }:{close:()=>void}) {
         </>}
         {managed && <p>Stop the local AI server to edit its launch settings.</p>}
         <div className="ai-setup-actions"><button type="submit" disabled={Boolean(busy) || managed || downloading}>{busy === "save" ? "Saving…" : "Save settings"}</button>
-          {settings.mode === "local" && <button type="button" disabled={Boolean(busy) || downloading || !settings.modelPath || !settings.executablePath} onClick={() => void action("load")}>{busy === "load" ? "Loading…" : managed ? "Switch & load selected model" : "Load selected model"}</button>}
-          {managed && <button type="button" disabled={Boolean(busy)} onClick={() => void action("stop")}>Stop local AI</button>}
+          {settings.mode === "local" && <button type="button" disabled={Boolean(busy) || (managed && starting) || downloading || !settings.modelPath || !settings.executablePath} onClick={() => void action("load")}>{busy === "load" || (managed && starting) ? "Loading model…" : managed ? "Switch & load selected model" : "Load selected model"}</button>}
+          {managed && <button type="button" disabled={Boolean(busy)} onClick={() => void action("stop")}>{starting ? "Cancel model startup" : "Stop local AI"}</button>}
           <button type="button" disabled={Boolean(busy)} onClick={() => void action("models")}>{busy === "models" ? "Finding…" : "Find models"}</button>
           <button type="button" disabled={Boolean(busy)} onClick={() => void action("test")}>{busy === "test" ? "Testing…" : "Test connection"}</button></div>
         <p className="ai-setup-hint">Test connection checks both the server and a structured JSON answer. Save to apply your changes. Your settings belong to this computer and are independent of adventure saves.</p>

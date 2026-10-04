@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { EventEmitter } from "node:events";
 import { canManageAi, defaultAiSettings, mergeAiSettings, normalizeAiSettings, publicAiSettings, readAiSettings, saveAiSettings } from "../server/ai-settings.mjs";
 import { aiRequest, discoverAi, generateStructured } from "../server/ai-transport.mjs";
-import { createLocalAiService, localServerCommand } from "../server/ai-service.mjs";
+import { createLocalAiService, localServerCommand, localSetupStatus, readStartupLog } from "../server/ai-service.mjs";
 import { profileForSettings } from "../server/model-runtime.mjs";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
@@ -157,4 +157,49 @@ test("local launch preserves paths with spaces and stops only its own process", 
     await existing.start(local); assert.equal(existing.view().managed,false); await assert.rejects(existing.stop(),/no local AI process/);
     await assert.rejects(service.start(settings()),/existing server/);
   } finally { rmSync(directory,{recursive:true,force:true}); }
+});
+
+test("local setup resolves an installation folder and reports invalid saved files",()=>{
+  const directory=mkdtempSync(join(tmpdir(),"hearthbound executable folder "));
+  try {
+    const executable=join(directory,process.platform === "win32" ? "llama-server.exe" : "llama-server");
+    const model=join(directory,"model.gguf");writeFileSync(executable,"");writeFileSync(model,"");
+    const config={...settings(),mode:"local",executablePath:directory,modelPath:model};
+    assert.equal(localServerCommand(config).executable,executable);
+    assert.deepEqual(localServerCommand(config).args.slice(-2),["--parallel","1"]);
+    assert.equal(localSetupStatus(config).valid,true);
+    assert.match(localSetupStatus({...config,executablePath:join(directory,"missing")}).error,/llama-server.exe/);
+    assert.equal(localSetupStatus(settings()),null);
+  } finally {rmSync(directory,{recursive:true,force:true});}
+});
+
+test("owned startup exposes elapsed time, PID, safe diagnostics and persistent failures",async()=>{
+  const directory=mkdtempSync(join(tmpdir(),"hearthbound startup visibility "));
+  try {
+    const executable=join(directory,"llama-server.exe"),model=join(directory,"model.gguf");writeFileSync(executable,"");writeFileSync(model,"");
+    let now=1000;
+    const child=new EventEmitter();child.pid=123;
+    const config={...settings(),mode:"local",executablePath:executable,modelPath:model};
+    const service=createLocalAiService({clock:()=>now,request:async()=>{throw Error("offline");},spawnImpl:()=>child,logReader:()=>["load_tensors: loading model"]});
+    await service.start(config);now=4000;
+    assert.equal(service.view().phase,"starting");assert.equal(service.view().elapsedMs,3000);assert.equal(service.view().pid,123);
+    assert.deepEqual(service.view().logLines,["load_tensors: loading model"]);
+    service.markReady();assert.equal(service.view().phase,"ready");assert.equal(service.view().elapsedMs,null);
+    child.emit("exit",1);assert.equal(service.view().managed,false);assert.equal(service.view().phase,"error");assert.match(service.view().error,/exit 1/);
+    const invalid=createLocalAiService({request:async()=>{throw Error("offline");}});
+    await assert.rejects(invalid.start({...config,executablePath:join(directory,"missing")}),/llama-server/);
+    assert.equal(invalid.view().phase,"error");assert.match(invalid.view().error,/llama-server/);
+  } finally {rmSync(directory,{recursive:true,force:true});}
+});
+
+test("startup diagnostics are bounded to the current launch and redact secrets and prompts",()=>{
+  const directory=mkdtempSync(join(tmpdir(),"hearthbound startup logs "));
+  try {
+    const filename=join(directory,"server.log");const old="CUDA: old process\n";
+    writeFileSync(filename,old+"load_tensors: offloading layers\nerror: secret-value api_key=another-secret Bearer auth-secret\nerror: prompt private conversation\nchat_template: hidden\n");
+    const lines=readStartupLog(filename,Buffer.byteLength(old),"secret-value");
+    assert.equal(lines.length,2);assert.match(lines[0],/offloading/);
+    assert.equal(/old process|secret-value|another-secret|auth-secret|private conversation|hidden/.test(lines.join("\n")),false);
+    assert.equal(readStartupLog(join(directory,"missing")).length,0);
+  } finally {rmSync(directory,{recursive:true,force:true});}
 });
