@@ -1,8 +1,10 @@
-import { addEvent, addInventoryItem, getActiveAdventure, getPartyState, getPlayer, listPlayers, removeInventoryItem, restorePlayerSpellSlots, setPartySpotlight, setPartyState, setPlayerGuidance, setPlayerHp, spendPlayerSpellSlot } from "./database.mjs";
+import { addEvent, addInventoryItem, completeActiveAdventure, getActiveAdventure, getPartyState, getPlayer, listPlayers, removeInventoryItem, restorePlayerSpellSlots, setPartySpotlight, setPartyState, setPlayerGuidance, setPlayerHp, spendPlayerSpellSlot } from "./database.mjs";
 import { COTTON_ID, cottonCombatant, cottonLevel } from "./cotton.mjs";
 import { lanternBelowAdventure } from "./adventures/lantern-below.mjs";
-import { canonicalProjection, createCanonicalState } from "./interaction-engine.mjs";
+import { canonicalProjection, createCanonicalState, applyEffects, resolveAuthoredInteractionSequence } from "./interaction-engine.mjs";
 import { recordCanonicalTransition } from "./canonical-events.mjs";
+import { adventureDefinition } from "./adventure-registry.mjs";
+import { requirementsMet } from "./world-state.mjs";
 
 const WEAPONS = {
   "greatsword":{ name:"Greatsword", ability:"strength", dice:[2,6], range:"melee" },
@@ -143,7 +145,7 @@ function finishDefeat(db, combat) {
   for (const player of listPlayers(db, combat.partyId)) if (player.hp <= 0) setPlayerHp(db, player.id, 1);
   const text = combat.workshop
     ? "The training opponent wins the exercise. The workshop's safety wards stabilize each fallen adventurer at 1 Hit Point; reset the fight to restore Hit Points, spell slots, and test consumables."
-    : "The last adventurer falls and the ink-dark guardian drives the company back from the collapse. After a grim interval, the party regains consciousness with 1 Hit Point each; the guardian still bars the way, and the encounter can be attempted again after regrouping.";
+    : `The last adventurer falls. After a grim interval, the party regains consciousness with 1 Hit Point each. ${combat.enemies[0]?.name || "The enemy"} still bars the way; the encounter remains unresolved and can be attempted again after regrouping. No route or rescue progress has been undone.`;
   addEvent(db, { partyId:combat.partyId, visibility:"public", kind:"narration", speaker:"Dungeon Master", text });
   setPartyState(db, combat.partyId, "combat", combat);
 }
@@ -151,7 +153,7 @@ function finishDefeat(db, combat) {
 function runEnemyTurn(db, combat, enemy) {
   const targets = livingPlayers(db, combat.partyId);
   if (!targets.length) return finishDefeat(db, combat);
-  if ((combat.order || []).some((member)=>member.id === COTTON_ID) && !(combat.enemiesThatTriedCotton || []).includes(enemy.id)) {
+  if (!combat.openingAmbush && (combat.order || []).some((member)=>member.id === COTTON_ID) && !(combat.enemiesThatTriedCotton || []).includes(enemy.id)) {
     combat.enemiesThatTriedCotton = [...(combat.enemiesThatTriedCotton || []), enemy.id];
     addEvent(db,{partyId:combat.partyId,visibility:"public",kind:"roll",speaker:"Combat",text:`${enemy.name} turns its attack on Cotton. Cotton is already somewhere else; the blow cannot touch him. He does not acknowledge it.`});
     return;
@@ -284,31 +286,42 @@ export function beginCombatPotion(db, player) {
   return saveCombat(db, player.partyId, combat);
 }
 
-function startInkGuardianCombat(db, player) {
+function startInkGuardianCombat(db, player, encounter = null, definition = lanternBelowAdventure, autoAttack = true) {
   const party = listPlayers(db, player.partyId).filter((item) => item.hp > 0);
-  const enemy = { id:"ink-dark-guardian", name:"Ink-dark guardian", ac:12, hp:10, maxHp:10, initiativeModifier:1, attackBonus:3, damageDice:[1,6], damageModifier:1 };
+  const enemy = encounter ? {...encounter.enemy,maxHp:encounter.enemy.hp} : { id:"ink-dark-guardian", name:"Ink-dark guardian", ac:12, hp:10, maxHp:10, initiativeModifier:1, attackBonus:3, damageDice:[1,6], damageModifier:1 };
   const order = [
     ...party.map((item) => ({ id:item.id, name:item.name, type:"player", initiative:rollDie(20) + abilityModifier(item.abilities?.dexterity), initiativeModifier:abilityModifier(item.abilities?.dexterity) })),
     cottonCombatant(db, player.partyId),
     { id:enemy.id, name:enemy.name, type:"enemy", initiative:rollDie(20) + enemy.initiativeModifier, initiativeModifier:enemy.initiativeModifier },
   ].sort((a,b) => b.initiative - a.initiative || b.initiativeModifier - a.initiativeModifier || (a.type === "player" ? -1 : 1));
-  const combat = { active:true, encounterId:"lantern-ink-guardian", partyId:player.partyId, round:1, turnIndex:0, order, enemies:[enemy], pendingRoll:null, dodgingPlayerIds:[], cottonHealsUsed:0, cottonNoMeowUsed:false, enemiesThatTriedCotton:[], outcome:null };
+  // An ambush changes turn order, never grants a guaranteed hit or extra turn.
+  if (encounter?.ambush) order.unshift(order.splice(order.findIndex((entry)=>entry.type === "enemy"),1)[0]);
+  const combat = { active:true, encounterId:encounter?.id || "lantern-ink-guardian", definitionId:definition.id, authoredEncounter:encounter?.id || null, openingAmbush:Boolean(encounter?.ambush), partyId:player.partyId, round:1, turnIndex:0, order, enemies:[enemy], pendingRoll:null, dodgingPlayerIds:[], cottonHealsUsed:0, cottonNoMeowUsed:false, enemiesThatTriedCotton:[], outcome:null };
   setPlayerGuidance(db, player.id, player.partyId, []);
-  addEvent(db, { partyId:player.partyId, visibility:"public", kind:"system", speaker:"Combat", text:`Combat begins. Initiative: ${order.map((item) => `${item.name} ${item.initiative}`).join(", ")}.` });
+  addEvent(db, { partyId:player.partyId, visibility:"public", kind:"system", speaker:"Combat", text:`${encounter?.opening || "Combat begins."} ${encounter?.ambush ? "Ambush: the enemy attacks first; subsequent rounds retain this order. " : ""}Initiative: ${order.map((item) => `${item.name} ${item.initiative}`).join(", ")}.` });
   const first = currentTurn(combat);
   if (first.type === "companion") {
     runCottonTurn(db, combat);
     if (combat.active) advanceTurn(db, combat);
   } else if (first.type === "enemy") {
     runEnemyTurn(db, combat, enemy);
+    combat.openingAmbush=false;
     if (combat.active) advanceTurn(db, combat);
   } else {
     setPartySpotlight(db, player.partyId, first.id);
     addEvent(db, { partyId:player.partyId, visibility:"public", kind:"system", speaker:"Combat", text:`Round 1: ${first.name}'s turn.` });
   }
   saveCombat(db, player.partyId, combat);
-  if (combat.active && currentTurn(combat)?.id === player.id) beginAttack(db, player, combat);
+  if (autoAttack && combat.active && currentTurn(combat)?.id === player.id) beginAttack(db, player, combat);
   return { source:"rules", combat:true };
+}
+
+export function startLocationEncounter(db, player, definition, world) {
+  if (getPartyState(db,player.partyId,"combat")?.active) return null;
+  const encounter=(definition.encounters || []).find((entry)=>entry.location === world.currentLocation
+    && !world.flags?.[entry.resolvedFlag] && requirementsMet(world,entry.requires || []));
+  if (!encounter) return null;
+  return startInkGuardianCombat(db,player,encounter,definition,false);
 }
 
 export function startWorkshopCombat(db, player, opponentId, participantMode = "solo") {
@@ -371,6 +384,7 @@ function finishGuardianVictory(db, player, combat, method) {
   combat.active = false;
   combat.outcome = "victory";
   combat.pendingRoll = null;
+  if (combat.authoredEncounter) return finishAuthoredEncounter(db,player,combat);
   const transition=commitGuardianVictory(db, player.partyId);
   const dmState = getPartyState(db, player.partyId, "dm") || {};
   setPartyState(db, player.partyId, "dm", { ...dmState, clueStage:Math.max(9, Number(dmState.clueStage || 0)) });
@@ -383,6 +397,33 @@ function finishGuardianVictory(db, player, combat, method) {
   addEvent(db, { partyId:player.partyId, visibility:"public", kind:"narration", speaker:"Dungeon Master", text,
     payload:{canonicalRevision:transition?.state.revision,canonicalEvents:transition?.canonicalEvents || [],authoritativeFacts:["The ink-dark guardian has been defeated and no longer blocks Mara."]} });
   return saveCombat(db, player.partyId, combat);
+}
+
+function finishAuthoredEncounter(db,player,combat,alternative=null) {
+  const definition=adventureDefinition(getActiveAdventure(db,player.partyId));
+  const encounter=definition?.encounters?.find((entry)=>entry.id === combat.authoredEncounter);
+  if (!encounter) throw new Error("Authored combat encounter is unavailable.");
+  db.exec("SAVEPOINT encounter_victory");
+  try {
+    const before=createCanonicalState(definition,getPartyState(db,player.partyId,`world:${definition.id}`));
+    if (!before.flags[encounter.resolvedFlag]) {
+      const next=structuredClone(alternative?.state || before);
+      next.flags[encounter.resolvedFlag]=true;
+      applyEffects(next,encounter.victoryEffects || []);
+      next.revision=before.revision+1;
+      const transition=recordCanonicalTransition(before,next,{interactionIds:[`encounter:${encounter.id}:victory`]});
+      setPartyState(db,player.partyId,`world:${definition.id}`,transition.state);
+      setPartyState(db,player.partyId,"dm",{...(getPartyState(db,player.partyId,"dm") || {}),...canonicalProjection(definition,transition.state)});
+      addEvent(db,{partyId:player.partyId,visibility:"public",kind:"narration",speaker:"Dungeon Master",text:alternative?.message || encounter.victoryText,payload:{canonicalRevision:transition.state.revision,canonicalEvents:transition.canonicalEvents}});
+    }
+    combat.active=false; combat.outcome="victory"; combat.pendingRoll=null;
+    setPlayerGuidance(db,player.id,player.partyId,[]);
+    saveCombat(db,player.partyId,combat);
+    const saved=getPartyState(db,player.partyId,`world:${definition.id}`);
+    if (definition.milestones?.complete && requirementsMet(saved,definition.milestones.complete.requires)) completeActiveAdventure(db,player.partyId,{withinTransaction:true});
+    db.exec("RELEASE encounter_victory");
+    return combat;
+  } catch (error) { db.exec("ROLLBACK TO encounter_victory"); db.exec("RELEASE encounter_victory"); throw error; }
 }
 
 function commitGuardianVictory(db, partyId) {
@@ -419,7 +460,7 @@ export function handleCombatAction(db, player, mode, action) {
       && attacks && /\b(creature|guardian|thing|monster|it)\b/.test(words)) return startInkGuardianCombat(db, player);
     return null;
   }
-  if (mode === "ask") return null;
+  if (mode !== "act") return null;
   const turn = currentTurn(combat);
   if (turn?.type !== "player" || turn.id !== player.id) {
     addEvent(db, { partyId:player.partyId, visibility:"public", kind:"system", speaker:"Combat", text:`It is ${turn?.name || "another combatant"}'s turn; ${player.name}'s action waits.` });
@@ -429,7 +470,17 @@ export function handleCombatAction(db, player, mode, action) {
     addEvent(db, { partyId:player.partyId, visibility:"public", kind:"system", speaker:"Combat", text:`Complete the pending ${combat.pendingRoll.kind === "attack" ? "attack" : "damage"} roll first.` });
     return { source:"rules", combat:true };
   }
-  if (/\b(light|lantern|torch)\b/.test(words) && /\b(hold|aim|shine|keep|use|train)\w*\b/.test(words)) {
+  const authoredEncounter=adventureDefinition(getActiveAdventure(db,player.partyId))?.encounters?.find((entry)=>entry.id === combat.authoredEncounter);
+  if (authoredEncounter && mode === "act") {
+    const definition=adventureDefinition(getActiveAdventure(db,player.partyId));
+    const world=createCanonicalState(definition,getPartyState(db,player.partyId,`world:${definition.id}`));
+    const alternative=resolveAuthoredInteractionSequence({definition,state:world,action,mode});
+    if (alternative.accepted && alternative.state.flags[authoredEncounter.resolvedFlag]) {
+      finishAuthoredEncounter(db,player,combat,alternative);
+      return {source:"rules",combat:true};
+    }
+  }
+  if ((authoredEncounter?.lightRepels || (!combat.workshop && combat.encounterId === "lantern-ink-guardian")) && /\b(light|lantern|torch)\b/.test(words) && /\b(hold|aim|shine|keep|use|train)\w*\b/.test(words)) {
     finishGuardianVictory(db, player, combat, "light");
     return { source:"rules", combat:true };
   }
@@ -449,7 +500,7 @@ export function handleCombatAction(db, player, mode, action) {
   }
   if (/\b(dodge|defend|brace)\w*\b/.test(words)) {
     combat.dodgingPlayerIds = [...new Set([...(combat.dodgingPlayerIds || []), player.id])];
-    addEvent(db, { partyId:player.partyId, visibility:"public", kind:"narration", speaker:"Dungeon Master", text:`${player.name} takes the Dodge action, focusing entirely on avoiding the guardian's next attack.` });
+    addEvent(db, { partyId:player.partyId, visibility:"public", kind:"narration", speaker:"Dungeon Master", text:`${player.name} takes the Dodge action, focusing entirely on avoiding the enemy's next attack.` });
     advanceTurn(db, combat);
     saveCombat(db, player.partyId, combat);
     return { source:"rules", combat:true };

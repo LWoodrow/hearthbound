@@ -31,19 +31,15 @@ export function buildStoryAuthority(definition, { worldState = {}, dmState = {} 
       stage,
       act: currentAct(story, stage),
       locationId: currentLocationId,
-      location: currentLocation ? {
-        name: currentLocation.name,
-        description: currentLocation.description,
-        visibleFeatures: visibleLocationFeatures(definition, worldState, currentLocationId).map(({ id, label, kind }) => ({ id, label, kind })),
-        exits: (currentLocation.exits || []).map(({ to, via }) => ({ to, via })),
-      } : null,
+      location: currentLocation ? projectScene(definition, {...worldState,currentLocation:currentLocationId}) : null,
     },
-    fixedTruths: story.fixedTruths,
-    relevantNpcs: Object.fromEntries(Object.entries(story.npcs || {}).filter(([, npc]) => npcIsRelevant(npc, currentLocationId))),
+    fixedTruths: (story.fixedTruths || []).filter((truth) => requirementsMet(worldState, truth.requires || [])),
+    relevantNpcs: Object.fromEntries(Object.entries(story.npcs || {}).filter(([, npc]) => npcIsRelevant(npc, currentLocationId)).map(([id,npc]) => [id,projectNpc(npc,worldState)])),
     relevantClues: Object.fromEntries(Object.entries(story.clues || {}).filter(([, clue]) => clueIsRelevant(clue, currentLocationId))),
     consequences: story.consequences,
     improvisation: story.improvisation,
     principles: definition.principles,
   };
 }
-import { visibleLocationFeatures } from "./world-state.mjs";
+import { requirementsMet } from "./world-state.mjs";
+import { projectScene, projectNpc } from "./scene-projection.mjs";

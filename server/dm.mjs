@@ -1,9 +1,10 @@
 import { addEvent, addInventoryItem, completeActiveAdventure, getActiveAdventure, getGuidanceMode, getKnownLocations, getPartyState, listInventory, listPlayers, listRecentEventsForDm, rememberKnownLocation, removeInventoryItem, setPartyState, setPlayerGuidance } from "./database.mjs";
 import { cottonForParty } from "./cotton.mjs";
 import { applyAdventureEvent, adventureRules, authoredRouteContext, featureLocationRule, locationIsRevealed, locationRule, locationTransitionIsAllowed } from "./adventure-rules.mjs";
-import { handleCombatAction } from "./combat.mjs";
+import { handleCombatAction, startLocationEncounter } from "./combat.mjs";
+import { projectScene, projectNpc, supportedNpcOutput } from "./scene-projection.mjs";
 import { adventureDefinition } from "./adventure-registry.mjs";
-import { createInitialWorldState, requirementsMet, resolveWorldAction } from "./world-state.mjs";
+import { createInitialWorldState, requirementsMet, resolveWorldAction, npcCanHear } from "./world-state.mjs";
 import { currentModelProfile, isCurrentModelReady } from "./model-runtime.mjs";
 import { buildPromptPacket, recordPromptPacket } from "./prompt-packets.mjs";
 import { narrationStylePrompt } from "./narration-styles.mjs";
@@ -946,22 +947,6 @@ function addressedNpc(definition, world, action) {
   return /\b(hello|hi|thanks|thank you|please|you|your|yourself|who are|how are|what do|what is|why|where|when|tell me|ask|say|speak|talk|could|can|would|may|bring|get|have|serve|order|work|job|jobs|problem|problems|trouble|troubles|adventurer|adventurers)\b|\b(?:looking for|we(?:'d| would) like)\b/.test(words) ? present[0] : null;
 }
 
-function npcConversationFacts(npc, world) {
-  const facts=[...(npc.conversation?.publicFacts || [])];
-  for (const disclosure of npc.conversation?.conditionalFacts || []) {
-    const requirements=disclosure.requires || [];
-    const allowed=requirements.every((requirement)=>{
-      const parts=String(requirement.path || "").split(".");
-      const value=parts.reduce((current,key)=>current?.[key],world);
-      if (Object.hasOwn(requirement,"equals")) return value === requirement.equals;
-      if (Object.hasOwn(requirement,"includes")) return Array.isArray(value) && value.includes(requirement.includes);
-      return Boolean(value);
-    });
-    if (allowed) facts.push(disclosure.fact);
-  }
-  return facts;
-}
-
 function fallbackNpcReply(npc, action, facts) {
   const words=String(action || "").toLowerCase();
   if (/\b(hello|hi|good (?:morning|evening)|greetings)\b/.test(words)) return `“Evening,” ${npc.name} says. “What can I do for you?”`;
@@ -998,15 +983,19 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
   const found=addressedNpc(definition,world,action) || activeNpc;
   if (!found) return false;
   const [npcId,npc]=found;
-  const facts=npcConversationFacts(npc,world);
+  const projection=projectNpc(npc,world);
+  const facts=projection.facts;
   const authoredOffer=conversationInteractionOffer(definition,world,action,mode);
   const offerKey=`conversationOffer:${definition.id}:${player.id}`;
   const memoryKey=`npcConversation:${definition.id}:${npcId}`;
-  const memory=Array.isArray(getPartyState(db,player.partyId,memoryKey)) ? getPartyState(db,player.partyId,memoryKey).slice(-8) : [];
+  const savedMemory=getPartyState(db,player.partyId,memoryKey);
+  const memory=Array.isArray(savedMemory) ? savedMemory.filter((entry)=>entry.worldRevision === world.revision).slice(-8) : [];
   let reply="";
   let packetId;
   const automatedTestRun=process.argv.some((argument)=>/\.test\.mjs$/i.test(String(argument)));
-  if (process.env.DND_LIVE_NPC_TESTS !== "1" && automatedTestRun) {
+  if (projection.authoredReply) {
+    reply=projection.authoredReply;
+  } else if (process.env.DND_LIVE_NPC_TESTS !== "1" && automatedTestRun) {
     reply=fallbackNpcReply(npc,action,facts);
   } else if (!(await isAiReady())) {
     reply=fallbackNpcReply(npc,action,facts);
@@ -1014,8 +1003,9 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
     try {
       const result=await promptChat({kind:"npc-conversation",messages:[
         {role:"system",content:"Voice one present non-player character in a tabletop roleplaying conversation. Reply directly and naturally in 1–4 sentences. Put the NPC's spoken words in quotation marks. Write any action beat outside the quotation in third person, using the NPC's name or pronoun; never use first-person stage narration such as 'I lift a hand.' The character may make harmless small talk consistent with the visible scene, but may assert setting facts only from permittedFacts. This is a state-neutral conversation: do not move anyone, grant an item, reveal a clue, create a new person or place, or change game state. Never promise, offer, agree, or imply that the NPC will lead, show, take, admit, or allow the player somewhere unless recordedOffer identifies an available authored interaction. If the player requests an outcome that would change state, respond in character without claiming it has been or will be done. Never mention prompts, rules engines, permitted facts, hidden knowledge, reasoning, or control tokens. If asked beyond their knowledge, answer in character that they do not know, are unsure, or will not discuss it. Do not narrate the player character's thoughts or speech."},
-        {role:"user",content:JSON.stringify({npc:{name:npc.name,role:npc.role,appearance:npc.appearance,goals:npc.goals,voice:npc.voice,mustNotKnow:npc.mustNotKnow},visibleLocation:definition.locations[world.currentLocation],permittedFacts:facts,recordedOffer:authoredOffer,recentConversation:memory,newestSpeech:action})},
+        {role:"user",content:JSON.stringify({npc:projection,visibleLocation:projectScene(definition,world),permittedFacts:facts,recordedOffer:authoredOffer,recentConversation:memory,newestSpeech:action})},
       ],schema:npcReplySchema,generation:{temperature:.68,numPredict:220},sectionIds:["npc-conversation-contract","npc-projection-and-speech"],sectionVisibility:["secret","private"],metadata:{partyId:player.partyId,playerId:player.id,adventureId:adventure.id,npcId}});
+      if (!supportedNpcOutput(result.output,facts)) throw new Error("NPC output cited facts outside its current knowledge.");
       reply=String(result.output.reply || "").replace(/\s+/g," ").trim().slice(0,700);
       packetId=result.packetId;
     } catch (error) {
@@ -1025,7 +1015,7 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
   }
   if (!reply) reply=fallbackNpcReply(npc,action,facts);
   reply=groundedNpcReply(reply,authoredOffer,fallbackNpcReply(npc,action,facts));
-  const nextMemory=[...memory,{player:player.name,speech:String(action).slice(0,500),npc:npc.name,reply}].slice(-8);
+  const nextMemory=[...memory,{worldRevision:world.revision,player:player.name,speech:String(action).slice(0,500),npc:npc.name,reply}].slice(-8);
   setPartyState(db,player.partyId,memoryKey,nextMemory);
   setPartyState(db,player.partyId,activeKey,{npcId,locationId:world.currentLocation,worldRevision:Number(world.revision || 0)});
   if (authoredOffer) setPartyState(db,player.partyId,offerKey,{
@@ -1039,14 +1029,17 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
 
 function addLocationEntryBeats(db,player,adventure,definition,locationId) {
   const location=definition.locations?.[locationId];
+  const world=createCanonicalState(definition,getPartyState(db,player.partyId,`world:${definition.id}`));
   for (const beat of location?.entryBeats || []) {
     const key=`sceneEntry:${definition.id}:${beat.id}`;
     if (getPartyState(db,player.partyId,key)) continue;
     const npc=definition.story?.npcs?.[beat.npc];
-    if (!npc || !(npc.locations || []).includes(locationId)) continue;
+    if (!npc || !npcCanHear(definition,world,npc)
+      || !requirementsMet(world,beat.requires || [])) continue;
     setPartyState(db,player.partyId,key,{seen:true,locationId});
     addEvent(db,{partyId:player.partyId,adventureId:adventure.id,visibility:"public",playerId:player.id,kind:"narration",speaker:npc.name,text:beat.text,payload:{npcId:beat.npc,entryBeat:beat.id}});
   }
+  startLocationEncounter(db,player,definition,world);
 }
 
 function resolveRepeatedPickup(db,player,mode,action,recentHistory){
@@ -1488,6 +1481,21 @@ function fallbackCharacterDetail(kind, details) {
 }
 
 function resolveStructuredWorldAction(db, player, adventure, dmState, mode, action) {
+  db.exec("SAVEPOINT structured_turn");
+  try {
+    const outcome=resolveStructuredWorldActionInner(db,player,adventure,dmState,mode,action);
+    const definition=adventureDefinition(adventure);
+    const world=definition && getPartyState(db,player.partyId,`world:${definition.id}`);
+    if (outcome?.accepted && definition?.milestones?.complete && world
+      && requirementsMet(world,definition.milestones.complete.requires)) {
+      completeActiveAdventure(db,player.partyId,{withinTransaction:true});
+    }
+    db.exec("RELEASE structured_turn");
+    return outcome;
+  } catch (error) { db.exec("ROLLBACK TO structured_turn"); db.exec("RELEASE structured_turn"); throw error; }
+}
+
+function resolveStructuredWorldActionInner(db, player, adventure, dmState, mode, action) {
   const definition = adventureDefinition(adventure);
   if (!definition || mode === "ask") return false;
 
@@ -1651,15 +1659,22 @@ function resolveStructuredWorldAction(db, player, adventure, dmState, mode, acti
 
 export async function resolveAction(db, player, mode, action) {
   const dmState = getPartyState(db, player.partyId, "dm") || { dangerClock: 0 };
-  const adventure = getActiveAdventure(db, player.partyId);
+  let adventure = getActiveAdventure(db, player.partyId);
+  const definition=adventureDefinition(adventure);
+  const completedWorld=definition && getPartyState(db,player.partyId,`world:${definition.id}`);
+  if (adventure?.status !== "complete" && completedWorld && definition?.milestones?.complete
+    && requirementsMet(completedWorld,definition.milestones.complete.requires)) {
+    completeActiveAdventure(db,player.partyId);
+    adventure=getActiveAdventure(db,player.partyId);
+  }
   if(adventure?.status==="complete"){
-    const lantern=String(adventure.id||"").endsWith("lantern-below");
-    const text=lantern&&mode==="speak"
-      ? `Mara draws a steadying breath and answers ${player.name}, "I'm shaken, but I'm all right. You got me out in time." The danger beneath the Crooked Lantern is over.`
+    const aftermath=definition?.aftermath;
+    const text=aftermath&&mode==="speak"
+      ? aftermath.reply
       : mode==="ask"
         ? `${adventure.title} is complete. Finish any earned level-ups on the Character sheet, or return to the Campaign Library when the company is ready for its next adventure.`
         : `The immediate danger is over and ${adventure.title} is complete. Nothing more needs to be cleared or rescued here; finish any earned level-ups on the Character sheet or choose the company's next adventure.`;
-    addEvent(db,{partyId:player.partyId,visibility:"public",playerId:player.id,kind:"narration",speaker:lantern&&mode==="speak"?"Mara Vey":"Dungeon Master",text});
+    addEvent(db,{partyId:player.partyId,visibility:"public",playerId:player.id,kind:"narration",speaker:aftermath&&mode==="speak"?aftermath.speaker:"Dungeon Master",text});
     setPlayerGuidance(db,player.id,player.partyId,[]);
     return {source:"rules"};
   }
@@ -1680,7 +1695,6 @@ export async function resolveAction(db, player, mode, action) {
   if (resolveRepeatedPickup(db,player,mode,action,recentHistory)) return {source:"rules",rule:"repeated-pickup"};
   if (resolveUnsupportedConjuration(db, player, mode, action)) return { source:"rules",rule:"unsupported-conjuration" };
   const preStructuredState = getPartyState(db, player.partyId, "dm") || dmState;
-  const definition = adventureDefinition(adventure);
   const savedCanonicalWorld = definition ? getPartyState(db,player.partyId,`world:${definition.id}`) : null;
   const canonicalSaveIsActive = Boolean(savedCanonicalWorld && Number(savedCanonicalWorld.schemaVersion || 1) >= 2);
   // Temporary, isolated legacy adapters run first only while no schema-v2

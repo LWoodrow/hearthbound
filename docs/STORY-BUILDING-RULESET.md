@@ -131,6 +131,12 @@ Completion remains idempotent even when an interaction's own effect invalidates 
 
 Every player-facing description of a mutable feature must be projected from canonical state. If a seal is broken, a container opens, a creature wakes, or an item is picked up, room lists, surface contents, recaps, prompts, and direct observations must stop presenting the earlier state. Feature presentations are authored as conditional variants rather than patched strings in individual replies.
 
+For stateful encounters, author encounters with a stable id, local location, initially false resolvedFlag, enemy stats, opening and victoryText. An ambush gives the enemy the first initiative turn, not an automatic hit or extra turn. lightRepels supplies an explicit light alternative; other authored interactions may resolve that encounter's flag and spend their declared resources. Resolution is saved once and must never resurrect on backtracking. Workshop fights remain separate from story milestones.
+
+Use conditional entryBeats for one-time NPC introductions and urgent nearby voices. audibleFrom must name adjacent locations with an open, eligible connection, and callResponse must state its canonical prerequisites. Hearing an NPC does not move the party or resolve their danger.
+
+Every quest needs a spoiler-safe invitation and actionable handoff: the player should learn that the sealed message exists before being expected to ask about it. Completion milestones must agree with campaign completion. Use aftermath for stable closing dialogue and the next adventure's real slug for the onward lead; do not reveal the campaign's hidden culprit.
+
 Repeat outcomes must preserve useful information. Rereading a note quotes or accurately restates its actionable instructions; it must not merely report that the text was read before. Likewise, an explicit transfer verb such as `take` or `pick up` must transfer an authored portable item or clearly refuse it—it must never silently collapse into inspection.
 
 Support explicit compound actions when their dependencies can be resolved safely in order. `Open the letter, warm the moth, and give it ink` may execute three authored interactions. If a prerequisite fails, stop safely; never send the failed action to the model to invent a result.

@@ -597,7 +597,7 @@ test("a fresh Lantern adventure enters the public inn before the private letter 
 
     await resolveAction(item.db,player,"act","enter the inn");
     assert.equal(getPartyState(item.db,party.id,"dm").lanternArrivalStage,1);
-    assert.match(listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text,/public taproom/i);
+    assert.match(listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text,/Tamsin.*behind the bar/i);
 
     await resolveAction(item.db,player,"speak","ask the innkeeper for a quiet private room");
     assert.equal(getPartyState(item.db,party.id,"dm").lanternArrivalStage,2);
@@ -1038,6 +1038,7 @@ test("Lantern route guesses stay sealed until discovery reaches structured navig
     await resolveAction(item.db, player, "act", "descend to the cellar");
     assert.equal(getPartyState(item.db, party.id, "dm").currentLocationKey, "cellar");
     assert.equal(getPartyState(item.db, party.id, "world:lantern-below").currentLocation, "cellar");
+    await resolveAction(item.db, player, "act", "hold the lantern on the swarm");
 
     await resolveAction(item.db, player, "act", "take the cellar key");
     await resolveAction(item.db, player, "act", "use the cellar key on the stone door");
@@ -1553,7 +1554,8 @@ test("completed adventures stay complete and rescued NPCs do not become trapped 
     completeActiveAdventure(item.db,party.id);
     await resolveAction(item.db,player,"speak","are you okay Mara?");
     const narration=listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text.toLowerCase();
-    assert.equal(narration.includes("i'm all right"),true);
+    assert.match(narration,/you got me out|mara is free/);
+    assert.match(narration,/briarwatch/);
     assert.equal(narration.includes("trapped"),false);
     assert.equal(getPartyState(item.db,party.id,`pendingCheck:${player.id}`),null);
   } finally { item.close(); }
@@ -1718,9 +1720,10 @@ test("mothglass navigation persists the opened passage and stays aligned while b
     assert.equal(getPartyState(item.db, party.id, "dm").clueStage, 8);
     assert.equal(getPartyState(item.db, party.id, "dm").currentLocationKey, "alcove");
     assert.equal(getPartyState(item.db, party.id, "world:lantern-below").currentLocation, "alcove");
+    await resolveAction(item.db, player, "act", "hold the lantern on the guardian");
 
     await resolveAction(item.db, player, "act", "go back");
-    assert.equal(getPartyState(item.db, party.id, "dm").clueStage, 8);
+    assert.equal(getPartyState(item.db, party.id, "dm").clueStage, 9);
     assert.equal(getPartyState(item.db, party.id, "dm").currentLocationKey, "passage");
     assert.equal(getPartyState(item.db, party.id, "world:lantern-below").currentLocation, "passage");
   } finally {

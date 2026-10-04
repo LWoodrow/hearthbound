@@ -85,6 +85,16 @@ Model-proposed danger changes and adventure completion are always discarded. The
 
 Rejected consequences are written to the DM ledger for diagnosis without entering player-visible history or future player-safe model context. The player receives a concrete unchanged-state result instead of an invented continuation.
 
+### Current-state dialogue and adventure completion
+
+Scene packets use conditional current descriptions, visible features and eligible exits, not the raw room definition containing earlier presentations. NPC packets use conditional facts, goals and voice. Conversation memory is retained only for the same world revision; a later rescue or victory cannot be contradicted by recycling an old conversation.
+
+NPC output must cite only exact permitted facts in its structured usedFacts field. Unsupported citations fall back to rules-based dialogue. This is not a complete semantic validator: uncited invented prose can still evade a citation check. Quest-critical NPC presentations can supply an authored reply, and completed adventures use authored aftermath instead of asking a model to reinvent the rescue condition.
+
+Accepted authored turns evaluate the completion milestone inside the same database savepoint as world state, narration and entry events. Campaign status, earned level-up eligibility and the series discovery are committed together and awarded once. Older saves with satisfied canonical milestones but an active campaign row are repaired on the next resolved action without resetting their world.
+
+Trace assessment without authoritative fact terms is unassessed, not a claim that arbitrary dialogue was proven consistent. Existing term coverage and movement checks remain diagnostics, not semantic verification.
+
 ## Model evaluation
 
 Model comparisons should measure prose quality only after this contract is stable. Candidate models receive identical validated scene packets and are scored for voice, continuity, repetition, invention rate, latency, and hardware cost. No candidate receives additional authority because it performs well in prose evaluation.

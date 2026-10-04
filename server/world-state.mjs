@@ -350,6 +350,16 @@ function featurePresentation(feature, state) {
   return { ...feature, ...visible };
 }
 
+export function npcCanHear(definition,state,npc) {
+  if ((npc.locations || []).includes(state.currentLocation)) return true;
+  if (!(npc.audibleFrom || []).includes(state.currentLocation)) return false;
+  return (definition.locations[state.currentLocation]?.exits || []).some((exit)=>{
+    const object=state.objects?.[exit.object];
+    return (npc.locations || []).includes(exit.to) && requirementsMet(state,exit.requires || [])
+      && object?.discovered !== false && object?.open !== false && object?.locked !== true;
+  });
+}
+
 export function visibleLocationFeatures(definition, state, locationId = state.currentLocation) {
   const location = definition.locations[locationId];
   return (location?.features || []).filter((feature) => {
@@ -541,7 +551,13 @@ export function resolveWorldAction({ definition, state: suppliedState, action, a
   const candidates = candidateAffordances(definition, state, intent, inventory);
   const result = (values = {}) => ({ handled: true, accepted: true, state: next, intent, events: [], diagnostic:{ candidateAffordances:candidates, selectedAffordance:"", rejectedAlternatives:[] }, ...values });
   if (!words || intent === "speech") return result({ handled: false });
-  if (intent === "call-out") return result({ message:`${actorId ? "The character" : "Someone"} calls out. The call carries into the established surroundings; no reply is established.`, diagnostic:{ candidateAffordances:candidates, selectedAffordance:"call-out", rejectedAlternatives:[] } });
+  if (intent === "call-out") {
+    const listeners=Object.values(definition.story?.npcs || {}).filter((npc)=>
+      npcCanHear(definition,state,npc)
+      && npc.callResponse && requirementsMet(state,npc.callResponse.requires || []));
+    const replies=listeners.map((npc)=>`${npc.name} answers: ${npc.callResponse.text}`);
+    return result({ message:`The character calls out; the call carries into the established surroundings. ${replies.join(" ") || "No reply is established."}`, diagnostic:{ candidateAffordances:candidates, selectedAffordance:"call-out", rejectedAlternatives:[] } });
+  }
 
   if (intent === "observe") {
     const check = abilityCheckForAction(action);

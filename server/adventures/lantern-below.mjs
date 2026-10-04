@@ -11,10 +11,29 @@ export const lanternBelowAdventure = assertValidAdventure({
   episode: 1,
   stateKey: "clueStage",
   startLocation: "outside-inn",
-  initialFlags: { privateRoomPermission:false, pantryPermission:false, letterOpened:false, suppliesLocated:false, miteAwake:false, inkOffered:false, mapDrawn:false, guardianDefeated:false, maraRescued:false, adventureComplete:false },
+  initialFlags: { privateRoomPermission:false, pantryPermission:false, letterOpened:false, suppliesLocated:false, miteAwake:false, inkOffered:false, mapDrawn:false, cellarSwarmResolved:false, guardianDefeated:false, maraRescued:false, adventureComplete:false },
+  encounters: [
+    {
+      id:"lantern-cellar-swarm", location:"cellar", resolvedFlag:"cellarSwarmResolved", lightRepels:true,
+      enemy:{id:"ink-fed-vermin",name:"Ink-fed vermin swarm",ac:11,hp:12,initiativeModifier:1,attackBonus:2,damageDice:[1,4],damageModifier:0},
+      opening:"Black ink beads between the barrels. A swarm of ink-fed vermin spills into the cellar, flinching away from steady light. Fight it or hold a lantern or torch on it to drive it away.",
+      victoryText:"The ink-fed vermin scatter into cracks and do not return. The barrels are safe to search; the old survey marks lead toward the stone door.",
+    },
+    {
+      id:"lantern-ink-guardian", location:"alcove", resolvedFlag:"guardianDefeated", ambush:true, lightRepels:true,
+      enemy:{id:"ink-dark-guardian",name:"Ink-dark guardian",ac:12,hp:10,initiativeModifier:1,attackBonus:3,damageDice:[1,6],damageModifier:1},
+      opening:"Mara raises a hand in warning. The ink-dark guardian surges from the ward-lines and attacks before the company can reach her.",
+      victoryText:"The ink-dark guardian unravels into a harmless stain. It no longer bars Mara; the company can now clear the loose stones safely.",
+    },
+  ],
+  aftermath:{
+    speaker:"Mara Vey",
+    reply:"Mara steadies herself. “You got me out. Thank you. That ward was only one anchor: several old roads are waking. My next survey is Briarwatch, where a tower cold for a century has begun to burn. Take the north road and find the signal mark at the watchtower. If you're willing, meet me there once we've rested.” Mara is free; the company can finish its earned level-ups and choose Ashes of Briarwatch in the Game library.",
+  },
   stageFlags: [{ path:"flags.guardianDefeated", stage:9 }, { path:"flags.maraRescued", stage:10 }],
   statusFacts: [
     { aliases:["guardian","ink-dark guardian","loose stones","rubble"], knownAfter:"alcove", variants:[
+      { requires:[{path:"flags.maraRescued",equals:true}], answer:"Mara has been rescued, the stones are cleared, and the guardian is gone. Her next lead is the burning watchtower at Briarwatch." },
       { requires:[{path:"flags.guardianDefeated",equals:true}], answer:"The ink-dark guardian has been defeated. It no longer blocks the loose stones; the company can now clear them to rescue Mara." },
       { answer:"The ink-dark guardian still bars safe access to the loose stones. It has not been defeated." },
     ] },
@@ -39,7 +58,8 @@ export const lanternBelowAdventure = assertValidAdventure({
     playerPromise: "A warm, grounded fantasy mystery in which observation, conversation, practical problem-solving, and class abilities can all move the investigation forward.",
     fixedTruths: [
       { id: "letter-sent-by-mara", statement: "Mara Vey arranged for the silver-moth letter to reach a company likely to honour the old road." },
-      { id: "mara-alive", statement: "Mara is alive but trapped in the collapsed survey alcove." },
+      { id: "mara-alive", requires:[{path:"flags.maraRescued",equals:false}], statement: "Mara is alive but trapped in the collapsed survey alcove." },
+      { id: "mara-rescued", requires:[{path:"flags.maraRescued",equals:true}], statement: "Mara is free and the immediate danger is over. Her next lead is Briarwatch." },
       { id: "innkeeper-innocent", statement: "Innkeeper Tamsin Reed is protective of the inn and its guests but is not responsible for Mara's disappearance." },
       { id: "route-awakened", statement: "A dormant ward-road anchor beneath the Crooked Lantern has begun operating again." },
       { id: "mite-is-map", statement: "The ink-mite remembers routes it has travelled and draws them after receiving warmth and fresh ink." },
@@ -51,6 +71,7 @@ export const lanternBelowAdventure = assertValidAdventure({
       { id: "living-map", title: "A Line Beneath the Lantern", stages: [2, 4], purpose: "Let the company interpret Mara's instructions and find one of several fair routes to the concealed cellar.", pressure: "The inn continues around the party, and attention from staff is a social complication rather than an automatic failure." },
       { id: "awakened-road", title: "The Mothglass Ward", stages: [5, 7], purpose: "Turn investigation into physical exploration and show that the old road is active, dangerous, and larger than this inn.", pressure: "Disturbing mechanisms carelessly can raise noise, damage supplies, or strengthen the guardian, but cannot erase essential evidence." },
       { id: "rescue", title: "Mara's Last Survey", stages: [8, 9], purpose: "Resolve the guardian and collapse through combat, ingenuity, negotiation, or careful rescue work.", pressure: "Failure changes the cost or creates a new immediate problem; it never silently kills Mara or resets progress." },
+      { id:"aftermath",title:"The Next Signal",stages:[10,10],purpose:"Let the rescued surveyor thank the company and offer the Briarwatch lead.",pressure:"The company chooses whether to pursue the next road after resting; rescue never resets." },
     ],
     npcs: {
       "tamsin-reed": {
@@ -71,6 +92,7 @@ export const lanternBelowAdventure = assertValidAdventure({
             "The taproom is public, while private rooms are available when guests ask and one is free",
             "The kitchen and pantry are staff work areas unless Tamsin grants permission",
             "The evening rain has made the inn busier than usual",
+            "A traveller left a sealed silver-moth letter for adventurers willing to help; Tamsin has kept it untouched in the private back room and will show them there if they ask",
             "Tamsin knows of no public adventuring contract tonight; if travellers are seeking unusual local trouble, she suggests speaking somewhere quieter than the crowded taproom",
           ],
           conditionalFacts: [
@@ -85,6 +107,12 @@ export const lanternBelowAdventure = assertValidAdventure({
         portraitId: "mara",
         role: "Surveyor of the old roads",
         locations: ["alcove"],
+        audibleFrom:["passage"],
+        callResponse:{requires:[{path:"flags.maraRescued",equals:false}],text:"“Here! By the collapse! I'm alive, but the stones have my legs. Keep your light up; something in the ink moves when it dims.”"},
+        presentations:[
+          {requires:[{path:"flags.maraRescued",equals:true}],goals:["Recover safely","Help the company follow the Briarwatch signal"],voice:"Shaken but relieved, precise, grateful.",reply:"“I'm free, thanks to you. The next signal is at Briarwatch: a watchtower that should be cold has begun to burn. Rest first; then take the north road.”"},
+          {requires:[{path:"flags.guardianDefeated",equals:true}],goals:["Get safely out from under the loose stones"],reply:"“It's gone. Thank you. My legs are still caught under these stones. Please clear them carefully.”"},
+        ],
         goals: ["Survive the collapse", "Prevent the awakened road from harming Eldervale", "Learn who is disturbing the old anchors"],
         knows: ["How the letter and ink-mite trail work", "The pantry hatch and cellar route", "Lantern light repels the guardian", "Several old routes elsewhere in Eldervale are stirring"],
         sharesWhen: "Before rescue Mara can give short, urgent answers about the immediate danger. After rescue she explains this episode's findings but not the hidden series answer she does not yet know.",
@@ -286,6 +314,12 @@ export const lanternBelowAdventure = assertValidAdventure({
       outcome:{message:"The brass lantern rests on a counterweighted spindle beside the wall seam. Its mounting can be turned, but has not moved.",publicFacts:["The brass lantern's spindle can be turned deliberately."]},
     },
     {
+      id:"ask-about-sealed-message",idempotencyKey:"tamsin:message",location:"inn",modes:["act","speak"],stage:0,
+      verbs:["ask","tell","show","take","lead","read","see","help"],targets:["letter","sealed message","silver moth letter","message for adventurers"],
+      effects:[{op:"set",path:"flags.privateRoomPermission",value:true},{op:"set",path:"currentLocation",value:"back-room"},{op:"add",path:"visited",value:"back-room"}],
+      outcome:{message:"“Someone left this for travellers prepared to help,” Tamsin says. “I haven't broken the seal.” She leads the company into the private back room, where the silver-moth letter waits on the table beside a lamp and fresh ink.",publicFacts:["Tamsin introduces the sealed message without revealing its sender.","The company enters the private back room with permission."]},
+    },
+    {
       id:"discover-spindle-passage", idempotencyKey:"mothglass:spindle", location:"mothglass", modes:["act"], stage:7,
       verbs:["operate","turn","pull","use"], targets:["brass lantern","spindle","counterweight","wall seam"],
       effects:[{op:"set",path:"objects.spindle-door.discovered",value:true},{op:"set",path:"objects.spindle-door.open",value:true},{op:"add",path:"discoveries",value:"spindle-passage"}],
@@ -330,7 +364,7 @@ export const lanternBelowAdventure = assertValidAdventure({
       aliases: ["the Crooked Lantern", "the inn", "the tavern", "the pub", "inside the inn", "inside the tavern", "inside the pub", "taproom"],
       description: "A busy public room with a bar, hearth, scattered tables, patrons, and doors to the inn's private areas.",
       occupants: ["ordinary patrons", "two taproom staff"],
-      entryBeats: [{id:"tamsin-welcome",npc:"tamsin-reed",text:"As the company enters the public taproom, Tamsin Reed looks up from behind the bar and gives the rain-soaked travellers a practical once-over. “Evening. Food, drink, or somewhere quiet to sit?”"}],
+      entryBeats: [{id:"tamsin-welcome",npc:"tamsin-reed",text:"Tamsin Reed looks up from behind the bar. “Evening. Food, drink, or somewhere quiet to sit? You look like adventurers. A traveller left a sealed silver-moth letter for people willing to help. I kept it untouched in the private back room. Ask me about the letter if you're interested.”"}],
       stage: 0,
       arrivalStage: 1,
       map: { x: 25, y: 12, w: 27, h: 30, kind: "taproom" },
@@ -413,7 +447,12 @@ export const lanternBelowAdventure = assertValidAdventure({
     },
     cellar: {
       name: "Cellar",
-      description: "Stone steps descend to barrels, old survey marks, and a locked stone door at the rear of the cellar.",
+      description: "Stone steps descend to barrels, old survey marks, and a locked stone door at the rear of the cellar. Black ink beads in the cracks between the barrels.",
+      presentations:[
+        {requires:[{path:"objects.keyed-stone-door.open",equals:true}],description:"Stone steps descend to barrels and old survey marks. The rear stone door remains open onto the cellar passage."},
+        {requires:[{path:"objects.keyed-stone-door.locked",equals:false}],description:"Stone steps descend to barrels and old survey marks. The rear stone door is unlocked but closed."},
+        {requires:[{path:"flags.cellarSwarmResolved",equals:true}],description:"The ink-fed vermin are gone. Barrels and old survey marks flank the locked stone door at the rear of the cellar."},
+      ],
       stage: 3,
       arrivalStage: 2,
       map: { x: 51, y: 71, w: 22, h: 23, kind: "cellar" },
@@ -433,7 +472,7 @@ export const lanternBelowAdventure = assertValidAdventure({
     },
     "cellar-passage": {
         name: "The Cellar Passage",
-      description: "A narrow passage beyond the opened stone door bearing Mara Vey's abandoned survey mark.",
+      description: "A narrow passage beyond the opened stone door bearing Mara Vey's abandoned survey mark. Ahead, an open mothglass chamber entrance is clearly visible; the stone door behind leads back to the cellar.",
       stage: 4,
       arrivalStage: 2,
       map: { x: 76, y: 73, w: 14, h: 18, kind: "passage" },
@@ -471,6 +510,7 @@ export const lanternBelowAdventure = assertValidAdventure({
     passage: {
       name: "Concealed Survey Passage",
       description: "A cramped survey passage where recent boot prints and a streak of dried black ink lead toward a collapse.",
+      entryBeats:[{id:"mara-hears-approach",npc:"mara-vey",requires:[{path:"flags.maraRescued",equals:false}],text:"From the collapse ahead, a strained voice calls, “Is someone there? I can hear your steps! I'm caught under the stones. Keep your light high; there's something moving in the ink.”"}],
       stage: 7,
       arrivalStage: 2,
       map: { x: 52, y: 98, w: 38, h: 14, kind: "passage" },
@@ -497,7 +537,7 @@ export const lanternBelowAdventure = assertValidAdventure({
       map: { x: 35, y: 98, w: 14, h: 16, kind: "alcove" },
       features: [
         feature("alcove-opening", "opening to the passage", "door"),
-        feature("loose-stones", "unstable loose stones", "hazard"),
+        {...feature("loose-stones", "unstable loose stones", "hazard"),requires:[{path:"flags.maraRescued",equals:false}]},
         feature("mara-vey", "Mara Vey", "npc"),
         { ...feature("ink-guardian", "ink-dark guardian", "creature"), requires:[{path:"flags.guardianDefeated",equals:false}] },
       ],
@@ -549,7 +589,7 @@ export const lanternBelowAdventure = assertValidAdventure({
         { path: "flags.guardianDefeated", equals: true },
         { path: "flags.maraRescued", equals: true },
       ],
-      nextAdventure: "ashes-of-briarwatch",
+      nextAdventure: "ashes-briarwatch",
     },
   },
 });

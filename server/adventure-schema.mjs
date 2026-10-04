@@ -75,6 +75,12 @@ function validateStory(adventure, errors, warnings) {
     for (const locationId of npc?.locations || []) {
       if (!adventure.locations[locationId]) errors.push(`story.npcs.${npcId} references unknown location '${locationId}'.`);
     }
+    for (const locationId of npc.audibleFrom || []) {
+      if (!adventure.locations[locationId]) errors.push(`story.npcs.${npcId}.audibleFrom references unknown location '${locationId}'.`);
+      else if (!(adventure.locations[locationId].exits || []).some((exit)=>(npc.locations || []).includes(exit.to))) errors.push(`story.npcs.${npcId}.audibleFrom must be adjacent to an NPC location.`);
+    }
+    validateRequirements(npc.callResponse?.requires,`story.npcs.${npcId}.callResponse.requires`,errors);
+    for (const [index,presentation] of (npc.presentations || []).entries()) validateRequirements(presentation.requires,`story.npcs.${npcId}.presentations[${index}].requires`,errors);
     for (const [index, disclosure] of (npc.conversation?.conditionalFacts || []).entries()) {
       if (!disclosure?.fact || !Array.isArray(disclosure?.requires) || !disclosure.requires.length) errors.push(`story.npcs.${npcId}.conversation.conditionalFacts[${index}] needs fact and requirements.`);
       validateRequirements(disclosure?.requires, `story.npcs.${npcId}.conversation.conditionalFacts[${index}].requires`, errors);
@@ -161,6 +167,7 @@ export function validateAdventure(adventure) {
     for (const [index, beat] of (location.entryBeats || []).entries()) {
       if (!beat?.id || !beat?.npc || !beat?.text) errors.push(`locations.${locationId}.entryBeats[${index}] needs id, npc, and text.`);
       if (beat?.npc && !adventure.story?.npcs?.[beat.npc]) errors.push(`locations.${locationId}.entryBeats[${index}] references unknown NPC '${beat.npc}'.`);
+      validateRequirements(beat.requires,`locations.${locationId}.entryBeats[${index}].requires`,errors);
     }
     for (const [index, exit] of location.exits.entries()) {
       if (!exit?.to || !adventure.locations[exit.to]) {
@@ -220,6 +227,27 @@ export function validateAdventure(adventure) {
     if (!scene.summary) warnings.push(`scenes.${sceneId} has no author-facing summary.`);
   }
 
+  const encounterIds=new Set();
+  for (const encounter of adventure.encounters || []) {
+    const path=`encounters.${encounter.id}`;
+    if (!encounter.id || encounterIds.has(encounter.id)) errors.push(`${path} needs a unique id.`);
+    encounterIds.add(encounter.id);
+    if (!adventure.locations[encounter.location]) errors.push(`${path} references an unknown location.`);
+    if (!Object.hasOwn(adventure.initialFlags || {},encounter.resolvedFlag) || adventure.initialFlags[encounter.resolvedFlag] !== false) errors.push(`${path} needs an initially false resolvedFlag.`);
+    if (!encounter.opening || !encounter.victoryText) errors.push(`${path} needs opening and victoryText.`);
+    const enemy=encounter.enemy;
+    if (!enemy?.id || !enemy.name || !Number.isFinite(enemy.ac) || !(enemy.hp>0)
+      || !Number.isFinite(enemy.initiativeModifier) || !Number.isFinite(enemy.attackBonus)
+      || !Number.isFinite(enemy.damageModifier) || !Array.isArray(enemy.damageDice) || enemy.damageDice.length !== 2
+      || enemy.damageDice.some((value)=>!Number.isInteger(value) || value<1)) errors.push(`${path} needs a complete, valid enemy stat block.`);
+    validateRequirements(encounter.requires,`${path}.requires`,errors);
+    errors.push(...validateInteractions({...adventure,interactions:[{id:encounter.id,location:encounter.location,modes:["act"],verbs:["resolve"],targets:[encounter.enemy?.name || "enemy"],outcome:{message:encounter.victoryText},effects:encounter.victoryEffects || []}]}));
+  }
+  if (adventure.aftermath && (!adventure.aftermath.speaker || !adventure.aftermath.reply)) errors.push("aftermath needs speaker and reply.");
+  if (adventure.milestones?.complete) {
+    if (!adventure.milestones.complete.requires?.length) errors.push("milestones.complete needs explicit completion requirements.");
+    validateRequirements(adventure.milestones.complete.requires,"milestones.complete.requires",errors);
+  }
   validateStory(adventure, errors, warnings);
   errors.push(...validateInteractions(adventure));
 

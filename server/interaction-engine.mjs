@@ -91,7 +91,7 @@ export function assertCanonicalState(definition, state) {
   return errors;
 }
 
-function applyEffects(state, effects = []) {
+export function applyEffects(state, effects = []) {
   for (const effect of effects) {
     if (effect.op === "set") setPath(state, effect.path, effect.value);
     else if (effect.op === "add") addPath(state, effect.path, effect.value);

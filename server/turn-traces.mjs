@@ -27,7 +27,8 @@ export function assessNarrationOutcome({ narration = "", before = {}, after = {}
   const factTerms = [...new Set((publicFacts || []).flatMap((fact) => clean(fact, 300).toLowerCase().split(/[^a-z0-9]+/)).filter((token) => token.length >= 6))];
   const supportedTerms = factTerms.filter((token) => lower.includes(token));
   return {
-    status:issues.length ? "contradiction" : "consistent",
+    // Term overlap is diagnostic, not a semantic proof of arbitrary NPC prose.
+    status:issues.length ? "contradiction" : factTerms.length ? "consistent" : "unassessed",
     issues,
     factCoverage:factTerms.length ? Number((supportedTerms.length / factTerms.length).toFixed(2)) : null,
   };

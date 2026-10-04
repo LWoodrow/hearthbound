@@ -921,7 +921,7 @@ export function getActiveAdventure(db, partyId) {
   return row ? mapAdventure(row, row.status) : null;
 }
 
-export function completeActiveAdventure(db, partyId) {
+export function completeActiveAdventure(db, partyId, { withinTransaction = false } = {}) {
   const adventure = getActiveAdventure(db, partyId);
   if (!adventure) return null;
   const status = db.prepare("SELECT status FROM party_adventures WHERE party_id = ? AND adventure_id = ?").get(partyId, adventure.id)?.status;
@@ -932,20 +932,20 @@ export function completeActiveAdventure(db, partyId) {
   const pendingLevelUps=getPartyState(db,partyId,"pendingLevelUps")||{};
   for(const player of eligible)pendingLevelUps[player.id]=Math.min(20,adventure.milestoneLevel);
   const now = new Date().toISOString();
-  db.exec("BEGIN IMMEDIATE");
+  if (!withinTransaction) db.exec("BEGIN IMMEDIATE");
   try {
     db.prepare("UPDATE party_adventures SET status = 'complete', completed_at = ? WHERE party_id = ? AND adventure_id = ?").run(now, partyId, adventure.id);
     setPartyState(db,partyId,"pendingLevelUps",pendingLevelUps);
-    db.exec("COMMIT");
-  } catch (error) { db.exec("ROLLBACK"); throw error; }
-  addEvent(db, { partyId, visibility: "public", kind: "system", speaker: "Milestone", text: leveled.length ? `${adventure.title} is complete. ${leveled.join(", ")} can now complete their level-ups to level ${adventure.milestoneLevel} on the Character sheet.` : `${adventure.title} is complete.` });
-  const episode=seriesEpisodeForAdventure(adventure.id);
-  if(episode){
-    setPartyState(db,partyId,"campaignSeries",campaignSeriesState(db,partyId));
-    addEvent(db,{partyId,visibility:"public",kind:"system",speaker:"The Hollow Road",text:episode.completionDiscovery});
-    addEvent(db,{partyId,visibility:"dm",kind:"system",speaker:"DM Ledger",text:`Campaign series episode ${episode.number} completed. Carry this connection forward: ${episode.completionDiscovery}`});
-  }
-  return { adventure, leveled };
+    addEvent(db, { partyId, visibility: "public", kind: "system", speaker: "Milestone", text: leveled.length ? `${adventure.title} is complete. ${leveled.join(", ")} can now complete their level-ups to level ${adventure.milestoneLevel} on the Character sheet.` : `${adventure.title} is complete.` });
+    const episode=seriesEpisodeForAdventure(adventure.id);
+    if(episode){
+      setPartyState(db,partyId,"campaignSeries",campaignSeriesState(db,partyId));
+      addEvent(db,{partyId,visibility:"public",kind:"system",speaker:"The Hollow Road",text:episode.completionDiscovery});
+      addEvent(db,{partyId,visibility:"dm",kind:"system",speaker:"DM Ledger",text:`Campaign series episode ${episode.number} completed. Carry this connection forward: ${episode.completionDiscovery}`});
+    }
+    if (!withinTransaction) db.exec("COMMIT");
+    return { adventure, leveled };
+  } catch (error) { if (!withinTransaction) db.exec("ROLLBACK"); throw error; }
 }
 
 export function getParty(db, partyId) {
