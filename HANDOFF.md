@@ -45,6 +45,8 @@ Use case: stylized-concept. Asset type: permanent square NPC avatar for the Hear
 
 ## Current status
 
+- 2026-10-04 integration complete: approved accumulated work fast-forwarded into `C:/Users/Lee/Documents/GitHub/hearthbound` main and pushed to `LWoodrow/hearthbound` origin/main at `ffcc850`. User-owned `.gitignore` addition retained uncommitted; local saves/settings excluded. No adventure reset. Main app build refreshed for launch; preview remains 4322. Next action: human testing, then choose the next bounded content package.
+
 - 2026-10-04 integration authorized by Lee: commit the approved accumulated AI connection, story lifecycle, regional exploration, Willowford map/interactions and portraits; fast-forward the main checkout and push to origin/main. Main checkout has a user-owned `.gitignore` addition (`.aider*`) which must be preserved and excluded from this package. 268 tests, build/typecheck and four adventure validations passed immediately before integration. Preview save/AI settings remain untouched.
 
 - 2026-10-04 square/speech/portrait package complete locally: shared nearby-people observations and valid state-neutral unanswered speech; authored villagers/farm workers and a bounded square greeting. Named/hearable NPC conversation retains first refusal; private party speech does not reach outsiders. Greetings never move the party or change permissions, flags, inventory or routes.
