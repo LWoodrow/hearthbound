@@ -6,6 +6,8 @@ Hearthbound treats every model response as untrusted narrative input. The rules 
 
 This contract is provider-neutral. Replacing Qwen, Gemma, or another model must not change game rules, unlock routes, create inventory, complete adventures, or alter hidden state.
 
+All structured generation uses one transport adapter for llama.cpp or Ollama, including character suggestions and Cotton. Connection settings and local process management belong to the host-level game library, outside adventure state. A provider change preserves prompt authority, response parsing, token budgets and deterministic validation; server availability never prevents opening the library. Saved endpoint credentials stay on the backend and are excluded from game views and prompt traces.
+
 ## Authority boundary
 
 The rules engine owns:

@@ -7,7 +7,10 @@ import { fileURLToPath } from "node:url";
 import { addEvent, advancePartySpotlight, buildLobby, createDatabase, createParty, createPlayer, createWorld, deletePlayer, getActiveAdventure, getGuidanceMode, getKnownLocations, getLevelUpOptions, getParty, getPartySpotlight, getPartyState, getPlayerByToken, getPlayerGuidance, levelUpPlayer, listInventory, listPlayers, listVisibleEvents, loginPlayer, movePlayerToParty, resetPartyStory, selectAdventure, setGuidanceMode, setPartySpotlight } from "./database.mjs";
 import { actionUsesSpotlight, canSubmitOutsideCombat, normalizeSpeechAudience } from "./spotlight.mjs";
 import { generateCharacterDetail, refreshPlayerGuidance, resolveAction, resolvePendingCheck } from "./dm.mjs";
-import { currentModelProfile, modelRuntimeView, selectAndLoadModel } from "./model-runtime.mjs";
+import { currentModelProfile, modelRuntimeView, resetModelRuntime, selectAndLoadModel, testAiConnection } from "./model-runtime.mjs";
+import { canManageAi, mergeAiSettings, publicAiSettings, readAiSettings, saveAiSettings } from "./ai-settings.mjs";
+import { discoverAi } from "./ai-transport.mjs";
+import { localAiService } from "./ai-service.mjs";
 import { cottonForParty, isCottonInteraction, maybeCottonInterjection } from "./cotton.mjs";
 import { beginCombatAttack, beginCombatPotion, beginCombatSpell, combatView, isCombatActive, resetWorkshopCombat, resolveCombatRoll, startWorkshopCombat, takeCombatDodge, workshopOptions } from "./combat.mjs";
 import { authoredRouteContext } from "./adventure-rules.mjs";
@@ -18,6 +21,7 @@ import { adventureDefinition } from "./adventure-registry.mjs";
 import { appendTurnTrace, captureTurnState, completeTurnTrace, createTurnTrace, listTurnTraces, redactedTurnTraces } from "./turn-traces.mjs";
 import { readRunningBuildInfo } from "./build-info.mjs";
 import { visibleNpcPortraits } from "../shared/portrait-catalogue.mjs";
+import { profileForSettings } from "./model-runtime.mjs";
 
 const dev = process.argv.includes("--dev");
 const port = Number(process.env.PORT || 4173);
@@ -28,6 +32,7 @@ let vite;
 let runningServer;
 
 async function queueApplicationRestart() {
+  if (localAiService.view().managed) await localAiService.stop();
   if (runningServer) await new Promise((done) => runningServer.close(done));
   const replacement = spawn(process.execPath, ["--env-file-if-exists=.env", "server/index.mjs"], {
     cwd: resolve("."), detached: true, stdio: "ignore", windowsHide: true, env: process.env,
@@ -36,7 +41,7 @@ async function queueApplicationRestart() {
   for (let attempt = 0; attempt < 30; attempt += 1) {
     await new Promise((done) => setTimeout(done, 250));
     try {
-      const response = await fetch(`http://127.0.0.1:${port}/api/health`, { signal: AbortSignal.timeout(700) });
+      const response = await fetch(`http://127.0.0.1:${port}/api/lobby`, { signal: AbortSignal.timeout(700) });
       if (response.ok) process.exit(0);
     } catch { /* The replacement is still starting. */ }
   }
@@ -66,6 +71,24 @@ function currentTurnState(player, adventure = getActiveAdventure(db, player.part
 
 export async function handleApi(request, response, url) {
   try {
+    if (url.pathname.startsWith("/api/ai/")) {
+      if (!canManageAi(request)) return json(response, 403, { error:"Open AI connection settings on the host computer using http://127.0.0.1:" + port + "." });
+      try {
+        if (request.method === "GET" && url.pathname === "/api/ai/settings") return json(response, 200, { settings:publicAiSettings(), runtime:await modelRuntimeView({force:true}), process:localAiService.view() });
+        if (request.method === "PUT" && url.pathname === "/api/ai/settings") {
+          if (localAiService.view().managed) return json(response, 409, { error:"Stop the local AI server before changing its settings." });
+          saveAiSettings(await readJson(request)); resetModelRuntime();
+          return json(response, 200, { settings:publicAiSettings(), runtime:await modelRuntimeView(), process:localAiService.view() });
+        }
+        if (request.method === "POST" && ["/api/ai/test", "/api/ai/models"].includes(url.pathname)) {
+          const settings = mergeAiSettings(await readJson(request));
+          return json(response, 200, url.pathname === "/api/ai/test" ? await testAiConnection(settings) : { models:await discoverAi(profileForSettings(settings)) });
+        }
+        if (request.method === "POST" && url.pathname === "/api/ai/start") return json(response, 202, { process:await localAiService.start() });
+        if (request.method === "POST" && url.pathname === "/api/ai/stop") { const process = await localAiService.stop(); resetModelRuntime(); return json(response, 200, { process }); }
+      } catch (error) { return json(response, 400, { error:error.message }); }
+      return json(response, 404, { error:"Unknown AI settings action." });
+    }
     if (request.method === "POST" && url.pathname === "/api/system/restart") {
       json(response, 202, { ok: true, restarting: true });
       setTimeout(() => void queueApplicationRestart(), 80);
@@ -81,6 +104,7 @@ export async function handleApi(request, response, url) {
       return json(response, 200, await modelRuntimeView({ force:true }));
     }
     if (request.method === "POST" && url.pathname === "/api/models/select") {
+      if (!canManageAi(request)) return json(response, 403, { error:"Change the server model from AI connection settings on the host computer." });
       const player = authenticatedPlayer(request);
       if (!player) return json(response, 401, { error:"Choose your character again." });
       const body = await readJson(request);
@@ -360,6 +384,10 @@ export async function start() {
   const server = secure ? createHttpsServer({ key: readFileSync(resolve(process.env.HTTPS_KEY)), cert: readFileSync(resolve(process.env.HTTPS_CERT)) }, requestHandler) : createHttpServer(requestHandler);
   runningServer = server;
   server.listen(port, host, () => console.log(`Hearthbound is ready at ${secure ? "https" : "http"}://localhost:${port}`));
+  try {
+    const settings = readAiSettings();
+    if (settings.autoStart) void localAiService.start(settings).catch(error => console.error("Local AI startup:", error.message));
+  } catch (error) { console.error("AI settings:", error.message); }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) start();

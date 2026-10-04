@@ -10,23 +10,36 @@ powershell -ExecutionPolicy Bypass -File .\Start-Hearthbound.ps1
 
 The launcher:
 
-1. Finds Node.js and Ollama.
-2. Starts Ollama when it is not already running.
-3. reads `DND_MODEL` from the local `.env` file, verifies that exact model is installed, and loads it into memory.
-4. Starts the Hearthbound web service when needed.
-5. Waits for both services, prints the local and network addresses, and opens the game.
+1. Finds Node.js and the built web application.
+2. Starts or restarts the Hearthbound web service and opens the game library even when AI is unavailable.
+3. Preserves local Ollama startup for existing configurations during migration.
+4. The backend optionally starts the saved local llama.cpp configuration if auto-start is enabled. Remote servers are managed on their own host.
 
-It is safe to run the launcher again when the services are already active. Use `-NoBrowser` to leave the browser closed or `-SkipModelWarmup` to start without loading the model immediately. Server output is written to `data/logs/`.
+It is safe to run the launcher again when the services are already active. Use `-NoBrowser` to leave the browser closed. `-SkipModelWarmup` remains accepted for old shortcuts; startup now follows the saved auto-start setting instead of a warm-up request. Server output is written to `data/logs/`.
 
 ## First setup on another Windows PC
 
-1. Install Node.js 22 or newer and Ollama.
+1. Install Node.js 22 or newer.
 2. Clone this repository and run `npm install` followed by `npm run build`.
 3. Copy `.env.example` to `.env`.
-4. Set `DND_MODEL` to an exact tag shown by `ollama list`, then download it with `ollama pull <model-tag>` if necessary.
-5. Run `Start-Hearthbound.ps1`.
+4. Run `Start-Hearthbound.ps1` and open **AI connection** in the game library on the host computer at `http://127.0.0.1:4173`.
+5. Choose llama.cpp on this computer, or an existing server by URL. Save the connection after testing it.
 
-The `.env` file, installed Ollama models, server logs, and `data/campaign.sqlite` are deliberately machine-local and are not stored on GitHub.
+The `.env` file, `data/ai-settings.json`, model files, server logs, and `data/campaign.sqlite` are machine-local and are not stored on GitHub. Resetting an adventure does not reset AI settings.
+
+## Set up local llama.cpp
+
+Download a Windows llama.cpp release matching the PC's hardware from the official release page and extract it. Download a supported instruct GGUF model separately. In AI connection, choose llama.cpp and **On this computer**, then enter absolute paths to `llama-server.exe` and the `.gguf` file. Paths containing spaces are supported.
+
+Use `http://127.0.0.1:8080`, a model alias such as `hearthbound`, and a context size matching the intended prompt budget (8192 initially). GPU layers default to 99; lower this for limited VRAM or use 0 for CPU. **Save & start local AI** launches without a visible terminal and logs to `data/logs/llamacpp.log`. **Test connection** verifies model discovery plus a schema-constrained JSON answer. Enable auto-start once this succeeds. **Stop local AI** stops only a process started by this Hearthbound service; external processes cannot be stopped here.
+
+## Connect to another computer
+
+Choose **An existing server**, enter its root URL (a trailing `/v1` is normalized), and supply an API key if required. **Find models** lists the model aliases advertised by that server. Select one, match the configured context capacity, test and save. All AI requests originate on the Hearthbound backend; browsers never receive the saved key. Changing provider or server URL clears the saved key unless a replacement is entered. Settings can be managed only through a loopback host address, independently of character login; iPads continue to play using the selected server.
+
+For a remote llama.cpp host, configure its network listening address and model alias on that machine. Use LAN/private VPN access, or authenticated HTTPS when using an internet hostname. Ordinary single-model llama.cpp advertises its loaded model; router configurations may expose more. Hardware setup, GGUF downloads and router management are outside this first package.
+
+API health/model discovery, schema-constrained completion and thinking-template controls follow the [official llama.cpp server documentation](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md). Context allocation is a server launch option, rather than an Ollama request option.
 
 ## Handing work to another conversation or contributor
 

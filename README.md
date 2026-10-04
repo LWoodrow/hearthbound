@@ -16,14 +16,14 @@ Hearthbound is a private family D&D prototype hosted by one Windows PC. Every hu
 - DM-only state that is never returned by the player API
 - Spoken narration through each participating iPad
 - Hold-to-talk recording with an optional local Whisper-compatible transcription service
-- Optional Ollama AI with a playable built-in demo DM when the configured model is unavailable
+- Library-level AI connection settings for local llama.cpp, remote llama.cpp URLs, and existing Ollama servers; deterministic fallback when AI is unavailable
 
 ## Start locally
 
-1. Install Node.js 22 or newer and Ollama.
-2. Copy `.env.example` to `.env` and select an installed Ollama model.
+1. Install Node.js 22 or newer.
+2. Copy `.env.example` to `.env`.
 3. Run `npm install`, then `npm run build`.
-4. Run `Start-Hearthbound.ps1` or use the **Hearthbound D&D** desktop shortcut. The launcher starts Ollama and the campaign server if needed, verifies and warms the configured model, prints the usable addresses, and opens the game. It is safe to run again when Hearthbound is already active.
+4. Run `Start-Hearthbound.ps1`. In the game library, open **AI connection** on the host PC. Choose local llama.cpp and enter the executable/GGUF paths, or enter an existing AI server URL. Use **Test connection** and **Save settings**. The app opens even before AI is configured.
 5. Open `http://<PC-address>:4173` from another device on the same network.
 
 Campaign data is saved in `data/campaign.sqlite`. Back up that file while the server is stopped, or copy the database together with its `-wal` and `-shm` files while it is running.
@@ -38,14 +38,14 @@ Each iPad must tap **Narration off** once to enable spoken playback. This delibe
 
 ## Local AI contract
 
-The configured Ollama model is used twice for each action:
+The configured AI server uses the shared structured-response adapter for interpretation, narration, NPC conversation, character suggestions, and Cotton. Model-driven actions use bounded director and narrator packets:
 
-1. A hidden director sees DM state and determines perceivable facts, private observations, and sealed campaign changes.
-2. A narrator receives only perceivable facts and turns them into player-facing prose.
+1. A hidden director proposes structured interpretation; deterministic code validates any supported consequence against canonical state.
+2. A narrator receives the accepted perceivable facts and turns them into player-facing prose.
 
-The narrator does not receive hidden doors, traps, enemy statistics, NPC motives, or future events. If Ollama or the configured model is unavailable, the opening scene remains playable through a deterministic demo DM.
+The narrator does not receive hidden doors, traps, enemy statistics, NPC motives, or future events. If the AI server is unavailable, deterministic fallback remains available.
 
-Set `DND_MODEL` to an exact installed Ollama tag. The chosen model is local configuration and is not stored in Git; `.env.example` provides the documented default.
+AI settings are saved privately in `data/ai-settings.json`, independently of adventure saves, and override environment defaults. Keys stay on the backend. Existing `.env` Ollama configuration remains usable until changed in Settings. Local startup uses a preinstalled `llama-server.exe` and a GGUF model; downloads and hardware installation remain manual.
 
 ## Current prototype boundary
 

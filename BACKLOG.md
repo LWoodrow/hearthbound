@@ -34,6 +34,8 @@ Maintenance guardrail: every systemic playtest or implementation lesson must upd
 
 ### AI prompt infrastructure
 
+AI connection package (2026-10-04): library-level settings, one structured generation transport for llama.cpp/Ollama, local llama.cpp startup/stop/auto-start, remote server URLs and API keys, and offline library access are implemented on `codex/ai-connections`. Next gate: human settings-page review and real GGUF/model-template verification. Automatic downloads, installation and remote server/router administration are deferred. Provider changes retain the existing canonical authority contract.
+
 Completed in the story-engine guardrail branch:
 
 - Versioned local model profiles, with Qwen 3 14B remaining the default and Gemma 4 12B available only as an explicit evaluation candidate

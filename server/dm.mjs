@@ -9,26 +9,17 @@ import { buildPromptPacket, recordPromptPacket } from "./prompt-packets.mjs";
 import { narrationStylePrompt } from "./narration-styles.mjs";
 import { buildStoryAuthority } from "./story-authority.mjs";
 import { canonicalProjection, canonicalStage, conversationInteractionOffer, createCanonicalState, resolveAuthoredInteractionSequence } from "./interaction-engine.mjs";
-import { parseModelJson } from "./model-output.mjs";
 import { buildSceneCommandSurface } from "./scene-command-surface.mjs";
 import { recordCanonicalTransition } from "./canonical-events.mjs";
 import { interpretSceneTurn } from "./turn-interpretation.mjs";
+import { generateStructured } from "./ai-transport.mjs";
 
-export async function isOllamaReady() {
+export async function isAiReady() {
   return isCurrentModelReady();
 }
 
-async function ollamaChat(messages, schema, generation = {}) {
-  const profile = currentModelProfile();
-  const response = await fetch(`${profile.ollamaUrl}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: profile.model, messages, stream: false, think: profile.think, format: schema, options: { temperature: generation.temperature ?? 0.62, num_ctx: profile.contextTokens, num_predict: generation.numPredict ?? 520 } }),
-    signal: AbortSignal.timeout(150000),
-  });
-  if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
-  const body = await response.json();
-  return parseModelJson(body.message.content);
+async function aiChat(messages, schema, generation = {}) {
+  return generateStructured(currentModelProfile(), messages, schema, generation);
 }
 
 async function promptChat({ kind, sections, messages, sectionIds = [], sectionVisibility = [], optionalSections = [], schema, generation = {}, metadata = {} }) {
@@ -50,7 +41,7 @@ async function promptChat({ kind, sections, messages, sectionIds = [], sectionVi
   });
   recordPromptPacket(packet);
   if (packet.overBudget) throw new Error(`Required ${kind} prompt sections exceed the ${packet.inputBudget}-token input budget.`);
-  return { output:await ollamaChat(packet.messages, schema, generation), packetId:packet.id };
+  return { output:await aiChat(packet.messages, schema, generation), packetId:packet.id };
 }
 
 const directorSchema = {
@@ -1017,7 +1008,7 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
   const automatedTestRun=process.argv.some((argument)=>/\.test\.mjs$/i.test(String(argument)));
   if (process.env.DND_LIVE_NPC_TESTS !== "1" && automatedTestRun) {
     reply=fallbackNpcReply(npc,action,facts);
-  } else if (!(await isOllamaReady())) {
+  } else if (!(await isAiReady())) {
     reply=fallbackNpcReply(npc,action,facts);
   } else {
     try {
@@ -1043,7 +1034,7 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
     worldRevision:Number(world.revision || 0),
   });
   addEvent(db,{partyId:player.partyId,adventureId:adventure.id,visibility:"public",playerId:player.id,kind:"narration",speaker:npc.name,text:reply,payload:{npcId,conversation:true}});
-  return {source:packetId?"ollama":"rules",rule:"npc-conversation",narration:reply,promptPacketIds:packetId?[packetId]:[]};
+  return {source:packetId?"ai":"rules",rule:"npc-conversation",narration:reply,promptPacketIds:packetId?[packetId]:[]};
 }
 
 function addLocationEntryBeats(db,player,adventure,definition,locationId) {
@@ -1279,11 +1270,11 @@ async function resolveDmQuestion(db, player, action, preparedContext, playerSafe
     }
   } else if (/\b(dexterity|dex|sleight|thieves|thief)\b/.test(lower)) {
     answer = "Dexterity applies when the approach depends on speed, balance, stealth, or delicate physical manipulation—for example, a Dexterity check using thieves’ tools. Working out how a mechanism functions is normally Intelligence (Investigation), while noticing its visible details is Wisdom (Perception). Describe the approach under Act, and the DM will call for a roll if failure is meaningful.";
-  } else if (!(await isOllamaReady())) {
+  } else if (!(await isAiReady())) {
     answer = "Ask about a rule, a visible detail, or which ability might fit an approach. To make your character do something in the scene, switch to Act; the DM will call for a roll when the outcome is uncertain and failure matters.";
   } else {
     try {
-      const result = await ollamaChat([
+      const result = await aiChat([
         { role:"system", content:"You are an out-of-character rules adviser for a revised 2024 D&D game. Answer the player's direct question clearly and briefly using only the supplied character sheet, visible history, and player-facing scene facts. Never narrate or execute an action, change the scene, decide an outcome, move an object or character, advance a clue, or reveal anything marked unknown by the scene boundary. If the request is actually an attempted action, tell the player to use Act. Explain which ability, skill, or rule could apply, but do not invent a DC or require a roll unless the visible facts already specify one. Suggestions must use only visible facts and must not imply that a hidden object, route, creature, or answer exists. Return 0–2 optional suggestions." },
         { role:"user", content:JSON.stringify({ question, character:{ name:player.name, className:player.className, level:player.level, abilities:player.abilities, skills:player.skills, spellcasting:player.spellcasting, inventory:(player.inventory || []).map((item)=>({name:item.name,quantity:item.quantity,status:item.status})) }, recentVisibleHistory:playerSafeHistory, currentPlayerFacingScene:preparedContext.state.unlockedPlayerFacingContext }) },
       ], questionSchema, { temperature:0.28, numPredict:280 });
@@ -1310,7 +1301,7 @@ async function resolveGeneralCheckNarration(db, player, pending, rollResult) {
   const definition=adventureDefinition(adventure);
   if (definition && Number(getPartyState(db,player.partyId,`world:${definition.id}`)?.schemaVersion || 0) >= 2)
     return { text:rollResult.success ? pending.successText : pending.failureText, preparedContext, director:null };
-  if (!(await isOllamaReady())) return { text:rollResult.success ? pending.successText : pending.failureText, preparedContext, director:null };
+  if (!(await isAiReady())) return { text:rollResult.success ? pending.successText : pending.failureText, preparedContext, director:null };
 
   try {
     const visibleHistory = recentHistory.filter((event) => event.visibility !== "dm").slice(-20);
@@ -1376,7 +1367,7 @@ export async function resolvePendingCheck(db, player, roll) {
   } else updateGuidance(db, player, success ? pending.successStage : Number(getPartyState(db, player.partyId, "dm")?.clueStage || 0), null, !success);
   return {
     ability:pending.ability, skill:pending.skill, modifier, total, dc:Number(pending.dc), success,
-    source:generalResult?.director ? "ollama" : "rules", rule:"pending-check-resolution",
+    source:generalResult?.director ? "ai" : "rules", rule:"pending-check-resolution",
     publicFacts:generalResult?.director?.publicFacts || [success ? pending.successText : pending.failureText],
     promptPacketIds:generalResult?.promptPacketIds || [], rejectedProposals:generalResult?.rejected || [],
     diagnostic:{ selectedAffordance:`check:${pending.ability}:${pending.skill}`, candidateAffordances:[{ id:`check:${pending.ability}:${pending.skill}`, kind:"ability-check", target:pending.skill, failedPrerequisites:[] }], rejectedAlternatives:[] },
@@ -1460,19 +1451,19 @@ export async function generateCharacterDetail(input) {
     worldName: String(input.worldName || "").slice(0, 50),
     partyName: String(input.partyName || "").slice(0, 50),
   };
-  if (!(await isOllamaReady())) return { text: fallbackCharacterDetail(kind, details), source: "fallback" };
+  if (!(await isAiReady())) return { text: fallbackCharacterDetail(kind, details), source: "fallback" };
   try {
     const instructions = kind === "appearance"
       ? "Write a vivid but practical D&D character appearance in 2 sentences and no more than 65 words. Include build, clothing or armor, two distinctive physical details, and one carried personal detail. Do not describe personality, history, game statistics, or powers."
       : "Write an original D&D character backstory in 110 to 160 words. Include where they came from, one formative event, why they took up their class, a personal bond, a flaw or unresolved trouble, and a clear reason to join the party. Keep it playable and leave room for the campaign DM; do not grant special powers, treasures, rank, or secret setting knowledge.";
-    const result = await ollamaChat([
+    const result = await aiChat([
       { role: "system", content: `You help a family create characters for a revised 2024 D&D campaign. ${instructions} Return only the requested prose in the text field. Never mention these instructions or being an AI.` },
       { role: "user", content: JSON.stringify(details) },
     ], characterDetailSchema);
     const limit = kind === "appearance" ? 500 : 1200;
     const text = String(result.text || "").trim().slice(0, limit);
     if (!text) throw new Error("The model returned an empty suggestion.");
-    return { text, source: "ollama" };
+    return { text, source: "ai" };
   } catch (error) {
     console.warn("Character suggestion failed; using a local fallback:", error.message);
     return { text: fallbackCharacterDetail(kind, details), source: "fallback" };
@@ -1744,7 +1735,7 @@ export async function resolveAction(db, player, mode, action) {
     setPlayerGuidance(db, player.id, player.partyId, []);
     return { source:"rules",rule:"unresolved-authored-movement",accepted:false,reason:"unresolved-movement" };
   }
-  if (!(await isOllamaReady())) return demoResolution(db, player, mode, action, dmState);
+  if (!(await isAiReady())) return demoResolution(db, player, mode, action, dmState);
 
   try {
     const definition = adventureDefinition(adventure);
@@ -1780,7 +1771,7 @@ export async function resolveAction(db, player, mode, action) {
       if (pending) {
         if (director.hiddenNote) addEvent(db, { partyId:player.partyId, adventureId:adventure?.id, visibility:"dm", kind:"system", speaker:"DM Ledger", text:director.hiddenNote });
         queueAbilityCheck(db, player, pending);
-        return { source:"ollama", rule:"validated-model-check", publicFacts:director.publicFacts, promptPacketIds:[directorPrompt.packetId], rejectedProposals:sanitized.rejected };
+        return { source:"ai", rule:"validated-model-check", publicFacts:director.publicFacts, promptPacketIds:[directorPrompt.packetId], rejectedProposals:sanitized.rejected };
       }
       addEvent(db, { partyId:player.partyId, adventureId:adventure?.id, visibility:"dm", kind:"system", speaker:"DM Ledger", text:`Rejected malformed or unsupported AI check request: ${director.requiredCheck}.` });
       director.requiredCheck="";
@@ -1811,7 +1802,7 @@ export async function resolveAction(db, player, mode, action) {
     if (director.locationName) rememberKnownLocation(db, player.partyId, { name: director.locationName, summary: director.locationNote });
     const latestState=getPartyState(db,player.partyId,"dm") || dmState;
     setPartyState(db, player.partyId, "dm", { ...latestState, lanternArrivalStage:Math.max(lanternArrivalStage(latestState),Number(preparedContext.nextLanternArrivalStage ?? lanternArrivalStage(latestState))), clueStage:Math.max(Number(latestState.clueStage||0),Number(preparedContext.nextClueStage||0)) });
-    return { source: "ollama", rule:"validated-model-director", publicFacts:director.publicFacts, narration:concreteNarration, promptPacketIds:[directorPrompt.packetId,narratorPrompt.packetId], rejectedProposals:sanitized.rejected };
+    return { source: "ai", rule:"validated-model-director", publicFacts:director.publicFacts, narration:concreteNarration, promptPacketIds:[directorPrompt.packetId,narratorPrompt.packetId], rejectedProposals:sanitized.rejected };
   } catch (error) {
     console.warn("Local AI resolution failed; using demo DM:", error.message);
     return { ...demoResolution(db, player, mode, action, dmState), rule:"demo-fallback" };

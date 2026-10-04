@@ -4,11 +4,13 @@ This is the shared operational record for humans and AI collaborators. Update it
 
 ## Current status
 
+- 2026-10-04 package: `codex/ai-connections` in `hearthbound-cellar-search`, based on GitHub main `217c88c`. Library-level AI settings, local llama.cpp process control and remote URLs, a shared structured generation adapter, and launcher updates are complete. All 204 tests, production build, adventure validation and PowerShell parse check pass. The HTTP integration test covers settings before login, structured JSON against a simulated llama.cpp endpoint, persisted settings across app restart, rejected foreign origins, masked keys and offline library access. Local process ownership/paths are tested with a fake process; real llama.cpp/GGUF inference and visual browser review remain pending because no llama.cpp installation or browser automation tool is available. Preview uses port 4322, `data/ai-preview.sqlite` and `data/ai-preview-settings.json`; its ignored `.env` is machine-local. Existing adventures and the original main runtime are preserved. Merge/publication are pending review. The existing provider-neutral authority rule in `docs/AI-STORY-CONTRACT.md` covers this migration and is explicitly extended for the shared transport.
+
 - 2026-09-29 handoff: the user supplied three richly illustrated fantasy-map references for a later Eldervale world-map redesign. The deferred, reveal-only atlas work is recorded in `BACKLOG.md`; no art or map redesign was attempted in this package. The user requested that the current convergence package be merged to local `main` for final testing, without requesting a GitHub push.
 
-- Local `main` is at `ed267cf` (portrait and map polish); GitHub `main` is behind local `main` and still needs separately authorized publication. The original checkout's unrelated `.gitignore` edit remains untouched.
-- Active development branch: `codex/atlas-guardian-convergence` in `hearthbound-cellar-search`, based on local `main`.
-- This package fixes guardian victory/rescue state convergence and changes The Lantern Below to fixed reveal-only room and route plates, with a revised regional survey map. It is isolated from the running local service; the user has not yet reviewed its appearance in a browser.
+- Local and GitHub `main` were synchronized at `217c88c` before the current package. The original checkout's unrelated `.gitignore` edit remains untouched.
+- Active development branch: `codex/ai-connections` in `hearthbound-cellar-search`.
+- The atlas/guardian package was merged and published on 2026-09-29. The current AI connection preview is isolated from the main service.
 - Recent resolver slices received syntax checks only; human playtesting is in progress by request
 - Package 1 scene-command-surface work is complete on `codex/scene-command-surface`; commit and local merge are authorized for human retest
 - Runtime servers: do not assume a port or process is active; inspect before testing
@@ -29,7 +31,7 @@ Improve player freedom and reliable conversational interpretation without weaken
 
 ## Active work
 
-Current work package: `codex/atlas-guardian-convergence` in `hearthbound-cellar-search`, based on local `main` at `ed267cf`. Fixed route plates include the taproom→kitchen→pantry chain and all other Lantern Below links; every visited intermediate room is mapped from canonical state. Combat defeat sets the canonical guardian flag, blocks repeat fights, and permits the authored rubble-clearing rescue. Generic checks cannot claim a persistent mutation without a canonical effect; Ask DM status uses authored state facts. Full test suite 195/195, production build, and adventure validation pass. Browser visual review and human playtest are pending. No merge or push authorized in this turn. Existing original-checkout `.gitignore` edit is out of scope.
+Current work package: `codex/ai-connections` in `hearthbound-cellar-search`, based on main `217c88c`. The game-library AI settings page supports a preinstalled local llama.cpp executable and GGUF file, auto-start, manual start/stop, remote server URL/model discovery, optional API key and structured JSON connection tests. Ollama remains a supported migration option. Every generation path uses the shared adapter and existing canonical authority guards. Next action: review the preview at `http://127.0.0.1:4322`, install/configure llama.cpp and a compatible GGUF model, then test real generation. No merge or push has been requested for this package.
 
 | Owner | Branch/worktree | Scope | Status | Files affected |
 | --- | --- | --- | --- | --- |
