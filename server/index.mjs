@@ -23,7 +23,7 @@ import { buildHearthboundPlaytestStatus, playtestToolsEnabled } from "./playtest
 import { adventureDefinition } from "./adventure-registry.mjs";
 import { appendTurnTrace, captureTurnState, completeTurnTrace, createTurnTrace, listTurnTraces, redactedTurnTraces } from "./turn-traces.mjs";
 import { readRunningBuildInfo } from "./build-info.mjs";
-import { visibleNpcPortraits } from "../shared/portrait-catalogue.mjs";
+import { visibleNpcPortraits, visibleNpcProfiles } from "../shared/portrait-catalogue.mjs";
 import { profileForSettings } from "./model-runtime.mjs";
 
 const dev = process.argv.includes("--dev");
@@ -211,6 +211,7 @@ export async function handleApi(request, response, url) {
         player,
         party: [...humanParty, cottonForParty(db, player.partyId)],
         npcPortraits,
+        npcProfiles: visibleNpcProfiles(adventureDefinition(adventure), events),
         events,
         knownLocations,
         recap:buildAuthoritativeRecap({ campaign:{ title:adventure?.title, scene:adventure?.scene }, events, knownLocations, party:humanParty, roomAuthority, pendingCheck }),

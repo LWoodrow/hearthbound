@@ -108,6 +108,8 @@ An authored public community directory may let present residents introduce exist
 
 Local-settlement and carriage packets retain the same authority boundaries. The model may voice the currently present Willowford resident using projected facts; it cannot reveal the sluice before investigation, authorise a diversion in prose, sell items, grant healing, award campaign levels or invent travel. Discovery, permission, resolution, report-back and established-path transport are authored transitions. Artwork is presentation, not a source of reachable geography or occupant identity.
 
+Rivergate uses the same contract: receiver verification, exchange authority, physical correction and report-back are distinct authored transitions. A record inspection or spoken physical command cannot move freight. Evidence and permission are alternative approaches, not possession of cargo or rewards. Public tower rumours may invite continuing the saved campaign but cannot reveal chapter markers, bypass gates, award levels or disclose hidden main-story answers.
+
 Model comparisons should measure prose quality only after this contract is stable. Candidate models receive identical validated scene packets and are scored for voice, continuity, repetition, invention rate, latency, and hardware cost. No candidate receives additional authority because it performs well in prose evaluation.
 
 ## Prompt packets and inspection

@@ -21,6 +21,19 @@ const render=(component,props)=>renderToStaticMarkup(React.createElement(compone
 const css=readFileSync(new URL("../src/styles.css",import.meta.url),"utf8");
 const rule=(selector)=>css.split("\n").find((line)=>line.trimStart().startsWith(selector+" {")) || "";
 
+test("game portraits offer an accessible inspect button while lobby portraits stay non-interactive",()=>{
+  const html=render(exported.CharacterAvatar,{player,onInspect:()=>{}});
+  assert.match(html,/aria-haspopup="dialog"/);
+  assert.match(html,/View Nigel portrait and background/);
+  assert.doesNotMatch(render(exported.CharacterAvatar,{player,size:"lobby"}),/<button/);
+});
+
+test("NPC event portraits are clickable without making unknown speakers interactive",()=>{
+  const props={ownPlayer:player,party:[player],npcPortraits:{"Tamsin Reed":"tamsin"},onInspectNpc:()=>{}};
+  assert.match(render(exported.EventCard,{...props,event:{kind:"narration",speaker:"Tamsin Reed",text:"Evening."}}),/View Tamsin Reed portrait and background/);
+  assert.doesNotMatch(render(exported.EventCard,{...props,event:{kind:"narration",speaker:"Unknown",text:"Evening."}}),/portrait-trigger/);
+});
+
 test("party and sheet portraits preserve accessible names and use separate size classes",()=>{
   const party=render(exported.CharacterAvatar,{player});
   assert.match(party,/portrait-frame/);

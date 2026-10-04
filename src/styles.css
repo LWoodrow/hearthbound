@@ -1081,3 +1081,23 @@ h1, h2, p { margin-top: 0; }
 .local-atlas-actions button {text-transform:capitalize}
 .carriage-options>div {display:grid;gap:.4rem}
 .world-atlas.local-atlas .illustrated-atlas-roads path {opacity:.48}
+.portrait-trigger { display:inline-flex; flex:0 0 auto; padding:0; border:0; border-radius:8px; background:transparent; color:inherit; cursor:zoom-in; line-height:0; }
+.portrait-trigger:focus-visible { outline:3px solid #d6b66c; outline-offset:4px; }
+.portrait-trigger:hover { filter:brightness(1.12); }
+.portrait-dialog { width:min(780px,calc(100vw - 32px)); max-height:85dvh; padding:28px; border:1px solid #87734e; border-radius:16px; background:#211c16; color:#eee5d3; box-shadow:0 24px 90px #0009; overflow:auto; }
+.portrait-dialog::backdrop { background:#090705c9; backdrop-filter:blur(4px); }
+.portrait-dialog header { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; margin-bottom:24px; }
+.portrait-dialog h2 { margin:8px 0; font-size:30px; }
+.portrait-dialog header p { margin:0; color:#c9baa0; }
+.portrait-dialog header button { padding:10px 14px; border:1px solid #87734e; border-radius:8px; background:#30271d; color:#eee5d3; cursor:pointer; }
+.portrait-dialog button:focus-visible { outline:3px solid #d6b66c; outline-offset:3px; }
+.portrait-dialog-content { display:grid; grid-template-columns:minmax(0,320px) minmax(0,1fr); gap:28px; align-items:start; }
+.portrait-enlargement { aspect-ratio:1; width:100%; }
+.portrait-dialog .avatar-expanded { display:block; width:100%; height:100%; border-radius:12px; }
+.portrait-biography h3 { color:#d6b66c; font-size:16px; margin:0 0 12px; }
+.portrait-biography p { line-height:1.65; white-space:pre-wrap; overflow-wrap:anywhere; margin:0 0 24px; }
+@media (max-width:600px) {
+  .portrait-dialog { padding:20px; }
+  .portrait-dialog-content { grid-template-columns:1fr; gap:24px; }
+  .portrait-enlargement { max-width:320px; margin:auto; }
+}

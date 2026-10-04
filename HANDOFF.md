@@ -1,5 +1,17 @@
 # Hearthbound handoff
 
+## Main integration authorised (2026-10-04)
+
+User approved the Rivergate hub and portrait popouts after testing, and requested committing, merging to main and updating GitHub. Package verification: 281 passing tests, production build/typecheck and all four adventure validations passed. Integrate the package by fast-forward where possible; preserve the main checkout's separate user-owned `.gitignore` addition `.aider*`, excluding it from this commit. Rebuild the main checkout so its production app serves the updated UI. No adventure/save reset. Final push status and commit are reported in chat; older pending-status notes below describe the pre-integration checkpoint.
+
+## Complete locally: portrait popouts (2026-10-04)
+
+Continuing on the Rivergate package branch without discarding its pending changes. Add normal-UI portrait inspection, larger existing artwork and recorded player backgrounds. NPC profiles must be explicit public text and restricted to already-encountered portrait identities; never serialize private story knowledge. No AI calls, navigation, or game-state changes when inspecting. Merge/push not requested for this addition.
+
+Implemented optional portrait buttons on gameplay roster, story events (including player roll portraits), and character sheet. Lobby character-entry buttons remain unchanged to avoid nested buttons. Native modal dialog shows existing artwork at up to 320px, public NPC introduction or player background/backstory/appearance. Keyboard focus is trapped by the browser; Close, Escape and backdrop dismiss it and restore opener focus. Narrow screens stack portrait and text. Selected identities resolve from the current view rather than storing stale biography snapshots. Combat action buttons retain their actual action, not portrait inspection.
+
+Verification: 281 tests pass (five new regressions cover approved encountered profile disclosure, private-field exclusion, accessible portrait triggers, lobby non-interactivity, escaped biography and modal dismissal/focus lifecycle). Production build/typecheck passed with normal Windows build permission after sandbox dependency-resolver spawn was blocked. All four adventure definitions validate; diff whitespace check clean. Preview 4322 refreshed and healthy, model ready. Browser visual/focus playtest still needs human confirmation; no live campaign reset. Main and GitHub remain unchanged, with the Rivergate package and popouts pending together on codex/rivergate-hub.
+
 This is the shared operational record for humans and AI collaborators. Update it whenever work starts, changes direction, reaches a natural break point, or is handed to another worker.
 
 ## Willowford portrait prompt set (2026-10-04)
@@ -43,7 +55,59 @@ Asset: `public/art/portraits/willowford-cora-v1.png`
 Use case: stylized-concept. Asset type: permanent square NPC avatar for the Hearthbound fantasy roleplaying game. Create one original portrait in the established premium naturalistic painted fantasy style: fine brushwork, textured skin, believable cloth, muted warm earthy colours, softly shaded lighting, not a photo or cartoon. Subject: Cora Bell, a cheerful adult female carriage driver with light freckled skin, a cropped chestnut bob, mustard neck scarf and practical dark green travel jacket; assured approachable expression, softly blurred stable behind her. Composition: single centred head-and-shoulders portrait, face large and readable at 40px, full hair/head visible with modest margin, shoulders fill lower edge. Square image. Ordinary grounded medieval village clothing, subtle background. No border, decorative frame, labels, writing, watermark, extra people, weapons or UI. This is a new person, not a copy of Tamsin or Mara.
 
 
+## Rivergate artwork provenance (2026-10-04)
+
+Built-in imagegen mode: seven independent generations, one original fixed map and six permanent portraits. All inspected before integration; originals retained in Codex generated-images. Marker anchors adjusted to the generated landmarks. No reference artwork copied. Exact prompts:
+
+### map
+
+Asset: `public/art/maps/rivergate-local-v1.png`
+
+Use case: stylized-concept. Asset type: fixed production local map background for Hearthbound tabletop fantasy RPG. Original richly detailed hand-painted cartographic map of Rivergate Market, a bustling riverside trading quarter, overhead with shallow isometric roof relief, landscape 3:2. Warm stone paving, muted slate and russet roofs, detailed timber shops, teal river along right edge, small working boats, rope coils, awnings and barrels. Authored composition as canvas percentages: broad public market square centre (47,46); courier stall under red canvas in square; tall bonded warehouse (70,31); timber docks on riverbank (86,58); cosy blue-roof inn (28,34); bakehouse with oven chimney (26,66); horse/carriage yard (48,16); stone records office (64,70). Connected clear pedestrian lanes radiate from square to these six places and link warehouse to docks. Landmarks physically separate, no room overlap. Smaller decorative buildings around perimeter only, dense polished fantasy cartography, textured foliage and materials, readable paths. No labels, letters, numbers, icons, grid, watermark, frame or UI. No hidden clue symbols or future quest answers. Gameplay labels are separate overlays.
+
+### elin
+
+Asset: `public/art/portraits/rivergate-elin-v1.png`
+
+Use case: stylized-concept. Asset type: permanent square NPC avatar for Hearthbound fantasy RPG. One original naturalistic painted head-and-shoulders portrait: fine brushwork, believable textured skin and medieval cloth, muted warm earthy colours, softly shaded lighting, not cartoon. Subject: Elin Marr, a quick-witted adult female courier with olive skin, dark curly hair tied high, a rust-coloured travel cloak and canvas shoulder strap, alert hazel eyes, blurred market awnings behind her. Single centred face large/readable at 40px, complete head with modest margin, shoulders filling bottom. Square, subtle background. No text, watermark, border, frame, extra people, weapons or UI. Distinct original person.
+
+### dain
+
+Asset: `public/art/portraits/rivergate-dain-v1.png`
+
+Use case: stylized-concept. Asset type: permanent square NPC avatar for Hearthbound fantasy RPG. One original naturalistic painted head-and-shoulders portrait: fine brushwork, believable textured skin and medieval cloth, muted warm earthy colours, softly shaded lighting, not cartoon. Subject: Dain Mercer, a broad middle-aged male dockmaster with dark brown skin, close-shaved hair, short grey beard, faded navy work coat, calm watchful expression, blurred timber docks behind him. Single centred face large/readable at 40px, complete head with modest margin, shoulders filling bottom. Square, subtle background. No text, watermark, border, frame, extra people, weapons or UI. Distinct original person.
+
+### vera
+
+Asset: `public/art/portraits/rivergate-vera-v1.png`
+
+Use case: stylized-concept. Asset type: permanent square NPC avatar for Hearthbound fantasy RPG. One original naturalistic painted head-and-shoulders portrait: fine brushwork, believable textured skin and medieval cloth, muted warm earthy colours, softly shaded lighting, not cartoon. Subject: Vera Senn, an older female records clerk with light skin, silver bob, plain spectacles, deep plum linen jacket, perceptive patient expression, blurred records shelves behind her. Single centred face large/readable at 40px, complete head with modest margin, shoulders filling bottom. Square, subtle background. No text, watermark, border, frame, extra people, weapons or UI. Distinct original person.
+
+### osric
+
+Asset: `public/art/portraits/rivergate-osric-v1.png`
+
+Use case: stylized-concept. Asset type: permanent square NPC avatar for Hearthbound fantasy RPG. One original naturalistic painted head-and-shoulders portrait: fine brushwork, believable textured skin and medieval cloth, muted warm earthy colours, softly shaded lighting, not cartoon. Subject: Osric Vale, a welcoming heavyset middle-aged male innkeeper with sandy hair and moustache, sage waistcoat and cream linen shirt, good-humoured expression, blurred warm inn behind him. Single centred face large/readable at 40px, complete head with modest margin, shoulders filling bottom. Square, subtle background. No text, watermark, border, frame, extra people, weapons or UI. Distinct original person.
+
+### nella
+
+Asset: `public/art/portraits/rivergate-nella-v1.png`
+
+Use case: stylized-concept. Asset type: permanent square NPC avatar for Hearthbound fantasy RPG. One original naturalistic painted head-and-shoulders portrait: fine brushwork, believable textured skin and medieval cloth, muted warm earthy colours, softly shaded lighting, not cartoon. Subject: Nella Brind, a young adult female baker with warm brown skin, dark hair wrapped in pale cloth, lightly flour-dusted apron over ochre clothes, lively kind expression, blurred stone bakehouse behind her. Single centred face large/readable at 40px, complete head with modest margin, shoulders filling bottom. Square, subtle background. No text, watermark, border, frame, extra people, weapons or UI. Distinct original person.
+
+### harlan
+
+Asset: `public/art/portraits/rivergate-harlan-v1.png`
+
+Use case: stylized-concept. Asset type: permanent square NPC avatar for Hearthbound fantasy RPG. One original naturalistic painted head-and-shoulders portrait: fine brushwork, believable textured skin and medieval cloth, muted warm earthy colours, softly shaded lighting, not cartoon. Subject: Harlan Moss, a lean older male warehouse keeper with freckled light skin, greying red hair and angular clean-shaven face, brown leather work vest, wary but fair expression, blurred wooden warehouse behind him. Single centred face large/readable at 40px, complete head with modest margin, shoulders filling bottom. Square, subtle background. No text, watermark, border, frame, extra people, weapons or UI. Distinct original person.
+
+
 ## Current status
+
+- Rivergate hub package complete locally (2026-10-04), `codex/rivergate-hub` from GitHub main `0babc13`: fixed original local map with seven enterable public places; six reviewed permanent portraits (existing Elin plus five new residents). Evidence from docks or records independently verifies the same crossed-label truth; alternatively obtain explicit exchange authority. Physical correction is local to docks; report to Elin, revisit safely and hear bounded Briarwatch road news. Old market/courier IDs and existing saves preserved.
+- Shared settlement presentation, accessibility, return directions, ordered task stages and action IDs now come from atlas data instead of Willowford branches. New Coach Stand has checked journeys to City/Willowford; old market service IDs retained. Public directory is authored; NPC facts project resolution. No central story-specific executor branches added. Original art and exact prompts recorded above.
+- Verification: **276 tests pass**, production build/typecheck, all four adventure validations and diff check pass. Eight Rivergate regressions cover geography/disclosure, two independent evidence sources, both solutions, physical speech guard, report/repeat persistence/no rewards, existing-save defaults, whole-party hazards, carriage boarding and stable assets. Full suite caught cross-settlement fallback-sketch overlap: Rivergate now owns a separate non-overlapping sketch block, independent of local plate anchors; original global route test passes unchanged.
+- Preview remains 4322; save and AI settings untouched. Human visual/mobile and live-model conversation review remain. No shopping/economy, paid lodging/healing, schedules, extra combat, Briarwatch migration, reset, commit, merge or push in this package. Next: human Rivergate testing before Stonecross content or structured Briarwatch migration.
 
 - 2026-10-04 integration complete: approved accumulated work fast-forwarded into `C:/Users/Lee/Documents/GitHub/hearthbound` main and pushed to `LWoodrow/hearthbound` origin/main at `ffcc850`. User-owned `.gitignore` addition retained uncommitted; local saves/settings excluded. No adventure reset. Main app build refreshed for launch; preview remains 4322. Next action: human testing, then choose the next bounded content package.
 

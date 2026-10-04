@@ -113,6 +113,7 @@ export type GameView = {
   player: Player;
   party: Player[];
   npcPortraits: Record<string, string>;
+  npcProfiles: Record<string, { name:string; portraitId:string; background:string }>;
   events: StoryEvent[];
   recap: {
     version:number; title:string; currentLocation:string; visibleFeatures:string[]; establishedFacts:string[];
@@ -178,6 +179,6 @@ export type RegionalAtlas = {
   carriages:Array<{id:string;label:string;text:string;available:boolean;reason:string}>;
 };
 export type LocalAtlasData={
-  id:string;title:string;image:string;sites:RegionalAtlas["sites"];routes:RegionalAtlas["routes"];
+  id:string;title:string;image:string;imageAlt:string;introduction:string;returnHint:string;sites:RegionalAtlas["sites"];routes:RegionalAtlas["routes"];
   task:string;reason:string;actions:Array<{id:string;text:string}>;
 };

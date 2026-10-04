@@ -4,6 +4,8 @@ This document records agreed future work. It is a planning document; an item bei
 
 ## Delivery order
 
+Rivergate hub package: fixed original local plate with seven places, six reviewed permanent portraits, evidence-or-authorised-exchange delivery task, persistent report-back and bounded main-story lead. Shared settlement presentation/task projection is now data-driven. Coach Stand extends established journeys, preserving old market service IDs. Next after human retest: Stonecross local content/map or structured Briarwatch migration. Shopping/economy, paid lodging, schedules and additional combat remain separate packages.
+
 2026-10-04 square/speech/portrait follow-up implemented locally: reusable presence questions and valid unanswered speech, authored background villagers with bounded greeting, and six reviewed permanent Willowford portraits. 268 tests/build/four validations pass. Next gate: human retest; fuller hub activity/next-location content remain future packages. No carriage eligibility relaxation, merge or push.
 
 2026-10-04 closing/input package: implemented generic local short references, contextual manipulation, opted-in social fragments, shared hearing for spoken NPC replies and unresolved-first-turn model rejection. The Lantern Below now has a canonical escort/homecoming, in-story level choices and an optional server-checked Briarwatch continuation. The illustrated regional atlas and seven-stop optional exploration first slice are now implemented locally. Next: human retest of saved/fresh journeys and regional detours, mobile atlas review and structured migration of Briarwatch.

@@ -3,12 +3,13 @@ import {createCanonicalState,journeyAvailable,availableInteractions} from "./int
 import {eldervaleRoads,regionalSites,regionalLinks} from "./adventures/eldervale-roads.mjs";
 import {visibleLocationDescription,requirementsMet} from "./world-state.mjs";
 import {willowfordAtlas} from "./adventures/willowford.mjs";
+import {rivergateAtlas} from "./adventures/rivergate.mjs";
 import {carriageServices} from "./adventures/carriage-network.mjs";
 import {projectScene} from "./scene-projection.mjs";
 import {adventureRules,authoredRouteContext,locationIsRevealed} from "./adventure-rules.mjs";
 
 // Future settlements provide the same data shape; projection never creates geography.
-const settlements=[willowfordAtlas];
+const settlements=[willowfordAtlas,rivergateAtlas];
 function localView(state,reason) {
   const settlement=settlements.find(entry=>entry.places.some(place=>place.id===state.currentLocation));
   if(!settlement) return null;
@@ -21,15 +22,10 @@ function localView(state,reason) {
     npcs:state.visited.includes(place.id)?Object.values(eldervaleRoads.story.npcs).filter(npc=>npc.locations.includes(place.id)).map(npc=>npc.name):[],
   }));
   const visible=new Set(sites.map(site=>site.id));
-  const task=state.flags.orchardReported?"Bessa has thanked the company. Willowford's water task is complete."
-    :state.flags.orchardRestored?"Water is restored. Return to Bessa at Thorn Orchard to tell her."
-    :state.flags.blockageKnown?"Storm debris blocks the grate. Clear it by hand, or obtain the shrine tender's permission and use the overflow."
-    :state.flags.sluiceKnown?"The sluice is marked. Reach it from Thorn Orchard and examine the blockage."
-    :state.visited.includes("willow-orchard")?"Bessa needs help with the water. Investigate the orchard's irrigation channel or the feeder at the landing."
-    :"Explore the public places and meet their residents. Optional tasks emerge through visits and investigation.";
-  return {id:settlement.id,title:settlement.title,image:settlement.image,sites,
+  const task=settlement.taskStages.find(stage=>requirementsMet(state,stage.requires))?.text||"Explore the public places.";
+  return {id:settlement.id,title:settlement.title,image:settlement.image,imageAlt:settlement.imageAlt,introduction:settlement.introduction,returnHint:settlement.returnHint,sites,
     routes:settlement.links.filter(([from,to])=>visible.has(from)&&visible.has(to)).map(([from,to])=>({from,to,travelled:traversed(state,from,to)})),
-    task,actions:availableInteractions(eldervaleRoads,state).filter(action=>action.id.startsWith("trace-flow-")||["diagnose-sluice","clear-orchard-grate","divert-orchard-flow"].includes(action.id)).map(action=>({id:action.id,text:action.verbs[0]+" "+action.targets[0]})),
+    task,actions:availableInteractions(eldervaleRoads,state).filter(action=>settlement.actionIds.includes(action.id)).map(action=>({id:action.id,text:action.verbs[0]+" "+action.targets[0]})),
     reason};
 }
 const traversed=(state,from,to)=>(state.outcomes||[]).some(outcome=>(outcome.canonicalEvents||[]).some(event=>event.type==="location-entered"&&[from,to].includes(event.locationId)&&[from,to].includes(event.previousLocationId)));

@@ -1,5 +1,7 @@
 # Story-engine convergence roadmap
 
+Rivergate proof of reuse: second local settlement uses the same canonical executor, hearing/conversation, footprint and portrait disclosure mechanisms. Distinct investigation/social delivery task has independent evidence sources, alternative authority route, guarded physical correction and persistent report-back. Local task text/accessibility/directions/action selection now belong to settlement data, not Willowford-specific branches. No adventure-ID executor condition or main-story migration added.
+
 2026-10-04 local follow-up: presence questions and unanswered spoken turns share generic deterministic handling; anonymous occupants/ambient greeting enrich Willowford Square without mechanical effects. Six reviewed resident portraits use the existing visible-event disclosure boundary. 268 tests/build/typecheck/four validations pass. Browser/live-model review remains before broader settlement expansion.
 
 Status: Active plan on `codex/story-engine-guardrails`

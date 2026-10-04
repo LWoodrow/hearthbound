@@ -6,6 +6,14 @@ export const carriageServices=carriageStops.flatMap(from=>carriageStops.filter(t
   const journey=start<end?road.slice(start,end+1):road.slice(end,start+1).reverse();
   return {id:"carriage-"+from.id+"-"+to.id,location:from.id,destination:to.id,label:to.name,text:"Ride carriage to "+to.name,journey,requires:journey.includes("ferry")?[{path:"flags.ferryRepaired",equals:true}]:[]};
 }));
+// A local boarding point extends the established market road. Existing market
+// service IDs remain valid; every extra intermediate stop is still recorded.
+for(const destination of ["city","willow-coach"]) {
+  const base=carriageServices.find(service=>service.location==="market"&&service.destination===destination);
+  const outward=["rivergate-coach",...base.journey];
+  carriageServices.push({id:"carriage-rivergate-coach-"+destination,location:"rivergate-coach",destination,label:base.label,text:"Ride carriage to "+base.label,journey:outward,requires:base.requires});
+  carriageServices.push({id:"carriage-"+destination+"-rivergate-coach",location:destination,destination:"rivergate-coach",label:"Rivergate Coach Stand",text:"Ride carriage to Rivergate Coach Stand",journey:[...outward].reverse(),requires:base.requires});
+}
 export const carriageInteractions=carriageServices.map(service=>({
   id:service.id,location:service.location,once:false,modes:["act"],verbs:["ride","board"],targets:["carriage to "+service.label],journey:service.journey,requires:service.requires,effects:[],
   outcome:{message:"The company takes the public carriage along the established road to "+service.label+". The saved main adventure and character resources are unchanged."},

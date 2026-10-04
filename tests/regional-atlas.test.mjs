@@ -357,7 +357,7 @@ test("nearby-people questions and square greetings project authored life without
     assert.doesNotMatch(reply.narration,/Use Act|Bessa|Ada|permission|sluice/i);
     assert.deepEqual(regionState(f),before);
     assert.ok(!f.view().local.sites.some(site=>site.id==="willow-sluice"));
-    assert.equal(Object.keys(roads.story.npcs).length,11,"anonymous people do not create named identities");
+    assert.equal(Object.keys(roads.story.npcs).length,16,"anonymous people do not create named identities");
   }finally{f.close();}
 });
 

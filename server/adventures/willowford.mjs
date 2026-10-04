@@ -13,7 +13,19 @@ export const willowfordPlaces=[
   {id:"willow-sluice",name:"Orchard Sluice",x:18,y:82,requires:[flag("sluiceKnown")],description:"A low wooden sluice sits beside the orchard's upstream channel. Its grate and overflow lever are within reach.",features:[{id:"sluice-grate",label:"sluice grate",kind:"scenery",observation:"Water piles up behind the grate. Examine the blockage before choosing how to restore the flow.",presentations:[{requires:[flag("orchardRestored")],observation:"Water flows safely again; no further repair is needed."}]},{id:"overflow-lever",label:"overflow lever",kind:"scenery",observation:"The lever diverts water through the shrine's shared garden. Ask its tender's permission before using it."}]},
 ];
 export const willowfordLinks=willowfordPlaces.filter(p=>p.id!=="village"&&p.id!=="willow-sluice").map(p=>["village",p.id]).concat([["willow-orchard","willow-sluice"]]);
-export const willowfordAtlas={id:"willowford",title:"Willowford",root:"village",image:"/art/maps/willowford-local-v1.png",places:willowfordPlaces,links:willowfordLinks};
+export const willowfordAtlas={id:"willowford",title:"Willowford",root:"village",image:"/art/maps/willowford-local-v1.png",places:willowfordPlaces,links:willowfordLinks,
+  imageAlt:"Illustrated Willowford village: timber cottages, orchards, a smithy, shrine, carriage yard and river landing. Interactive places are marked separately.",
+  introduction:"Visit the inn, workshops and river paths at your own pace. Markers show real enterable places; decoration is not an extra destination.",
+  returnHint:"Return to the square for the regional roads, or visit the coach yard for established-route carriage travel.",
+  actionIds:["trace-flow-willow-orchard","trace-flow-willow-landing","diagnose-sluice","clear-orchard-grate","divert-orchard-flow"],
+  taskStages:[
+    {requires:[flag("orchardReported")],text:"Bessa has thanked the company. Willowford's water task is complete."},
+    {requires:[flag("orchardRestored")],text:"Water is restored. Return to Bessa at Thorn Orchard to tell her."},
+    {requires:[flag("blockageKnown")],text:"Storm debris blocks the grate. Clear it by hand, or obtain the shrine tender's permission and use the overflow."},
+    {requires:[flag("sluiceKnown")],text:"The sluice is marked. Reach it from Thorn Orchard and examine the blockage."},
+    {requires:[{path:"visited",includes:"willow-orchard"}],text:"Bessa needs help with the water. Investigate the orchard's irrigation channel or the feeder at the landing."},
+    {requires:[],text:"Explore the public places and meet their residents. Optional tasks emerge through visits and investigation."},
+  ]};
 // Public community knowledge is not evidence of visiting a person, nor live
 // knowledge of where they are now. Reuse this authoring pattern in each town.
 export const willowfordCommunityFacts=[
