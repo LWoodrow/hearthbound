@@ -45,15 +45,17 @@ test("player NPC and roll cards all use the 40px event portrait rather than part
   assert.match(rule(".avatar-event"),/width:40px; height:40px/);
 });
 
-test("rounded portrait frames and combat actions remain bounded and highlights preserve art",()=>{
+test("borderless rounded portraits use the full artwork area without enlarging the UI",()=>{
   assert.match(rule(".character-avatar"),/border-radius:8px/);
   assert.match(rule(".portrait-frame"),/flex:0 0 auto; line-height:0/);
   assert.match(rule(".combat-actions button::before"),/width:40px; height:40px/);
   assert.match(rule(".combat-actions button::before"),/border-radius:8px/);
   assert.match(rule(".combat-actions button"),/grid-template-columns:40px minmax\(0,1fr\)/);
-  const highlight=rule(".party-member.you .character-avatar, .party-member.spotlight .character-avatar");
-  assert.match(highlight,/border-color/);
-  assert.doesNotMatch(highlight,/background:/);
+  assert.match(rule(".character-avatar"),/border:0/);
+  assert.match(rule(".painted-portrait"),/box-shadow:none/);
+  assert.match(rule(".combat-actions button::before"),/border:0/);
+  assert.equal(rule(".party-member.you .character-avatar, .party-member.spotlight .character-avatar"),"");
+  assert.equal(rule(".party-member.companion .party-portrait, .party-member.companion .character-avatar"),"");
   assert.match(rule(".party-strip"),/minmax\(0,auto\)/);
   assert.match(rule(".story-feed"),/var\(--party-bar-height\)/);
 });
