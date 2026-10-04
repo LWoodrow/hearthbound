@@ -119,6 +119,7 @@ test("AI authentication, loading, network and malformed response errors are boun
   await assert.rejects(aiRequest(profile,"/health",{fetchImpl:async()=>({ok:false,status:401})}),/API key/);
   await assert.rejects(aiRequest(profile,"/health",{fetchImpl:async()=>({ok:false,status:503})}),/loading/);
   await assert.rejects(aiRequest(profile,"/health",{fetchImpl:async()=>{throw Error("private-key");}}),/Cannot reach/);
+  await assert.rejects(aiRequest(profile,"/health",{fetchImpl:async()=>{throw new DOMException("private-key","TimeoutError");}}),/may still be loading/);
   await assert.rejects(generateStructured(profile,[],{}, {},async()=>response({choices:[]})),/structured answer/);
   await assert.rejects(generateStructured(profile,[],{}, {},async()=>response({choices:[{message:{content:"invalid"}}]})));
 });

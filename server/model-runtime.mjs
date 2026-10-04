@@ -26,7 +26,7 @@ export async function testAiConnection(settings) {
   const profile = profileForSettings(settings);
   const models = await discoverAi(profile);
   if (!models.some(item => item.name === settings.model)) throw new Error(`The server does not advertise '${settings.model}'. Choose one of: ${models.map(item => item.name).join(", ") || "no models available"}.`);
-  const result = await generateStructured(profile, [{ role:"user", content:'Return JSON: {"ready":true}.' }], { type:"object", properties:{ ready:{ type:"boolean" } }, required:["ready"], additionalProperties:false }, { temperature:0, numPredict:24, timeoutMs:30000 });
+  const result = await generateStructured(profile, [{ role:"user", content:'Return JSON: {"ready":true}.' }], { type:"object", properties:{ ready:{ type:"boolean" } }, required:["ready"], additionalProperties:false }, { temperature:0, numPredict:24, timeoutMs:150000 });
   if (result?.ready !== true) throw new Error("The server responded, but the structured JSON test failed.");
   return { ok:true, message:"Connection and structured JSON are ready.", models };
 }

@@ -7,7 +7,7 @@ export async function aiRequest(profile, path, { body, timeoutMs = 2500, fetchIm
       method:body ? "POST" : "GET", headers:{ "Content-Type":"application/json", ...(profile.apiKey ? { Authorization:`Bearer ${profile.apiKey}` } : {}) },
       ...(body ? { body:JSON.stringify(body) } : {}), signal:AbortSignal.timeout(timeoutMs),
     });
-  } catch { throw new Error("Cannot reach the AI server. Check its address, that it is running, and the connection timeout."); }
+  } catch (error) { throw new Error(["TimeoutError", "AbortError"].includes(error?.name) ? "The AI response timed out. The model may still be loading; wait, then test again." : "Cannot reach the AI server. Check its address and that it is running."); }
   if (!response.ok) throw new Error(response.status === 401 || response.status === 403 ? "The AI server rejected the API key." : response.status === 503 ? "The AI server is still loading or unavailable." : `The AI server returned HTTP ${response.status}.`);
   return response.json();
 }

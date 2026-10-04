@@ -28,7 +28,7 @@ export function AiSettings({ close }:{close:()=>void}) {
   const update = (change:Partial<Settings>) => { setSettings(previous => previous ? {...previous,...change} : previous); setNotice(""); setError(""); };
   const draft = () => ({ ...settings, apiKey:key, clearApiKey:clearKey });
   const action = async (name:string) => {
-    setBusy(name); setError(""); setNotice("");
+    setBusy(name); setError(""); setNotice(name === "test" ? "Testing the server and structured JSON. Loading a model for the first time can take a few minutes." : "");
     try {
       if (name === "save" || name === "start") {
         const saved = await request<Snapshot>("/api/ai/settings", draft(), "PUT");
