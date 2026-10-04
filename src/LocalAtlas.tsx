@@ -12,7 +12,7 @@ export function LocalAtlas({atlas,busy,travel,act}:{atlas:LocalAtlasData;busy:bo
   return <section className="world-atlas local-atlas">
     <header><div><span className="eyebrow">Local atlas · Public paths and discovered places</span><h1>{atlas.title}</h1><p>{atlas.introduction}</p></div><div className="atlas-zoom" aria-label="Local map zoom"><button type="button" disabled={zoom<=1} onClick={()=>setZoom(value=>Math.max(1,value-.5))} aria-label="Zoom local map out">−</button><button type="button" onClick={()=>setZoom(1)}>{Math.round(zoom*100)}%</button><button type="button" disabled={zoom>=3} onClick={()=>setZoom(value=>Math.min(3,value+.5))} aria-label="Zoom local map in">+</button></div></header>
     <div className="illustrated-atlas-scroll"><div className="illustrated-atlas-plate" style={{width:`${zoom*100}%`}}>
-      <img src={atlas.image} alt={atlas.imageAlt}/>
+      {atlas.schematic?<div className="city-survey-background" role="img" aria-label={atlas.imageAlt}/>:atlas.imageViewport?<div className="city-district-art" role="img" aria-label={atlas.imageAlt} style={{backgroundImage:`url(${atlas.image})`,backgroundSize:`${atlas.imageViewport.scale*100}%`,backgroundPosition:`${atlas.imageViewport.x}% ${atlas.imageViewport.y}%`}}/>:<img src={atlas.image} alt={atlas.imageAlt}/>}
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="illustrated-atlas-roads" aria-hidden="true">{atlas.routes.map(route=>{
         const from=atlas.sites.find(place=>place.id===route.from),to=atlas.sites.find(place=>place.id===route.to);
         return from&&to?<path key={route.from+route.to} className={route.travelled?"travelled":""} d={`M${from.x} ${from.y} L${to.x} ${to.y}`}/>:null;

@@ -5,17 +5,21 @@ import {visibleLocationDescription,requirementsMet} from "./world-state.mjs";
 import {willowfordAtlas} from "./adventures/willowford.mjs";
 import {rivergateAtlas} from "./adventures/rivergate.mjs";
 import {stonecrossAtlas} from "./adventures/stonecross.mjs";
+import {cityAtlases,cityOverview,undercityAtlas} from "./adventures/eldervale-city.mjs";
 import {carriageServices} from "./adventures/carriage-network.mjs";
 import {projectScene} from "./scene-projection.mjs";
 import {adventureRules,authoredRouteContext,locationIsRevealed} from "./adventure-rules.mjs";
 
 // Future settlements provide the same data shape; projection never creates geography.
-const settlements=[willowfordAtlas,rivergateAtlas,stonecrossAtlas];
-function localView(state,reason) {
-  const settlement=settlements.find(entry=>entry.places.some(place=>place.id===state.currentLocation));
+const settlements=[willowfordAtlas,rivergateAtlas,stonecrossAtlas,...cityAtlases,undercityAtlas];
+export function projectLocalAtlas(state,reason="",override=null) {
+  const settlement=override||settlements.find(entry=>entry.places.some(place=>place.id===state.currentLocation));
   if(!settlement) return null;
   const exits=projectScene(eldervaleRoads,state).exits;
-  const sites=settlement.places.filter(place=>requirementsMet(state,place.requires||[])).map(place=>({
+  // Only an actually eligible cross-layer exit adds a descent/return marker.
+  // Public city art must not disclose an unbriefed underground destination.
+  const boundary=exits.filter(exit=>!settlement.places.some(place=>place.id===exit.to)&&(settlement.schematic||settlements.some(atlas=>atlas.schematic&&atlas.places.some(place=>place.id===exit.to)))).map((exit,index)=>({id:exit.to,name:eldervaleRoads.locations[exit.to].name,x:12+index*24,y:5}));
+  const sites=[...settlement.places,...boundary].filter(place=>requirementsMet(state,place.requires||[])&&(!settlement.schematic||state.visited.includes(place.id)||exits.some(exit=>exit.to===place.id))).map(place=>({
     id:place.id,name:place.name,x:place.x,y:place.y,kind:"local",
     description:visibleLocationDescription(eldervaleRoads,state,place.id),
     visited:state.visited.includes(place.id),current:state.currentLocation===place.id,
@@ -24,8 +28,8 @@ function localView(state,reason) {
   }));
   const visible=new Set(sites.map(site=>site.id));
   const task=settlement.taskStages.find(stage=>requirementsMet(state,stage.requires))?.text||"Explore the public places.";
-  return {id:settlement.id,title:settlement.title,image:settlement.image,imageAlt:settlement.imageAlt,introduction:settlement.introduction,returnHint:settlement.returnHint,sites,
-    routes:settlement.links.filter(([from,to])=>visible.has(from)&&visible.has(to)).map(([from,to])=>({from,to,travelled:traversed(state,from,to)})),
+  return {id:settlement.id,title:settlement.title,image:settlement.image,imageAlt:settlement.imageAlt,imageViewport:settlement.imageViewport,schematic:settlement.schematic,introduction:settlement.introduction,returnHint:settlement.returnHint,sites,
+    routes:[...settlement.links,...boundary.map(place=>[state.currentLocation,place.id])].filter(([from,to])=>visible.has(from)&&visible.has(to)&&(!settlement.schematic||state.visited.includes(from)&&state.visited.includes(to)||exits.some(exit=>exit.to===from||exit.to===to))).map(([from,to])=>({from,to,travelled:traversed(state,from,to)})),
     task,actions:availableInteractions(eldervaleRoads,state).filter(action=>settlement.actionIds.includes(action.id)).map(action=>({id:action.id,text:action.verbs[0]+" "+action.targets[0]})),
     reason};
 }
@@ -77,7 +81,7 @@ export function regionalAtlasView(db,player) {
   if (completed("ashes-briarwatch") || currentSlug==="hollow-star") sites.push({id:"court",name:"Astronomer's Court",x:49,y:52,kind:"chapter",description:"A later main-story destination in Eldervale City. Continue through the campaign rather than skipping its discoveries.",current:currentSite==="court",visited:currentSlug==="hollow-star",available:false,npcs:[]});
   return {image:"/art/maps/eldervale-atlas-v1.png",title:party.worldName,exploring,currentSite,sites,
     routes:regionalLinks.map(([from,to])=>({from,to,travelled:traversed(state,from,to)})),
-    local:exploring?localView(state,reason):null,carriages:exploring?transportView(state,reason):[],
+    local:exploring?projectLocalAtlas(state,reason):null,city:exploring&&(state.currentLocation==="city"||settlement?.root==="city")?projectLocalAtlas(state,reason,cityOverview):null,carriages:exploring?transportView(state,reason):[],
     canExplore:departureSafe&&!reason,canReturn:exploring&&state.currentLocation==="city"&&Boolean(resume?.adventureId)&&!reason,
     departureDescription:gateway?.description || "",
     reason:reason || (!exploring&&!departureSafe ? departureReason : ""),
@@ -87,7 +91,7 @@ export function regionalAtlasView(db,player) {
 
 export function regionalTravelCommand(db,player,destinationId) {
   const view=regionalAtlasView(db,player);
-  const site=view?.local?.sites.find(entry=>entry.id===destinationId)||view?.sites.find(entry=>entry.id===destinationId);
+  const site=view?.local?.sites.find(entry=>entry.id===destinationId)||view?.city?.sites.find(entry=>entry.id===destinationId)||view?.sites.find(entry=>entry.id===destinationId);
   if (!view?.exploring || !site?.available) throw new Error(view?.reason || "Choose an available connected road; that destination cannot be reached directly.");
   return site.travelText;
 }

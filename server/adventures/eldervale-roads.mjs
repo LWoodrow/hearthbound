@@ -1,4 +1,5 @@
 import {assertValidAdventure} from "../adventure-schema.mjs";
+import {withEldervaleCity} from "./eldervale-city.mjs";
 import {withRegionalResidents} from "./regional-residents.mjs";
 import {willowfordLocations,willowfordNpcs,willowfordInteractions,willowfordFlags,willowfordDiscoveries,willowfordClues} from "./willowford.mjs";
 import {carriageInteractions} from "./carriage-network.mjs";
@@ -25,7 +26,7 @@ const characters=[
   {id:"watcher",name:"Perrin Vale",location:"hill",role:"Signal Hill lookout",voice:"Cheerful, precise about what can actually be seen.",facts:["Signal Hill overlooks the river valley.","Perrin watches weather and the public roads, not hidden activity in distant towers.","The hill has marked routes to the city, Greyfen and Mosswood."],greeting:"Perrin shades his eyes against the sun. “Room for another pair of eyes up here. The river tells a different story from this height.”"},
 ];
 const npcs=Object.fromEntries(characters.map(c=>[c.id,{name:c.name,role:c.role,locations:[c.location],goals:["Look after their community","Talk with visiting adventurers"],knows:c.facts,voice:c.voice,mustNotKnow:["Hidden main-campaign answers or future adventure outcomes"],conversation:{publicFacts:c.id==="ferryman"?c.facts.slice(0,1):c.facts,conditionalFacts:c.id==="ferryman"?[{requires:[{path:"flags.ferryRepaired",equals:false}],fact:c.facts[1]},{requires:[{path:"flags.ferryRepaired",equals:false}],fact:c.facts[2]},{requires:[{path:"flags.ferryRepaired",equals:true}],fact:"The company repaired the mooring; the ferry is working safely again."}]:[]}}]));
-export const eldervaleRoads=assertValidAdventure(withRegionalResidents({
+export const eldervaleRoads=assertValidAdventure(withEldervaleCity(withRegionalResidents({
   schemaVersion:1,id:"eldervale-roads",title:"The Roads of Eldervale",startLocation:"city",stateKey:"region",initializeOnSelection:true,
   premise:"Explore the river settlements at your own pace while keeping the Hollow Road investigation separate and resumable.",
   initialFlags:{ferryRepaired:false,storyRecorded:false,...willowfordFlags,...rivergateFlags,...stonecrossFlags},initialResources:{},initialClocks:{},
@@ -50,5 +51,5 @@ export const eldervaleRoads=assertValidAdventure(withRegionalResidents({
     {id:"repair-ferry",idempotencyKey:"region:ferry-repaired",location:"ferry",modes:["act"],verbs:["repair","secure","tie","fix"],targets:["mooring","rope","ferry","landing ring"],effects:[{op:"set",path:"flags.ferryRepaired",value:true},{op:"add",path:"discoveries",value:"ferry-restored"}],outcome:{message:"The company secures the sound spare rope to the landing ring. Jory tests the mooring, then smiles. “That'll hold. Thank you.” Stonecross Ferry is working again. The company stays at the landing.",publicFacts:["The Stonecross mooring is repaired.","No money, item or main-campaign milestone is awarded."]},repeat:{message:"The mooring is already secure; Jory's ferry remains in service."}},
     {id:"record-travel-story",idempotencyKey:"region:story-recorded",location:"abbey",modes:["act","speak"],verbs:["share","tell","record","write"],targets:["story","travels","register","Iona"],effects:[{op:"set",path:"flags.storyRecorded",value:true},{op:"add",path:"discoveries",value:"traveller-record"}],outcome:{message:"Iona records only the account the company chooses to share. “The road is made of people, too,” she says, closing the register. No private discovery or hidden adventure answer is disclosed.",publicFacts:["The company shared a voluntary traveller account at Greyfen."]},repeat:{message:"Iona remembers the company's visit and welcomes another conversation; no duplicate reward is granted."}},
   ],
-}));
+})));
 export default eldervaleRoads;

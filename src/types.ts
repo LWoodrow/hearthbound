@@ -176,9 +176,11 @@ export type RegionalAtlas = {
   routes:Array<{from:string;to:string;travelled:boolean}>;
   activities:{ferryRepaired:boolean;storyRecorded:boolean};
   local:LocalAtlasData|null;
+  city?:LocalAtlasData|null;
   carriages:Array<{id:string;label:string;text:string;available:boolean;reason:string}>;
 };
 export type LocalAtlasData={
+  imageViewport?:{x:number;y:number;scale:number};schematic?:boolean;
   id:string;title:string;image:string;imageAlt:string;introduction:string;returnHint:string;sites:RegionalAtlas["sites"];routes:RegionalAtlas["routes"];
   task:string;reason:string;actions:Array<{id:string;text:string}>;
 };
