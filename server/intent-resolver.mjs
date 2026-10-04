@@ -1,9 +1,9 @@
-import { tokenEquivalent } from "./semantic-tokens.mjs";
+import { tokenEquivalent, meaningfulReferenceWords } from "./semantic-tokens.mjs";
 
 const normalise = (value) => String(value || "").toLowerCase().replace(/[’']/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 const words = (value) => normalise(value).split(" ").filter(Boolean);
 const LOW_SIGNAL_WORDS = new Set(["some","somewhere","thing","things","place","places","area","areas","room","rooms"]);
-const meaningfulWords = (value) => words(value).filter((word) => word.length > 3 && !LOW_SIGNAL_WORDS.has(word));
+const meaningfulWords = (value) => meaningfulReferenceWords(value).filter((word) => !LOW_SIGNAL_WORDS.has(word));
 
 const VERB_FAMILIES = {
   observe:["look","inspect","examine","study","search","investigate","read","check"],
@@ -33,7 +33,7 @@ function phrasePresent(action, phrase) {
   const haystack = normalise(action);
   const needle = normalise(phrase);
   if (!needle) return false;
-  if (haystack.includes(needle)) return true;
+  if (` ${haystack} `.includes(` ${needle} `)) return true;
   const actionWords = new Set(words(action));
   const meaningful = meaningfulWords(phrase);
   return meaningful.length > 0 && meaningful.every((word) => [...actionWords].some((item) => tokenEquivalent(item, word)));
@@ -43,7 +43,7 @@ function entityScore(action, entity) {
   const aliases = [entity.id, entity.name, entity.label, ...(entity.aliases || [])].filter(Boolean);
   let score = 0;
   for (const alias of aliases) {
-    if (normalise(action).includes(normalise(alias))) score = Math.max(score, 1);
+    if (` ${normalise(action)} `.includes(` ${normalise(alias)} `)) score = Math.max(score, 1);
     else {
       const aliasWords = meaningfulWords(alias);
       const actionWords = new Set(meaningfulWords(action));
@@ -86,7 +86,7 @@ export function interactionMatch(interaction, action, mode = "act", turn = null)
   const parsed = turn?.parsed || parseLiteralIntent(action, mode);
   const verbs = interaction.verbs || [];
   const modeMatch = !interaction.modes?.length || interaction.modes.includes(mode);
-  const verbMatch = verbs.some((verb) => words(verb).every((word) => words(scopedAction).includes(word))
+  const explicitVerbMatch = verbs.some((verb) => words(verb).every((word) => words(scopedAction).includes(word))
     || equivalentVerbPresent(scopedAction, verb));
   const targets = [...(interaction.targets || []), ...(interaction.representations || [])];
   const target = resolveEntityReferences(scopedAction, targets.map((name, index) => ({ id:`target:${index}`, name })));
@@ -104,5 +104,14 @@ export function interactionMatch(interaction, action, mode = "act", turn = null)
   const instrumentMatch = !interaction.instruments?.length
     || exactInstrumentMatch
     || Boolean(instrument.selected && instrument.selected.confidence > .5);
-  return { parsed, modeMatch, verbMatch, targetMatch, instrumentMatch, groupMatch:matchAll, target, instrument };
+  // Authors opt a social affordance into elliptical requests. This never
+  // infers a physical command, an instrument, or an unrecorded promise.
+  const ellipticalRequest = interaction.request?.implicit === true
+    && (parsed.verb === (mode === "speak" ? "speak" : "other")
+      || (parsed.verb === "use" && /^(?:a|an|some|somewhere)\b/.test(normalise(scopedAction))
+        && !VERB_FAMILIES.use.filter((verb)=>verb !== "place").some((verb)=>words(scopedAction).includes(verb))))
+    && !/^(?:is|are|who|what|where|why|how|can|could|would|may)\b/.test(normalise(scopedAction).replace(/^\w+\s+(?=is|are|who|what|where|why|how|can|could|would|may)/,""))
+    && /\b(?:please|somewhere|some|a|an)\b/.test(normalise(scopedAction))
+    && (interaction.request.subjects || []).some((subject) => phrasePresent(scopedAction, subject));
+  return { parsed, modeMatch, implicitRequest:ellipticalRequest && !explicitVerbMatch, verbMatch:explicitVerbMatch || ellipticalRequest, targetMatch:targetMatch || ellipticalRequest, instrumentMatch, groupMatch:matchAll, target, instrument };
 }

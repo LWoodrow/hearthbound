@@ -224,5 +224,11 @@ test("a complete authored descent fights both encounters and ends in the Briarwa
     assert.equal(getActiveAdventure(f.db,f.party.id).status,"complete");
     await f.act("where should we go next Mara?","speak");
     assert.match(listVisibleEvents(f.db,f.player).at(-1).text,/Briarwatch.*north road/);
+    await f.act("escort Mara back to the inn");
+    assert.equal(f.state().currentLocation,"inn");
+    assert.equal(f.state().flags.maraSafeAtInn,true);
+    assert.equal(getPartyState(f.db,f.party.id,"combat").active,false);
+    await f.act("rest by the hearth");
+    assert.equal(f.state().flags.aftermathRested,true);
   } finally {Math.random=random;f.close();}
 });

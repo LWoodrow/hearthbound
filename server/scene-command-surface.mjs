@@ -1,5 +1,5 @@
 import { availableInteractions, createCanonicalState } from "./interaction-engine.mjs";
-import { requirementsMet, visibleLocationFeatures, visiblePortableItems } from "./world-state.mjs";
+import { requirementsMet, visibleLocationFeatures, visiblePortableItems, npcLocations, npcCanHear } from "./world-state.mjs";
 
 const normalise = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
@@ -115,8 +115,11 @@ export function buildSceneCommandSurface(definition, suppliedState = {}, { inven
   }));
   const exits = (location.exits || []).map((route) => visibleExit(definition, state, state.currentLocation, route)).filter(Boolean);
   const presentNpcs = Object.entries(definition.story?.npcs || {})
-    .filter(([, npc]) => (npc.locations || []).includes(state.currentLocation))
+    .filter(([, npc]) => npcLocations(npc, state).includes(state.currentLocation))
     .map(([id, npc]) => ({ id, name:npc.name, role:npc.role || "" }));
+  const hearableNpcs = Object.entries(definition.story?.npcs || {})
+    .filter(([, npc]) => npcCanHear(definition, state, npc))
+    .map(([id, npc]) => ({id, name:npc.name, role:npc.role || "", nearby:!npcLocations(npc,state).includes(state.currentLocation)}));
   const carriedItems = (Array.isArray(inventory) ? inventory : []).map((item) => ({
     id:String(item.id || item.name || ""), name:String(item.name || ""), quantity:Number(item.quantity || 1), status:String(item.status || "carried"),
   })).filter((item) => item.id && item.name);
@@ -139,6 +142,7 @@ export function buildSceneCommandSurface(definition, suppliedState = {}, { inven
     localPortableItems,
     exits,
     presentNpcs,
+    hearableNpcs,
     carriedItems,
     interactions,
     pendingOffer:pending,

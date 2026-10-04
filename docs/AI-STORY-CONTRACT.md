@@ -45,6 +45,8 @@ Combat victories and other subsystem outcomes obey that same transaction boundar
 
 Input mode is part of authority. Unmatched `Speak` input is state-neutral. It may become bounded conversation or an explicitly authored social interaction, but it cannot open, use, move, take, warm, attack, or otherwise execute a physical command merely because those words were spoken aloud.
 
+Registered structured adventures reject unresolved physical input before any director/narrator call even when no schema-v2 save has yet been written. Compatibility migration remains isolated; a model cannot fill gaps between old and canonical state with invented success. Nearby spoken replies use the same open-connection hearing rules as calls; a heard-only NPC uses an authored response and receives no authority to see, move, rescue or attack across the room boundary.
+
 ## Accepted director fields
 
 ### Public facts
@@ -92,6 +94,8 @@ Scene packets use conditional current descriptions, visible features and eligibl
 NPC output must cite only exact permitted facts in its structured usedFacts field. Unsupported citations fall back to rules-based dialogue. This is not a complete semantic validator: uncited invented prose can still evade a citation check. Quest-critical NPC presentations can supply an authored reply, and completed adventures use authored aftermath instead of asking a model to reinvent the rescue condition.
 
 Accepted authored turns evaluate the completion milestone inside the same database savepoint as world state, narration and entry events. Campaign status, earned level-up eligibility and the series discovery are committed together and awarded once. Older saves with satisfied canonical milestones but an active campaign row are repaired on the next resolved action without resetting their world.
+
+A playable aftermath is a continuation of that canonical world, not a reversal of completion. Conditional NPC presence and checked, explored return journeys are authored transitions. Rewards remain earned, completed encounters cannot respawn, and rest flavour does not restore mechanical resources without a real rest rule. The closing view exposes only its currently eligible scene and local actions; starting the authored next adventure is an authenticated, explicitly chosen operation rechecked against campaign completion, location, combat and all party levels.
 
 Trace assessment without authoritative fact terms is unassessed, not a claim that arbitrary dialogue was proven consistent. Existing term coverage and movement checks remain diagnostics, not semantic verification.
 

@@ -1551,10 +1551,13 @@ test("completed adventures stay complete and rescued NPCs do not become trapped 
   try {
     const party=buildLobby(item.db).worlds[0].parties[0];
     const player=createPlayer(item.db,{partyId:party.id,name:"Dad",species:"Human",className:"Fighter"});
+    const rescued=createCanonicalState(lanternBelowAdventure,{currentLocation:"alcove",visited:["alcove"],flags:{guardianDefeated:true,maraRescued:true,adventureComplete:true}});
+    setPartyState(item.db,party.id,"world:lantern-below",rescued);
+    setPartyState(item.db,party.id,"dm",canonicalProjection(lanternBelowAdventure,rescued));
     completeActiveAdventure(item.db,party.id);
     await resolveAction(item.db,player,"speak","are you okay Mara?");
     const narration=listVisibleEvents(item.db,player).filter((event)=>event.kind==="narration").at(-1).text.toLowerCase();
-    assert.match(narration,/you got me out|mara is free/);
+    assert.match(narration,/you got me out|mara is free|i['’]?m free/);
     assert.match(narration,/briarwatch/);
     assert.equal(narration.includes("trapped"),false);
     assert.equal(getPartyState(item.db,party.id,`pendingCheck:${player.id}`),null);

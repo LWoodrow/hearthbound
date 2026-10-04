@@ -4,7 +4,7 @@ import { applyAdventureEvent, adventureRules, authoredRouteContext, featureLocat
 import { handleCombatAction, startLocationEncounter } from "./combat.mjs";
 import { projectScene, projectNpc, supportedNpcOutput } from "./scene-projection.mjs";
 import { adventureDefinition } from "./adventure-registry.mjs";
-import { createInitialWorldState, requirementsMet, resolveWorldAction, npcCanHear } from "./world-state.mjs";
+import { createInitialWorldState, requirementsMet, resolveWorldAction, npcCanHear, npcLocations } from "./world-state.mjs";
 import { currentModelProfile, isCurrentModelReady } from "./model-runtime.mjs";
 import { buildPromptPacket, recordPromptPacket } from "./prompt-packets.mjs";
 import { narrationStylePrompt } from "./narration-styles.mjs";
@@ -923,17 +923,19 @@ function resolveVisibleNpcQuestion(db, player, adventure, dmState, mode, action)
   const saved = getPartyState(db, player.partyId, `world:${definition.id}`);
   const locationId = saved?.currentLocation || dmState.currentLocationKey || definition.startLocation;
   const npc = Object.values(definition.story?.npcs || {}).find((entry) =>
-    (entry.locations || []).includes(locationId)
+    npcLocations(entry,saved || {}).includes(locationId)
     && words.includes(String(entry.name || '').toLowerCase().split(' ')[0]));
   if (!npc) return false;
-  const text = npc.appearance || `No further visible description is authored for ${npc.name}.`;
+  const text = projectNpc(npc,saved || {}).appearance || `No further visible description is authored for ${npc.name}.`;
   addEvent(db,{partyId:player.partyId,adventureId:adventure?.id,visibility:'public',playerId:player.id,kind:'narration',speaker:'Dungeon Master',text});
   return true;
 }
 
 function addressedNpc(definition, world, action) {
   const words=String(action || "").toLowerCase();
-  const present=Object.entries(definition?.story?.npcs || {}).filter(([,npc])=>(npc.locations || []).includes(world.currentLocation));
+  const present=Object.entries(definition?.story?.npcs || {}).filter(([,npc])=>npcCanHear(definition,world,npc));
+  const reference=interpretSceneTurn(buildSceneCommandSurface(definition,world),action,"speak").sceneReference;
+  if (reference.selected?.entityType === "npc") return present.find(([id])=>id === reference.selected.id) || null;
   const explicit=present.find(([,npc])=>{
     const first=String(npc.name || "").toLowerCase().split(/\s+/)[0];
     const role=String(npc.role || "").toLowerCase();
@@ -944,7 +946,7 @@ function addressedNpc(definition, world, action) {
   // With one important NPC present, natural second-person requests can reach
   // them without repeating their name. Authored state changes have already had
   // first refusal; this branch remains state-neutral conversation.
-  return /\b(hello|hi|thanks|thank you|please|you|your|yourself|who are|how are|what do|what is|why|where|when|tell me|ask|say|speak|talk|could|can|would|may|bring|get|have|serve|order|work|job|jobs|problem|problems|trouble|troubles|adventurer|adventurers)\b|\b(?:looking for|we(?:'d| would) like)\b/.test(words) ? present[0] : null;
+  return /\b(hello|hi|thanks|thank you|please|you|your|yourself|who|how are|what do|what is|why|where|when|tell me|ask|say|speak|talk|shout|call|could|can|would|may|bring|get|have|serve|order|work|job|jobs|problem|problems|trouble|troubles|adventurer|adventurers)\b|\b(?:looking for|we(?:'d| would) like)\b/.test(words) ? present[0] : null;
 }
 
 function fallbackNpcReply(npc, action, facts) {
@@ -977,7 +979,7 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
     && active.locationId === world.currentLocation
     && Number(active.worldRevision || 0) === Number(world.revision || 0)
     && definition.story?.npcs?.[active.npcId]
-    && (definition.story.npcs[active.npcId].locations || []).includes(world.currentLocation)
+    && npcCanHear(definition,world,definition.story.npcs[active.npcId])
     ? [active.npcId,definition.story.npcs[active.npcId]]
     : null;
   const found=addressedNpc(definition,world,action) || activeNpc;
@@ -993,7 +995,12 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
   let reply="";
   let packetId;
   const automatedTestRun=process.argv.some((argument)=>/\.test\.mjs$/i.test(String(argument)));
-  if (projection.authoredReply) {
+  const heardOnly = !npcLocations(npc,world).includes(world.currentLocation);
+  if (heardOnly && npc.callResponse && requirementsMet(world,npc.callResponse.requires || [])) {
+    reply=npc.callResponse.text;
+  } else if (heardOnly) {
+    reply=`${npc.name} can hear the company from nearby, but has no further reply to offer just now.`;
+  } else if (projection.authoredReply) {
     reply=projection.authoredReply;
   } else if (process.env.DND_LIVE_NPC_TESTS !== "1" && automatedTestRun) {
     reply=fallbackNpcReply(npc,action,facts);
@@ -1039,7 +1046,7 @@ function addLocationEntryBeats(db,player,adventure,definition,locationId) {
     setPartyState(db,player.partyId,key,{seen:true,locationId});
     addEvent(db,{partyId:player.partyId,adventureId:adventure.id,visibility:"public",playerId:player.id,kind:"narration",speaker:npc.name,text:beat.text,payload:{npcId:beat.npc,entryBeat:beat.id}});
   }
-  startLocationEncounter(db,player,definition,world);
+  if (getActiveAdventure(db,player.partyId)?.status !== "complete") startLocationEncounter(db,player,definition,world);
 }
 
 function resolveRepeatedPickup(db,player,mode,action,recentHistory){
@@ -1667,7 +1674,7 @@ export async function resolveAction(db, player, mode, action) {
     completeActiveAdventure(db,player.partyId);
     adventure=getActiveAdventure(db,player.partyId);
   }
-  if(adventure?.status==="complete"){
+  if(adventure?.status==="complete" && !definition?.aftermath?.playable){
     const aftermath=definition?.aftermath;
     const text=aftermath&&mode==="speak"
       ? aftermath.reply
@@ -1731,14 +1738,21 @@ export async function resolveAction(db, player, mode, action) {
   if (mode === "ask") return { ...(await resolveDmQuestion(db, player, action, preparedContext, playerSafeHistory)), rule:"dm-question" };
   if (!canonicalSaveIsActive && resolveAuthoritativeClueAction(db, player, adventure, dmState, action, preparedContext)) return { source: "rules",rule:"authoritative-clue" };
   if (!canonicalSaveIsActive && resolveBriarwatchClueAction(db, player, adventure, dmState, action, preparedContext)) return { source:"rules",rule:"briarwatch-clue" };
-  if (canonicalSaveIsActive && mode === "act") {
-    const state = createCanonicalState(definition, getPartyState(db, player.partyId, `world:${definition.id}`));
+  // Registered worlds remain authoritative even before their first accepted
+  // turn persists a v2 save. Compatibility adapters can migrate old records,
+  // but an unresolved input can never ask AI to invent a physical success.
+  if (definition && mode === "act") {
+    const state = createCanonicalState(definition, getPartyState(db, player.partyId, `world:${definition.id}`) || {});
     const surface = buildSceneCommandSurface(definition, state, { inventory:listInventory(db, player.id) });
     const turn = interpretSceneTurn(surface, action, mode);
     const room = surface.location.name;
+    const feature = turn.sceneReference.selected?.entityType === "feature" ? turn.sceneReference.selected : null;
+    const routes = surface.exits.filter((entry)=>entry.available).map((entry)=>entry.destination);
     const message = turn.worldIntent === "move"
-      ? `No established route matching that movement is available from ${room}. The party remains here.`
-      : `No established result for that action is available in ${room}. The scene remains unchanged.`;
+      ? `No established route matching that movement is available from ${room}. The party remains here.${routes.length ? ` Available destinations: ${routes.join(", ")}.` : ""}`
+      : feature && !["door","container","mechanism"].includes(feature.kind)
+        ? `${feature.label} is visible scenery, but no ${turn.parsed.verb === "open" ? "opening or contents" : "operation"} is established for it. You can inspect it; nothing is moved, taken or revealed.`
+        : `No established result for that action is available in ${room}. The scene remains unchanged. Try inspecting a visible feature or naming a current exit.`;
     addEvent(db, { partyId:player.partyId, adventureId:adventure?.id, visibility:"public", playerId:player.id, kind:"narration", speaker:"Dungeon Master", text:message, payload:{ canonicalRevision:state.revision, canonicalEvents:[] } });
     return { source:"rules", rule:"unresolved-structured-action", accepted:false, reason:"unresolved-action", publicFacts:[message], narration:message };
   }

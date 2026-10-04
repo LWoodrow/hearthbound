@@ -118,7 +118,7 @@ test("canonical projections derive legacy location and stage without a second mu
   state = run(state, "give the mite fresh ink", "offer-mite-ink");
   assert.deepEqual(assertCanonicalState(lanternBelowAdventure, state), []);
   assert.deepEqual(canonicalProjection(lanternBelowAdventure, state), {
-    privateRoomPermission:false, pantryPermission:false, letterOpened:true, suppliesLocated:false, miteAwake:true, inkOffered:true, mapDrawn:true, cellarSwarmResolved:false, guardianDefeated:false, maraRescued:false, adventureComplete:false,
+    privateRoomPermission:false, pantryPermission:false, letterOpened:true, suppliesLocated:false, miteAwake:true, inkOffered:true, mapDrawn:true, cellarSwarmResolved:false, guardianDefeated:false, maraRescued:false, maraSafeAtInn:false, aftermathRested:false, adventureComplete:false,
     currentLocationKey:"back-room", locationName:"Private Back Room", locationNote:lanternBelowAdventure.locations["back-room"].description,
     clueStage:2, dangerClock:0, storyDiscoveries:["mara-sent-message","mite-awake"],
     lanternArrivalStage:2,

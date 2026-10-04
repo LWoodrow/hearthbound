@@ -108,6 +108,7 @@ export type GameView = {
   world: { id: string; name: string };
   group: { id: string; name: string };
   campaign: { title: string; chapter: string; scene: string; minLevel: number; maxLevel: number };
+  aftermath: null | {title:string;summary:string;actions:Array<{interactionId:string;label:string;text:string;mode:"act";available:boolean}>;nextAdventure:null|{id:string;title:string;minLevel:number;available:boolean}};
   player: Player;
   party: Player[];
   npcPortraits: Record<string, string>;

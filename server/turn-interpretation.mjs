@@ -6,8 +6,15 @@ import { classifyWorldAction } from "./world-state.mjs";
 // authored and ordinary world resolvers must not independently rediscover a
 // different target from the same sentence.
 export function interpretSceneTurn(surface, action, mode = "act") {
-  const worldIntent = classifyWorldAction(action, mode);
-  const parsed = parseLiteralIntent(action, mode);
+  let worldIntent = classifyWorldAction(action, mode);
+  let parsed = parseLiteralIntent(action, mode);
+  // Transitive move/shift/remove operates a thing; movement through/to a
+  // route navigates. Unknown/remote things stay unhandled, not teleported.
+  if (mode === "act" && /^(?:move|shift|remove)\s+/i.test(String(action).trim())
+    && !/\b(?:to|towards?|through|into|out|up|down|back)\b/i.test(action)) {
+    worldIntent = "other";
+    parsed = {...parsed,verb:"use"};
+  }
   const sceneIntent = worldIntent === "pickup" ? "take"
     : worldIntent === "object" ? "open"
     : worldIntent === "speech" ? "speak"

@@ -2,6 +2,10 @@
 
 Status: ready for the first focused browser playtest on the story-engine guardrail branch.
 
+Current continuation preview (2026-10-04): port **4322**, existing AI-preview save and configured llama.cpp model. Do not use the older disposable 4321 instructions to replace this save. Refresh the preview after the app update; restarting the adventure is optional, not required for the aftermath.
+
+Closing/input retest: an unmatched first turn must not narrate entry; polite quiet-seat requests must reach the authored room; `pickup key` must select only the unique visible key; closed unlocked doors must explain opening. Nearby Say aloud should reach Mara through the open adjacent connection, while Party only and remote physical actions cannot. After rescue, escort Mara back through explored/open rooms to Tamsin, check current NPC presence, stay and talk, complete both earned levels without leaving Adventure, then explicitly choose Briarwatch. Check backtracking, cancelled level choices, a closed return threshold and a second low-level party member. Neither escort nor levelling may re-award completion or respawn encounters. The hearth respite is flavour, not a mechanical Long Rest.
+
 ## Safe test instance
 
 Run `npm run build`, then `npm run playtest`. The test instance uses:

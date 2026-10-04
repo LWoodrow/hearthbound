@@ -4,6 +4,8 @@ This document records agreed future work. It is a planning document; an item bei
 
 ## Delivery order
 
+2026-10-04 closing/input package: implemented generic local short references, contextual manipulation, opted-in social fragments, shared hearing for spoken NPC replies and unresolved-first-turn model rejection. The Lantern Below now has a canonical escort/homecoming, in-story level choices and an optional server-checked Briarwatch continuation. Next: human retest of saved and fresh journeys, mobile layout review and structured migration of Briarwatch; richer map art remains deferred.
+
 1. Create a private GitHub safety baseline and recoverable first release
 2. Preserve reported playtest failures as classified replay fixtures
 3. Add canonical turn traces and one authoritative campaign-state model

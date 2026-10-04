@@ -100,7 +100,18 @@ export function applyEffects(state, effects = []) {
   }
 }
 
-function candidateFor(interaction, state, action, mode, turn = null) {
+export function journeyAvailable(definition, state, journey) {
+  if (!journey) return true;
+  if (!Array.isArray(journey) || journey.length < 2 || journey[0] !== state.currentLocation) return false;
+  return journey.slice(1).every((to,index) => {
+    const route = definition.locations[journey[index]]?.exits?.find((entry)=>entry.to === to);
+    const object = route?.object && state.objects?.[route.object];
+    return route && state.visited.includes(to) && requirementsMet(state,route.requires || [])
+      && object?.discovered !== false && object?.locked !== true && object?.open !== false;
+  });
+}
+
+function candidateFor(interaction, state, action, mode, turn = null, definition = null) {
   // A completed one-shot interaction is an idempotent fact, not a newly
   // unsatisfied action. Its original prerequisites commonly become false as a
   // direct result of completion (for example, opening requires closed=false).
@@ -108,12 +119,13 @@ function candidateFor(interaction, state, action, mode, turn = null) {
   const repeated = interaction.once !== false && state.completedInteractions.includes(interaction.id);
   const failed = repeated ? [] : failedRequirements(state, interaction.requires || []);
   if (interaction.location && interaction.location !== state.currentLocation) failed.push({ path:"currentLocation", predicate:"equals" });
+  if (!repeated && definition && !journeyAvailable(definition,state,interaction.journey)) failed.push({path:"journey",predicate:"traversable"});
   if (!repeated && interaction.forbids && requirementsMet(state, interaction.forbids)) failed.push({ path:"forbids", predicate:"false" });
   const match = interactionMatch(interaction, action, mode, turn);
   // An observation may reveal a mechanism, but cannot itself cross a route or
   // physically open/lock an object, even if authored verb aliases are broad.
   const intent = turn?.worldIntent || classifyWorldAction(action, mode);
-  const physicalEffect = (interaction.effects || []).some((effect) => effect.path === "currentLocation"
+  const physicalEffect = Boolean(interaction.journey) || (interaction.effects || []).some((effect) => effect.path === "currentLocation"
     || /^objects\.[^.]+\.(?:open|locked)$/.test(effect.path || ""));
   const safeMatch = intent === "observe" && physicalEffect ? { ...match, verbMatch:false } : match;
   return { id:interaction.id, kind:"authored-interaction", target:(interaction.targets || [])[0] || "", priority:Number(interaction.priority || 0), ...safeMatch, confidence:safeMatch.target.selected?.confidence || 0, failedPrerequisites:failed, repeated };
@@ -125,6 +137,7 @@ export function availableInteractions(definition, suppliedState, mode = "act") {
     if (interaction.location && interaction.location !== state.currentLocation) return false;
     if (interaction.modes?.length && !interaction.modes.includes(mode)) return false;
     if (!requirementsMet(state, interaction.requires || [])) return false;
+    if (!journeyAvailable(definition,state,interaction.journey)) return false;
     if (interaction.once !== false && state.completedInteractions.includes(interaction.id)) return false;
     return true;
   });
@@ -136,7 +149,7 @@ export function availableInteractions(definition, suppliedState, mode = "act") {
 export function conversationInteractionOffer(definition, suppliedState, action, mode = "speak") {
   const state = createCanonicalState(definition, suppliedState);
   const candidates = (definition.interactions || [])
-    .map((interaction) => ({ interaction, candidate:candidateFor(interaction, state, action, mode) }))
+    .map((interaction) => ({ interaction, candidate:candidateFor(interaction, state, action, mode, null, definition) }))
     .filter(({ candidate }) => candidate.modeMatch
       && candidate.targetMatch
       && candidate.instrumentMatch
@@ -152,7 +165,7 @@ export function conversationInteractionOffer(definition, suppliedState, action, 
 export function resolveAuthoredInteraction({ definition, state:suppliedState, action, mode = "act", excludeInteractionIds = [], turn = null }) {
   const state = createCanonicalState(definition, suppliedState);
   const excluded = new Set(excludeInteractionIds);
-  const candidates = (definition.interactions || []).filter((interaction) => !excluded.has(interaction.id)).map((interaction) => candidateFor(interaction, state, action, mode, turn));
+  const candidates = (definition.interactions || []).filter((interaction) => !excluded.has(interaction.id)).map((interaction) => candidateFor(interaction, state, action, mode, turn, definition));
   const matched = candidates.filter((candidate) => candidate.modeMatch && candidate.verbMatch && candidate.targetMatch && candidate.instrumentMatch && candidate.groupMatch);
   const available = matched.filter((candidate) => candidate.failedPrerequisites.length === 0)
     .sort((a,b) => b.priority - a.priority || b.confidence - a.confidence);
@@ -172,6 +185,10 @@ export function resolveAuthoredInteraction({ definition, state:suppliedState, ac
     return { handled:false, state, diagnostic:{ candidateAffordances:matched, selectedAffordance:"", rejectedAlternatives:matched.map((item) => item.id) } };
   }
   const selected = available[0];
+  if (selected.implicitRequest && available.filter((entry)=>entry.implicitRequest).length > 1) return {
+    handled:true,accepted:false,state,reason:"ambiguous-request",message:"More than one request could fit here. Please name the option you want; the scene remains unchanged.",
+    diagnostic:{candidateAffordances:available,selectedAffordance:"blocked:ambiguous-request",rejectedAlternatives:available.map((entry)=>entry.id)},
+  };
   const interaction = definition.interactions.find((entry) => entry.id === selected.id);
   const repeated = state.completedInteractions.includes(interaction.id);
   if (repeated && interaction.once !== false) return {
@@ -187,6 +204,11 @@ export function resolveAuthoredInteraction({ definition, state:suppliedState, ac
     diagnostic:{ candidateAffordances:candidates, selectedAffordance:`interaction:${interaction.id}`, rejectedAlternatives:candidates.filter((item) => item.id !== interaction.id).map((item) => item.id) },
   };
   const next = clone(state);
+  if (interaction.journey) {
+    next.previousLocation = interaction.journey.at(-2);
+    next.currentLocation = interaction.journey.at(-1);
+    next.visited = [...new Set([...next.visited,...interaction.journey])];
+  }
   applyEffects(next, interaction.effects || []);
   if (interaction.once !== false) addPath(next, "completedInteractions", interaction.id);
   next.revision = Number(state.revision || 0) + 1;
@@ -264,6 +286,9 @@ export function validateInteractions(definition) {
     if (!interaction.verbs?.length || !interaction.targets?.length) errors.push(`${path} needs verbs and targets.`);
     if (interaction.priority !== undefined && !Number.isFinite(Number(interaction.priority))) errors.push(`${path}.priority must be numeric when supplied.`);
     if (interaction.matchAll && (!Array.isArray(interaction.matchAll) || interaction.matchAll.some((group) => !Array.isArray(group) || !group.length))) errors.push(`${path}.matchAll must contain non-empty alias groups.`);
+    if (interaction.request && (interaction.request.implicit !== true || !interaction.request.subjects?.length || !interaction.modes.includes("speak"))) errors.push(`${path}.request must describe an explicitly speakable social affordance with subjects.`);
+    if (interaction.journey && (!Array.isArray(interaction.journey) || interaction.journey.length < 2 || interaction.journey[0] !== interaction.location
+      || interaction.journey.some((id,index,route)=>!definition.locations[id] || (index > 0 && !definition.locations[route[index-1]]?.exits?.some((exit)=>exit.to === id))))) errors.push(`${path}.journey must be an adjacent authored path from its location.`);
     if (!interaction.outcome?.message && !interaction.check) errors.push(`${path} needs an outcome or check.`);
     if (interaction.idempotencyKey) {
       if (idempotency.has(interaction.idempotencyKey)) errors.push(`Duplicate idempotency key '${interaction.idempotencyKey}'.`);

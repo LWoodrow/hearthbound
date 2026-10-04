@@ -46,6 +46,10 @@ An authored interaction that names an instrument must validate actual canonical 
 
 Recorded NPC offers are commitments to one exact authored transition. Natural acceptance such as “lead the way,” “show us,” or “take us there” executes that transition before freeform NPC dialogue; state-neutral prose cannot promise an escort on its own.
 
+Short exact nouns are valid scene references (key, ink, map), not reasons to guess a distant entity. Resolve them in the intent-typed local pool; ask when two local items fit. Do not silently correct misspellings into consequential actions. Transitive `move/shift/remove` requests manipulate a thing; directional `move to/through` requests navigate.
+
+Social affordances can opt into polite noun-fragment requests with `request: { implicit:true, subjects:[...] }`. The author declares the subject and transition; the engine accepts only one eligible matching request. Questions can instead establish a recorded offer. Observation and unrelated small talk cannot be converted into consent.
+
 Repeated object operations are idempotent. Opening an already-open door reports its current state without requesting a check, and a visible exit is advertised only when the same canonical route can be traversed by the movement resolver.
 
 ## 3. Features must answer ordinary questions
@@ -135,7 +139,11 @@ For stateful encounters, author encounters with a stable id, local location, ini
 
 Use conditional entryBeats for one-time NPC introductions and urgent nearby voices. audibleFrom must name adjacent locations with an open, eligible connection, and callResponse must state its canonical prerequisites. Hearing an NPC does not move the party or resolve their danger.
 
+Say-aloud conversation uses the same hearing boundaries as calls. Heard-only NPCs answer from authored call responses, not visual scene assumptions; party-only speech never reaches them. Conditional NPC `presence` variants use canonical requirements and known locations, so an escorted person cannot remain listed in the old room. Directly addressing one NPC must not become ambiguous merely because the sentence mentions someone else.
+
 Every quest needs a spoiler-safe invitation and actionable handoff: the player should learn that the sealed message exists before being expected to ask about it. Completion milestones must agree with campaign completion. Use aftermath for stable closing dialogue and the next adventure's real slug for the onward lead; do not reveal the campaign's hidden culprit.
+
+Completion awards rewards once but need not close the world. A `playable` aftermath authors conditional closing scenes, local action cards and an optional next-adventure slug. Preserve exploration and conversation, allow a safe escort/homecoming, and suppress new entry encounters after completion. Earned levels remain available without a mandatory escort or level-up. Keep level choices in the Adventure view and return to the scene after confirmation; continuation requires an explicit choice and server-side eligibility checks.
 
 Repeat outcomes must preserve useful information. Rereading a note quotes or accurately restates its actionable instructions; it must not merely report that the text was read before. Likewise, an explicit transfer verb such as `take` or `pick up` must transfer an authored portable item or clearly refuse it—it must never silently collapse into inspection.
 
@@ -160,6 +168,7 @@ Spoken words may cause only an explicitly authored `Speak` interaction or a boun
 - Treat the known map as a field sketch, not an exact battle grid. Use shared material fills, restrained architectural marks, and readable room labels; visual stamps must stay clipped to their room and may not imply an actionable clue absent from the visible scene. Keep route lines and the current-position marker visually distinct from decorative marks.
 - Backtracking stays available unless an authored consequence removes it.
 - A revealed multi-room route that players can reasonably traverse in one declaration should be an authored journey interaction. Record every intermediate visited location and opened physical threshold, and stop if any genuine physical prerequisite is unmet.
+- A return/escort `journey` lists adjacent authored rooms from the current location. Every destination must already be explored and every threshold discovered, open and unlocked; reject atomically otherwise. Journey narration does not implicitly open a closed door or create a route.
 - Keep social permission separate from physical topology. A staff-only door may carry social consequences, but it is not physically locked unless the story authors a lock or obstruction. If permission is required by the intended scene, author both the permission route and any legitimate alternative approach.
 
 ## 8. Separate deterministic rules from model work

@@ -1,4 +1,4 @@
-import { observationReferenceText } from "./intent-resolver.mjs";
+import { observationReferenceText, resolveEntityReferences } from "./intent-resolver.mjs";
 import { tokenEquivalent } from "./semantic-tokens.mjs";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -184,7 +184,7 @@ export function classifyWorldAction(action, mode = "act") {
     const first = classifyWorldAction(clauses[0], mode);
     if (first !== "other") return first;
   }
-  if (/\b(is there|are there|what|which|how many)\b/.test(words)) return "observe";
+  if (/\b(is there|are there|what|which|who|how many)\b/.test(words)) return "observe";
   if (/\b(check|search|look|inspect|examine|scan|sweep|investigate|study|read)\b/.test(words)) return "observe";
   if (/\buse\b.*\bkey\b.*\b(door|lock|hatch|gate)\b/.test(words)) return "object";
   if (/\b(unlock|lock|open|close|shut|unfasten)\b|\blift (?:the )?lid\b/.test(words)) return "object";
@@ -350,12 +350,17 @@ function featurePresentation(feature, state) {
   return { ...feature, ...visible };
 }
 
+export function npcLocations(npc, state) {
+  return (npc.presence || []).find((entry) => requirementsMet(state, entry.requires || []))?.locations || npc.locations || [];
+}
+
 export function npcCanHear(definition,state,npc) {
-  if ((npc.locations || []).includes(state.currentLocation)) return true;
+  const locations = npcLocations(npc, state);
+  if (locations.includes(state.currentLocation)) return true;
   if (!(npc.audibleFrom || []).includes(state.currentLocation)) return false;
   return (definition.locations[state.currentLocation]?.exits || []).some((exit)=>{
     const object=state.objects?.[exit.object];
-    return (npc.locations || []).includes(exit.to) && requirementsMet(state,exit.requires || [])
+    return locations.includes(exit.to) && requirementsMet(state,exit.requires || [])
       && object?.discovered !== false && object?.open !== false && object?.locked !== true;
   });
 }
@@ -434,7 +439,7 @@ function observationResult(definition, state, words, actorId) {
     return { message:`${visibleLocationDescription(definition,state)} Visible here: ${featureList}.${portable}` };
   }
   const visibleNpc = Object.values(definition.story?.npcs || {}).find((npc) =>
-    (npc.locations || []).includes(state.currentLocation)
+    npcLocations(npc,state).includes(state.currentLocation)
     && mentionsNamedThing(words, npc.name));
   if (visibleNpc && /\b(wear|wearing|look|looks|appearance|hair|clothes|clothing|dressed|describe)\b/.test(words)) {
     return visibleNpc.appearance
@@ -445,7 +450,7 @@ function observationResult(definition, state, words, actorId) {
     && /\b(who|is there|are there|present|here|inside|in (?:the )?(?:room|inn|tavern|taproom))\b/.test(words);
   if (asksWhoIsPresent) {
     const namedPeople = Object.values(definition.story?.npcs || {})
-      .filter((npc) => (npc.locations || []).includes(state.currentLocation))
+      .filter((npc) => npcLocations(npc,state).includes(state.currentLocation))
       .map((npc) => `${npc.name} (${npc.role})`);
     const occupants = [...namedPeople, ...(location.occupants || [])];
     return occupants.length
@@ -492,6 +497,7 @@ function observationResult(definition, state, words, actorId) {
       return { message:`No further markings or surface details are established on the ${namedFeature.label}. It is ${condition} in ${location.name}.` };
     }
     if (namedFeature.kind === "clue") return { handled:false };
+    if (condition === "visible" && namedFeature.kind === "scenery") return {message:`Visible here: ${namedFeature.label}. No further contents or details are established; examining this scenery does not operate or take it.`};
     return { message:`The ${namedFeature.label} is ${condition} in ${location.name}.` };
   }
 
@@ -567,8 +573,11 @@ export function resolveWorldAction({ definition, state: suppliedState, action, a
 
   if (intent === "pickup") {
     if (/\bcotton\b/.test(words)) return result({ accepted: false, reason: "companion-not-item", message: "Cotton is a companion, not an inventory item." });
+    const local = resolveEntityReferences(words,visiblePortableItems(definition,next));
+    if (!selected && !local.selected && local.candidates.length > 1) return result({accepted:false,reason:"ambiguous-reference",message:`More than one visible item fits: ${local.candidates.map((item)=>item.name).join(" or ")}. Please name which one to take.`});
     const itemEntry = selected?.entityType === "local-item" && definition.items?.[selected.id]
       ? [selected.id, definition.items[selected.id]]
+      : local.selected ? [local.selected.id,definition.items[local.selected.id]]
       : Object.entries(definition.items || {}).find(([id, item]) => mentionsNamedThing(words, id, item.name, ...(item.aliases || [])));
     if (!itemEntry) return result({ handled: false });
     const [itemId, item] = itemEntry;
@@ -628,7 +637,7 @@ export function resolveWorldAction({ definition, state: suppliedState, action, a
         return result({ accepted: false, reason: "missing-key", message: `The matching key is required to unlock ${target.exit.via}.` });
       }
       objectState.locked = false;
-      return result({ message: `${target.exit.via} is now unlocked.` });
+      return result({ message: `${target.exit.via} is now unlocked${objectState.open ? " and remains open" : " but closed; open it before passing through"}.` });
     }
     if (/\bopen\b/.test(words)) {
       if (objectState.open === true) return result({ message:`${target.exit.via} is already open.`, diagnostic:{ candidateAffordances:candidates, selectedAffordance:`object:${target.id}`, rejectedAlternatives:candidates.filter((item) => item.id !== `object:${target.id}`).map((item) => item.id) } });

@@ -11,7 +11,7 @@ export const lanternBelowAdventure = assertValidAdventure({
   episode: 1,
   stateKey: "clueStage",
   startLocation: "outside-inn",
-  initialFlags: { privateRoomPermission:false, pantryPermission:false, letterOpened:false, suppliesLocated:false, miteAwake:false, inkOffered:false, mapDrawn:false, cellarSwarmResolved:false, guardianDefeated:false, maraRescued:false, adventureComplete:false },
+  initialFlags: { privateRoomPermission:false, pantryPermission:false, letterOpened:false, suppliesLocated:false, miteAwake:false, inkOffered:false, mapDrawn:false, cellarSwarmResolved:false, guardianDefeated:false, maraRescued:false, maraSafeAtInn:false, aftermathRested:false, adventureComplete:false },
   encounters: [
     {
       id:"lantern-cellar-swarm", location:"cellar", resolvedFlag:"cellarSwarmResolved", lightRepels:true,
@@ -27,6 +27,11 @@ export const lanternBelowAdventure = assertValidAdventure({
     },
   ],
   aftermath:{
+    playable:true,
+    scenes:[
+      {location:"alcove",requires:[{path:"flags.maraRescued",equals:true},{path:"flags.maraSafeAtInn",equals:false}],title:"Bring Mara safely home",summary:"The danger is over and your milestone is earned. Mara can walk with help. Escort her back through the explored route, or stay and speak with her.",actions:[{interactionId:"escort-mara-to-inn",label:"Escort Mara to Tamsin",text:"Escort Mara back to the inn",mode:"act"}]},
+      {location:"inn",requires:[{path:"flags.maraSafeAtInn",equals:true}],title:"Safe at the Crooked Lantern",summary:"Tamsin has settled Mara beside the hearth. Stay and talk, rest and complete your earned level-ups here, or choose the next adventure when the company is ready.",actions:[{interactionId:"rest-after-rescue",label:"Rest with the company",text:"Rest by the hearth",mode:"act"}],nextAdventure:"ashes-briarwatch"},
+    ],
     speaker:"Mara Vey",
     reply:"Mara steadies herself. “You got me out. Thank you. That ward was only one anchor: several old roads are waking. My next survey is Briarwatch, where a tower cold for a century has begun to burn. Take the north road and find the signal mark at the watchtower. If you're willing, meet me there once we've rested.” Mara is free; the company can finish its earned level-ups and choose Ashes of Briarwatch in the Game library.",
   },
@@ -80,6 +85,7 @@ export const lanternBelowAdventure = assertValidAdventure({
         role: "Innkeeper of the Crooked Lantern",
         appearance: "Tamsin Reed is a broad-shouldered woman in her middle years, with iron-grey hair braided close at the nape. She wears a clean cream shirt beneath a dark green wool waistcoat, with a practical brown apron tied at her waist.",
         locations: ["inn", "kitchen"],
+        presentations:[{requires:[{path:"flags.maraSafeAtInn",equals:true}],goals:["Help Mara recover","Look after the returning company"],reply:"“She's safe here,” Tamsin says, drawing a chair closer to the hearth. “Stay as long as you need. You can tell me what happened when you've caught your breath.”"}],
         goals: ["Protect guests and staff", "Keep strangers out of private work areas", "Understand why Mara vanished after asking about the pantry"],
         knows: ["Mara stayed at the inn eleven days ago", "Mara repeatedly sketched the pantry shelves", "The shelves predate Tamsin's family and sometimes admit a cold draught"],
         sharesWhen: "Polite questions earn ordinary facts. Showing Mara's signed note or earning Tamsin's trust earns the pantry observations. Trespass causes confrontation, not magical ignorance or an impassable story lock.",
@@ -107,9 +113,11 @@ export const lanternBelowAdventure = assertValidAdventure({
         portraitId: "mara",
         role: "Surveyor of the old roads",
         locations: ["alcove"],
+        presence:[{requires:[{path:"flags.maraSafeAtInn",equals:true}],locations:["inn"]}],
         audibleFrom:["passage"],
         callResponse:{requires:[{path:"flags.maraRescued",equals:false}],text:"“Here! By the collapse! I'm alive, but the stones have my legs. Keep your light up; something in the ink moves when it dims.”"},
         presentations:[
+          {requires:[{path:"flags.maraSafeAtInn",equals:true}],goals:["Recover at the inn","Offer the Briarwatch lead"],reply:"“Thank you for bringing me home,” Mara says. “Tamsin will look after me. Briarwatch is my next lead: its watchtower, cold for a century, has begun to burn. Take the north road and look for the signal mark. Rest first; choose Ashes of Briarwatch when your company is ready. Or stay a while—I owe you more than a hurried goodbye.”"},
           {requires:[{path:"flags.maraRescued",equals:true}],goals:["Recover safely","Help the company follow the Briarwatch signal"],voice:"Shaken but relieved, precise, grateful.",reply:"“I'm free, thanks to you. The next signal is at Briarwatch: a watchtower that should be cold has begun to burn. Rest first; then take the north road.”"},
           {requires:[{path:"flags.guardianDefeated",equals:true}],goals:["Get safely out from under the loose stones"],reply:"“It's gone. Thank you. My legs are still caught under these stones. Please clear them carefully.”"},
         ],
@@ -118,7 +126,9 @@ export const lanternBelowAdventure = assertValidAdventure({
         sharesWhen: "Before rescue Mara can give short, urgent answers about the immediate danger. After rescue she explains this episode's findings but not the hidden series answer she does not yet know.",
         voice: "Exact, exhausted, brave, and accustomed to describing distances and physical evidence.",
         mustNotKnow: ["Chancellor Oris Vale is responsible", "The full identity or purpose of The Witness"],
-        conversation: { publicFacts:["Mara is present in the survey alcove."], conditionalFacts:[
+        conversation: { publicFacts:[], conditionalFacts:[
+          {requires:[{path:"flags.maraSafeAtInn",equals:false}],fact:"Mara is in the survey alcove."},
+          {requires:[{path:"flags.maraSafeAtInn",equals:true}],fact:"Mara is safe at the Crooked Lantern with Tamsin."},
           {requires:[{path:"flags.maraRescued",equals:false}],fact:"Mara remains behind loose stones and needs help to get free."},
           {requires:[{path:"flags.guardianDefeated",equals:true}],fact:"The ink-dark guardian is defeated and no longer blocks the loose stones."},
           {requires:[{path:"flags.maraRescued",equals:true}],fact:"The company has cleared the stones and rescued Mara."},
@@ -223,6 +233,7 @@ export const lanternBelowAdventure = assertValidAdventure({
     },
     {
       id:"request-private-room", idempotencyKey:"tamsin:private-room", location:"inn", modes:["act","speak"], stage:0,
+      request:{implicit:true,subjects:["privacy","private","quiet","secluded"]},
       verbs:["ask","request","find","want","need","have","take","show","lead","follow","move","go","enter"], targets:["privacy","some privacy","somewhere private","private place","private space","private room","quiet private room","back room","secluded corner","quiet corner"],
       effects:[{op:"set",path:"flags.privateRoomPermission",value:true},{op:"set",path:"currentLocation",value:"back-room"},{op:"add",path:"visited",value:"back-room"}],
       outcome:{message:"Tamsin leads the company from the public taproom into a small private back room. Once the door closes, they notice a sealed silver-moth letter resting alone on the table.",publicFacts:["The company enters the private back room with Tamsin's permission.","A sealed silver-moth letter is visible on the table."]},
@@ -341,7 +352,24 @@ export const lanternBelowAdventure = assertValidAdventure({
       id:"rescue-mara", idempotencyKey:"mara:rescue", location:"alcove", modes:["act"], stage:10,
       verbs:["rescue","free","help","pull","clear","move","shift","remove"], targets:["Mara","Mara Vey","loose stones","stones","rubble","collapsed alcove"],
       requires:[{path:"flags.guardianDefeated",equals:true}], effects:[{op:"set",path:"flags.maraRescued",value:true},{op:"set",path:"flags.adventureComplete",value:true}],
-      outcome:{message:"With the guardian resolved, the company clears the unstable stones and frees Mara Vey. The Lantern Below is complete, and Mara's survey of the wider old road carries forward.",publicFacts:["Mara Vey is rescued.","The adventure is complete."]},
+      outcome:{message:"With the guardian resolved, the company clears the unstable stones and frees Mara Vey. The Lantern Below is complete and the milestone is earned. Mara steadies herself: “Could you help me back to Tamsin at the inn? I can walk now. Then we can talk about the next road.”",publicFacts:["Mara Vey is rescued.","The adventure is complete.","Mara asks for an escort back to Tamsin at the inn."]},
+    },
+    {
+      id:"escort-mara-to-inn",idempotencyKey:"mara:safe-home",location:"alcove",modes:["act"],stage:10,
+      verbs:["escort","take","bring","lead","help","walk","return"],targets:["Mara","Mara Vey"],matchAll:[["inn","taproom","Tamsin","home","Crooked Lantern"]],
+      requires:[{path:"flags.maraRescued",equals:true},{path:"flags.maraSafeAtInn",equals:false}],
+      journey:["alcove","passage","mothglass","cellar-passage","cellar","pantry","kitchen","inn"],
+      effects:[{op:"set",path:"flags.maraSafeAtInn",value:true}],
+      blocked:{message:"Mara must first be freed, and every threshold on the explored return route must be open. Clear any obstruction before escorting her to the inn."},
+      outcome:{message:"The company supports Mara along the explored survey passages, through the open cellar door, up the pantry stairs and through the kitchen to the taproom. Tamsin hurries over, settles her beside the hearth and brings water. “You're safe here.” Mara thanks the company: “Briarwatch is next—a watchtower cold for a century has begun to burn. Rest first, then take the north road to its signal mark.”",publicFacts:["Mara is safely back at the Crooked Lantern with Tamsin.","The company returns through the explored rooms to the taproom.","Mara offers the Briarwatch watchtower lead."]},
+      repeat:{message:"Mara is already safe at the inn with Tamsin; the escort and milestone are not repeated."},
+    },
+    {
+      id:"rest-after-rescue",idempotencyKey:"company:closing-rest",location:"inn",modes:["act"],stage:10,
+      verbs:["rest","sit","settle","relax"],targets:["hearth","inn","company","Mara","Tamsin"],
+      requires:[{path:"flags.maraSafeAtInn",equals:true}],effects:[{op:"set",path:"flags.aftermathRested",value:true}],
+      outcome:{message:"The company settles beside the hearth while Tamsin looks after Mara. There is time to talk and reflect on what you've learned. Complete earned level-ups here when ready; this brief respite is not a mechanical Long Rest. The next road can wait until you choose it.",publicFacts:["The company takes a quiet respite at the inn."]},
+      repeat:{message:"The company remains comfortably at the hearth. Mara is safe, and the Briarwatch lead remains available."},
     },
   ],
   locations: {
@@ -363,8 +391,9 @@ export const lanternBelowAdventure = assertValidAdventure({
       name: "The Crooked Lantern Taproom",
       aliases: ["the Crooked Lantern", "the inn", "the tavern", "the pub", "inside the inn", "inside the tavern", "inside the pub", "taproom"],
       description: "A busy public room with a bar, hearth, scattered tables, patrons, and doors to the inn's private areas.",
+      presentations:[{requires:[{path:"flags.maraSafeAtInn",equals:true}],description:"The public taproom is warm and busy. Mara rests safely beside the hearth while Tamsin looks after her; the company can talk, reflect on its earned levels, or prepare for the next road."}],
       occupants: ["ordinary patrons", "two taproom staff"],
-      entryBeats: [{id:"tamsin-welcome",npc:"tamsin-reed",text:"Tamsin Reed looks up from behind the bar. “Evening. Food, drink, or somewhere quiet to sit? You look like adventurers. A traveller left a sealed silver-moth letter for people willing to help. I kept it untouched in the private back room. Ask me about the letter if you're interested.”"}],
+      entryBeats: [{id:"tamsin-welcome",npc:"tamsin-reed",requires:[{path:"flags.maraRescued",equals:false}],text:"Tamsin Reed looks up from behind the bar. “Evening. Food, drink, or somewhere quiet to sit? You look like adventurers. A traveller left a sealed silver-moth letter for people willing to help. I kept it untouched in the private back room. Ask me about the letter if you're interested.”"}],
       stage: 0,
       arrivalStage: 1,
       map: { x: 25, y: 12, w: 27, h: 30, kind: "taproom" },
@@ -529,6 +558,7 @@ export const lanternBelowAdventure = assertValidAdventure({
       name: "Collapsed Survey Alcove",
       description: "Loose stones block Mara Vey in a damaged survey alcove while an ink-dark guardian bars a safe rescue.",
       presentations: [
+        {requires:[{path:"flags.maraSafeAtInn",equals:true}],description:"The loose stones have been cleared and the guardian is gone. Mara is safely back at the Crooked Lantern with Tamsin."},
         {requires:[{path:"flags.maraRescued",equals:true}],description:"The loose stones have been cleared. Mara Vey is free, and the ink-dark guardian is gone."},
         {requires:[{path:"flags.guardianDefeated",equals:true}],description:"Mara Vey remains behind loose stones, but the defeated guardian no longer blocks the rescue."},
       ],
@@ -538,7 +568,7 @@ export const lanternBelowAdventure = assertValidAdventure({
       features: [
         feature("alcove-opening", "opening to the passage", "door"),
         {...feature("loose-stones", "unstable loose stones", "hazard"),requires:[{path:"flags.maraRescued",equals:false}]},
-        feature("mara-vey", "Mara Vey", "npc"),
+        {...feature("mara-vey", "Mara Vey", "npc"),requires:[{path:"flags.maraSafeAtInn",equals:false}]},
         { ...feature("ink-guardian", "ink-dark guardian", "creature"), requires:[{path:"flags.guardianDefeated",equals:false}] },
       ],
       exits: [exit("passage", "survey passage", { object: "alcove-opening" })],

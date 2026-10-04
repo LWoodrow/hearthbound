@@ -2,6 +2,8 @@
 
 Status: Active plan on `codex/story-engine-guardrails`
 
+2026-10-04 follow-up: shared short-reference/contextual-manipulation rules, opt-in social fragments, hearable-NPC speech and first-turn model-fallback rejection are implemented alongside an authored playable aftermath. Rescue awards once; the checked return journey moves Mara to the inn, keeps conversation open and offers an explicitly chosen, level-checked Briarwatch transition. Level choices stay in the Adventure view. Human review of the closing UI and local-model dialogue is the next gate; pre-v2 adapters remain isolated and Briarwatch is still legacy content.
+
 ## Convergence result (2026-08-13)
 
 Implementation status: **Phases 0–9 complete; Phase 10 harness complete and the live paired comparison remains. Overall convergence: 96%.**

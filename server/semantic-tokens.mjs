@@ -3,6 +3,11 @@ export const normaliseText = (value) => String(value || "").toLowerCase()
 
 export const textTokens = (value) => normaliseText(value).split(" ").filter(Boolean);
 
+// Short nouns (key, ink, map, Ada) still identify entities. Function words
+// don't: a scene-local exact tie must ask rather than choose the first match.
+const REFERENCE_STOP_WORDS = new Set(["the","and","for","with","from","into","that","this","them","some","somewhere","thing","things","place","places","area","areas","room","rooms","please","you","your","our","can","could","would","get","look","take","use","open","move","go","to","of","in","on","at","a","an","is","it","me","we","us"]);
+export const meaningfulReferenceWords = (value) => textTokens(value).filter((word) => word.length >= 3 && !REFERENCE_STOP_WORDS.has(word));
+
 // Small, predictable English inflections suffice for scene names without
 // importing model guesses or broad fuzzy matching into authoritative rules.
 export function tokenForms(token) {

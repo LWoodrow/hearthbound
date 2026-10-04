@@ -3,8 +3,8 @@ function currentAct(story, stage) {
   return (story?.acts || []).find((act) => numericStage >= act.stages[0] && numericStage <= act.stages[1]) || null;
 }
 
-function npcIsRelevant(npc, locationId) {
-  return (npc.locations || []).includes(locationId);
+function npcIsRelevant(npc, locationId, worldState) {
+  return npcLocations(npc,worldState).includes(locationId);
 }
 
 function clueIsRelevant(clue, locationId) {
@@ -34,12 +34,12 @@ export function buildStoryAuthority(definition, { worldState = {}, dmState = {} 
       location: currentLocation ? projectScene(definition, {...worldState,currentLocation:currentLocationId}) : null,
     },
     fixedTruths: (story.fixedTruths || []).filter((truth) => requirementsMet(worldState, truth.requires || [])),
-    relevantNpcs: Object.fromEntries(Object.entries(story.npcs || {}).filter(([, npc]) => npcIsRelevant(npc, currentLocationId)).map(([id,npc]) => [id,projectNpc(npc,worldState)])),
+    relevantNpcs: Object.fromEntries(Object.entries(story.npcs || {}).filter(([, npc]) => npcIsRelevant(npc, currentLocationId, worldState)).map(([id,npc]) => [id,projectNpc(npc,worldState)])),
     relevantClues: Object.fromEntries(Object.entries(story.clues || {}).filter(([, clue]) => clueIsRelevant(clue, currentLocationId))),
     consequences: story.consequences,
     improvisation: story.improvisation,
     principles: definition.principles,
   };
 }
-import { requirementsMet } from "./world-state.mjs";
+import { requirementsMet, npcLocations } from "./world-state.mjs";
 import { projectScene, projectNpc } from "./scene-projection.mjs";

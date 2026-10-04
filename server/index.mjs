@@ -1,4 +1,5 @@
 import { createServer as createHttpServer } from "node:http";
+import { aftermathView } from "./aftermath.mjs";
 import { createServer as createHttpsServer } from "node:https";
 import { spawn } from "node:child_process";
 import { readFileSync, existsSync, statSync } from "node:fs";
@@ -217,12 +218,23 @@ export async function handleApi(request, response, url) {
         combat: combatView(db, player),
         workshop: String(adventure?.id || "").endsWith("combat-workshop") ? { active:true, opponents:workshopOptions(), checklist:["Basic weapon attack and damage","Class resource or signature feature","Cantrip and levelled spell","Saving throw and area effect","Healing or support ability","Taking damage and reaching 0 HP","Rest and resource recovery","Equipment, ammunition and consumable items"] } : null,
         levelUp:getLevelUpOptions(db, player.id),
+        aftermath:aftermathView(adventureDefinition(adventure),worldState,{status:adventure?.status,players:humanParty,adventures:buildLobby(db).worlds.find((world)=>world.id === partyInfo.worldId)?.adventures || []}),
         guidanceMode,
         guidance,
         ai: { ...ai, promptInspectorEnabled:promptInspectorEnabled() },
         speech: { transcriptionConfigured: Boolean(process.env.WHISPER_URL) },
         art: { imageConfigured: Boolean(process.env.HEARTHBOUND_IMAGE_API_URL) },
       });
+    }
+    if (request.method === "POST" && url.pathname === "/api/adventure/continue") {
+      const player = authenticatedPlayer(request);
+      if (!player) return json(response,401,{error:"Choose your character again."});
+      const adventure = getActiveAdventure(db,player.partyId);
+      const definition = adventureDefinition(adventure);
+      const party = getParty(db,player.partyId);
+      const closing = aftermathView(definition,definition && getPartyState(db,player.partyId,`world:${definition.id}`),{status:adventure?.status,players:listPlayers(db,player.partyId),adventures:buildLobby(db).worlds.find((world)=>world.id === party.worldId)?.adventures || []});
+      if (!closing?.nextAdventure?.available || getPartyState(db,player.partyId,"combat")?.active) return json(response,409,{error:"Finish the closing scene and any required level-ups before continuing."});
+      return json(response,200,{adventure:selectAdventure(db,player.partyId,closing.nextAdventure.id)});
     }
     if (request.method === "POST" && (url.pathname === "/api/adventure/restart" || url.pathname === "/api/test/reset-story")) {
       const player = authenticatedPlayer(request);

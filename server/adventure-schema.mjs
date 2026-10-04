@@ -79,6 +79,10 @@ function validateStory(adventure, errors, warnings) {
       if (!adventure.locations[locationId]) errors.push(`story.npcs.${npcId}.audibleFrom references unknown location '${locationId}'.`);
       else if (!(adventure.locations[locationId].exits || []).some((exit)=>(npc.locations || []).includes(exit.to))) errors.push(`story.npcs.${npcId}.audibleFrom must be adjacent to an NPC location.`);
     }
+    for (const [index,presence] of (npc.presence || []).entries()) {
+      validateRequirements(presence.requires,`story.npcs.${npcId}.presence[${index}].requires`,errors);
+      if (!presence.requires?.length || !presence.locations?.length || presence.locations.some((id)=>!adventure.locations[id])) errors.push(`story.npcs.${npcId}.presence[${index}] needs conditions and known locations.`);
+    }
     validateRequirements(npc.callResponse?.requires,`story.npcs.${npcId}.callResponse.requires`,errors);
     for (const [index,presentation] of (npc.presentations || []).entries()) validateRequirements(presentation.requires,`story.npcs.${npcId}.presentations[${index}].requires`,errors);
     for (const [index, disclosure] of (npc.conversation?.conditionalFacts || []).entries()) {
@@ -244,6 +248,16 @@ export function validateAdventure(adventure) {
     errors.push(...validateInteractions({...adventure,interactions:[{id:encounter.id,location:encounter.location,modes:["act"],verbs:["resolve"],targets:[encounter.enemy?.name || "enemy"],outcome:{message:encounter.victoryText},effects:encounter.victoryEffects || []}]}));
   }
   if (adventure.aftermath && (!adventure.aftermath.speaker || !adventure.aftermath.reply)) errors.push("aftermath needs speaker and reply.");
+  for (const [index,scene] of (adventure.aftermath?.scenes || []).entries()) {
+    const path=`aftermath.scenes[${index}]`;
+    if (!adventure.locations[scene.location] || !scene.title || !scene.summary || !scene.requires?.length) errors.push(`${path} needs a known location, title, summary and conditions.`);
+    validateRequirements(scene.requires,`${path}.requires`,errors);
+    for (const action of scene.actions || []) {
+      const interaction=adventure.interactions?.find((entry)=>entry.id === action.interactionId);
+      if (!interaction || interaction.location !== scene.location || !interaction.modes.includes(action.mode) || !action.label || !action.text) errors.push(`${path}.actions must reference a local interaction with a supported mode, label and text.`);
+    }
+    if (scene.nextAdventure && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(scene.nextAdventure)) errors.push(`${path}.nextAdventure must be a stable adventure slug.`);
+  }
   if (adventure.milestones?.complete) {
     if (!adventure.milestones.complete.requires?.length) errors.push("milestones.complete needs explicit completion requirements.");
     validateRequirements(adventure.milestones.complete.requires,"milestones.complete.requires",errors);
