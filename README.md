@@ -45,7 +45,7 @@ The configured AI server uses the shared structured-response adapter for interpr
 
 The narrator does not receive hidden doors, traps, enemy statistics, NPC motives, or future events. If the AI server is unavailable, deterministic fallback remains available.
 
-AI settings are saved privately in `data/ai-settings.json`, independently of adventure saves, and override environment defaults. Keys stay on the backend. Existing `.env` Ollama configuration remains usable until changed in Settings. Local startup uses a preinstalled `llama-server.exe` and a GGUF model; downloads and hardware installation remain manual.
+AI settings are saved privately in `data/ai-settings.json`, independently of adventure saves, and override environment defaults. Keys stay on the backend. Existing `.env` Ollama configuration remains usable until changed in Settings. Local startup uses a preinstalled `llama-server.exe`. Choose a models folder, refresh the GGUF dropdown, then **Load selected model** (or **Switch & load selected model**). You can paste a public Hugging Face single-file GGUF link into **Download a model**; progress and cancellation are provided. Private/gated models, split GGUFs, installation and hardware setup remain manual. Remote model names come from **Find models** on that server, not from local files.
 
 ## Current prototype boundary
 

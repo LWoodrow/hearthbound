@@ -34,7 +34,7 @@ Maintenance guardrail: every systemic playtest or implementation lesson must upd
 
 ### AI prompt infrastructure
 
-AI connection package (2026-10-04): library-level settings, one structured generation transport for llama.cpp/Ollama, local llama.cpp startup/stop/auto-start, remote server URLs and API keys, and offline library access are implemented on `codex/ai-connections`. Next gate: human settings-page review and real GGUF/model-template verification. Automatic downloads, installation and remote server/router administration are deferred. Provider changes retain the existing canonical authority contract.
+AI connection package (2026-10-04): library-level settings, one structured generation transport for llama.cpp/Ollama, local llama.cpp startup/stop/auto-start, remote server URLs and API keys, offline library access, a local GGUF library dropdown and managed switching are implemented on `codex/ai-connections`. Public Hugging Face single-file downloads include progress/cancel and safe completion publishing. Next gate: human settings-page review and real GGUF/model-template verification. Private/gated and split-model downloads, resumable downloads, installation and remote server/router administration are deferred. Provider changes retain the existing canonical authority contract.
 
 Completed in the story-engine guardrail branch:
 

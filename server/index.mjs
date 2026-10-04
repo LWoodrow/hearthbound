@@ -9,8 +9,9 @@ import { actionUsesSpotlight, canSubmitOutsideCombat, normalizeSpeechAudience } 
 import { generateCharacterDetail, refreshPlayerGuidance, resolveAction, resolvePendingCheck } from "./dm.mjs";
 import { currentModelProfile, modelRuntimeView, resetModelRuntime, selectAndLoadModel, testAiConnection } from "./model-runtime.mjs";
 import { canManageAi, mergeAiSettings, publicAiSettings, readAiSettings, saveAiSettings } from "./ai-settings.mjs";
-import { discoverAi } from "./ai-transport.mjs";
-import { localAiService } from "./ai-service.mjs";
+import { aiRequest, discoverAi } from "./ai-transport.mjs";
+import { localAiService, localServerCommand } from "./ai-service.mjs";
+import { isGgufFile, listLocalModels, modelDownloader } from "./model-library.mjs";
 import { cottonForParty, isCottonInteraction, maybeCottonInterjection } from "./cotton.mjs";
 import { beginCombatAttack, beginCombatPotion, beginCombatSpell, combatView, isCombatActive, resetWorkshopCombat, resolveCombatRoll, startWorkshopCombat, takeCombatDodge, workshopOptions } from "./combat.mjs";
 import { authoredRouteContext } from "./adventure-rules.mjs";
@@ -30,6 +31,7 @@ const build = readRunningBuildInfo({ cwd:resolve(".") });
 const db = createDatabase();
 let vite;
 let runningServer;
+let localLoadBusy = false;
 
 async function queueApplicationRestart() {
   if (localAiService.view().managed) await localAiService.stop();
@@ -74,8 +76,34 @@ export async function handleApi(request, response, url) {
     if (url.pathname.startsWith("/api/ai/")) {
       if (!canManageAi(request)) return json(response, 403, { error:"Open AI connection settings on the host computer using http://127.0.0.1:" + port + "." });
       try {
+        if (request.method === "GET" && url.pathname === "/api/ai/download") return json(response, 200, modelDownloader.view());
+        if (request.method === "POST" && url.pathname === "/api/ai/download/cancel") return json(response, 200, await modelDownloader.cancel());
+        if (request.method === "POST" && ["/api/ai/library", "/api/ai/download", "/api/ai/load"].includes(url.pathname)) {
+          const input = await readJson(request);
+          const settings = mergeAiSettings(input);
+          if (settings.provider !== "llamacpp" || settings.mode !== "local") throw new Error("The local model library is for llama.cpp on this computer. Remote models are managed on their server.");
+          if (url.pathname === "/api/ai/library") return json(response, 200, { models:listLocalModels(settings.modelsDirectory) });
+          if (url.pathname === "/api/ai/download") {
+            if (localLoadBusy) return json(response, 409, { error:"Wait for the model load to finish." });
+            return json(response, 202, modelDownloader.start(input.url, settings.modelsDirectory));
+          }
+          if (localLoadBusy || modelDownloader.active()) return json(response, 409, { error:"Wait for the current model operation to finish." });
+          localServerCommand(settings);
+          if (!isGgufFile(settings.modelPath)) throw new Error("Select a complete supported GGUF model file before loading.");
+          localLoadBusy = true;
+          try {
+            if (!localAiService.view().managed) {
+              let external = false;
+              try { await aiRequest(profileForSettings(settings), "/health"); external = true; } catch { /* No external server responding. */ }
+              if (external) throw new Error("A server started elsewhere is using this address. Stop it there or use a different local port.");
+            } else await localAiService.stop();
+            saveAiSettings({ ...settings, clearApiKey:!settings.apiKey }); resetModelRuntime();
+            return json(response, 202, { settings:publicAiSettings(), process:await localAiService.start() });
+          } finally { localLoadBusy = false; }
+        }
         if (request.method === "GET" && url.pathname === "/api/ai/settings") return json(response, 200, { settings:publicAiSettings(), runtime:await modelRuntimeView({force:true}), process:localAiService.view() });
         if (request.method === "PUT" && url.pathname === "/api/ai/settings") {
+          if (localLoadBusy || modelDownloader.active()) return json(response, 409, { error:"Wait for the current model operation to finish before saving settings." });
           if (localAiService.view().managed) return json(response, 409, { error:"Stop the local AI server before changing its settings." });
           saveAiSettings(await readJson(request)); resetModelRuntime();
           return json(response, 200, { settings:publicAiSettings(), runtime:await modelRuntimeView(), process:localAiService.view() });
@@ -84,12 +112,14 @@ export async function handleApi(request, response, url) {
           const settings = mergeAiSettings(await readJson(request));
           return json(response, 200, url.pathname === "/api/ai/test" ? await testAiConnection(settings) : { models:await discoverAi(profileForSettings(settings)) });
         }
+        if (request.method === "POST" && ["/api/ai/start", "/api/ai/stop"].includes(url.pathname) && localLoadBusy) return json(response, 409, { error:"Wait for the model load to finish." });
         if (request.method === "POST" && url.pathname === "/api/ai/start") return json(response, 202, { process:await localAiService.start() });
         if (request.method === "POST" && url.pathname === "/api/ai/stop") { const process = await localAiService.stop(); resetModelRuntime(); return json(response, 200, { process }); }
       } catch (error) { return json(response, 400, { error:error.message }); }
       return json(response, 404, { error:"Unknown AI settings action." });
     }
     if (request.method === "POST" && url.pathname === "/api/system/restart") {
+      if (modelDownloader.active() || localLoadBusy) return json(response, 409, { error:"Finish or cancel the model download/load before restarting Hearthbound." });
       json(response, 202, { ok: true, restarting: true });
       setTimeout(() => void queueApplicationRestart(), 80);
       return;

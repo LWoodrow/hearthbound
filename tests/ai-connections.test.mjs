@@ -42,6 +42,17 @@ test("library settings work before login, test a remote AI and persist across ap
     assert.equal(before.settings.apiKey,undefined); assert.equal(before.settings.hasApiKey,true);
     const testResponse=await fetch(`${base}/api/ai/test`,{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});
     assert.equal(testResponse.status,200); assert.equal((await testResponse.json()).ok,true);
+    const gguf=Buffer.alloc(32);gguf.write("GGUF");gguf.writeUInt32LE(3,4);
+    const modelPath=join(directory,"downloaded.gguf");writeFileSync(modelPath,gguf);
+    const localDraft={mode:"local",modelsDirectory:directory,executablePath:process.execPath,modelPath};
+    const post=async(path,body)=>fetch(`${base}/api/ai/${path}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const library=await post("library",localDraft);assert.equal(library.status,200);assert.equal((await library.json()).models[0].path,modelPath);
+    const external=await post("load",localDraft);assert.equal(external.status,400);assert.match((await external.json()).error,/started elsewhere/);
+    assert.equal((await (await fetch(`${base}/api/ai/settings`)).json()).settings.mode,"remote");
+    writeFileSync(modelPath,"invalid model");
+    const invalid=await post("load",localDraft);assert.equal(invalid.status,400);assert.match((await invalid.json()).error,/GGUF/);
+    const remoteDownload=await post("download",{url:"https://huggingface.co/example/instruct/resolve/main/model.gguf"});assert.equal(remoteDownload.status,400);
+    const foreignLibrary=await fetch(`${base}/api/ai/library`,{method:"POST",headers:{"Content-Type":"application/json",Origin:"https://foreign.example"},body:JSON.stringify(localDraft)});assert.equal(foreignLibrary.status,403);
     const foreign=await fetch(`${base}/api/ai/settings`,{method:"PUT",headers:{"Content-Type":"application/json",Origin:"https://foreign.example"},body:"{}"});
     assert.equal(foreign.status,403);
     const saved=await fetch(`${base}/api/ai/settings`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({contextTokens:4096})});

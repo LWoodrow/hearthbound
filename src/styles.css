@@ -1021,3 +1021,5 @@ h1, h2, p { margin-top: 0; }
 .ai-setup-error,.ai-setup-notice { padding:12px 16px; border-radius:5px; background:#53291d; }.ai-setup-card .ai-setup-error { color:#ffcfbc; }.ai-setup-notice { background:#263b2d; }
 .ai-setup-help { margin-top:28px; padding-top:18px; border-top:1px solid #554a37; }.ai-setup-help summary { cursor:pointer; }.ai-setup-help a { color:#e1c285; }
 @media(max-width:640px) { .ai-setup-page { padding:18px 12px 50px; }.ai-setup-card { padding:20px 16px; }.ai-setup-grid { grid-template-columns:1fr; gap:0; }.ai-setup-header { align-items:flex-start; }.ai-setup-header span { font-size:12px; }.library-ai-button { top:92px; right:12px; } }
+.ai-download-status { display:grid; gap:10px; border:1px solid #665942; border-radius:8px; padding:20px; margin:20px 0; overflow-wrap:anywhere; }
+.ai-download-status progress { width:100%; height:16px; accent-color:#9ba980; }.ai-download-status button { justify-self:start; padding:10px 18px; }

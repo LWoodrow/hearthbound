@@ -19,7 +19,7 @@ export function normalizeAiSettings(input) {
   const integer = (value, min, max, name) => { const number = Number(value); if (!Number.isInteger(number) || number < min || number > max) throw new Error(`${name} must be between ${min} and ${max}.`); return number; };
   const model = String(input.model || "").trim();
   if (!model || model.length > 200) throw new Error("Enter a model name or server alias (up to 200 characters).");
-  return { version:1, provider:input.provider, mode:input.mode, baseUrl:url.href.replace(/\/+$/, ""), model, apiKey:String(input.apiKey || ""), contextTokens:integer(input.contextTokens, 2048, 262144, "Context size"), executablePath:String(input.executablePath || "").trim(), modelPath:String(input.modelPath || "").trim(), gpuLayers:integer(input.gpuLayers ?? 99, 0, 999, "GPU layers"), autoStart:Boolean(input.autoStart) && input.mode === "local" };
+  return { version:1, provider:input.provider, mode:input.mode, baseUrl:url.href.replace(/\/+$/, ""), model, apiKey:String(input.apiKey || ""), contextTokens:integer(input.contextTokens, 2048, 262144, "Context size"), executablePath:String(input.executablePath || "").trim(), modelPath:String(input.modelPath || "").trim(), modelsDirectory:resolve(String(input.modelsDirectory || (input.modelPath ? dirname(input.modelPath) : "data/models")).trim()), gpuLayers:integer(input.gpuLayers ?? 99, 0, 999, "GPU layers"), autoStart:Boolean(input.autoStart) && input.mode === "local" };
 }
 
 export function readAiSettings() {
