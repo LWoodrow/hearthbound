@@ -2,10 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Adventure, GameView, LobbyData, Party, Player, StoryEvent, World } from "./types";
 import { UNIVERSE_IDS, universeIdForWorld, universeTheme } from "../shared/universe-themes.mjs";
 import type { UniverseId, UniverseTheme } from "../shared/universe-themes.mjs";
-import { NPC_PORTRAIT_INDEX } from "../shared/portrait-catalogue.mjs";
+import { NPC_PORTRAIT_INDEX,NPC_PORTRAIT_FILES } from "../shared/portrait-catalogue.mjs";
 import { LANTERN_SURVEY_ROUTES, routeBetweenRooms } from "./map-routes";
 import { AiSettings } from "./AiSettings";
 import { ModelLoadProgress } from "./ModelLoadProgress";
+import {WorldAtlas} from "./WorldAtlas";
+import {LocalAtlas} from "./LocalAtlas";
 
 const CLASSES = ["Barbarian","Bard","Cleric","Druid","Fighter","Monk","Paladin","Ranger","Rogue","Sorcerer","Warlock","Wizard"];
 const SPECIES = ["Aasimar","Dragonborn","Dwarf","Elf","Gnome","Goliath","Halfling","Human","Orc","Tiefling"];
@@ -109,6 +111,8 @@ const AVATAR_IDS = new Set<AvatarId>([...AVATAR_OPTIONS.map((item) => item.id), 
 const PLAYER_PORTRAIT_ORDER: Exclude<AvatarId, "cat">[] = AVATAR_OPTIONS.map((option) => option.id);
 
 function Portrait({ avatarId, npcId, className = "" }: { avatarId?: AvatarId; npcId?: string; className?: string }) {
+  const portraitFile=npcId&&NPC_PORTRAIT_FILES[npcId];
+  if(portraitFile) return <span className={`character-avatar painted-portrait ${className}`} aria-hidden="true" style={{backgroundImage:`url(${portraitFile})`,backgroundSize:"cover",backgroundPosition:"center"}}/>;
   const npcIndex = npcId ? NPC_PORTRAIT_INDEX[npcId] : undefined;
   const playerIndex = avatarId && avatarId !== "cat" ? PLAYER_PORTRAIT_ORDER.indexOf(avatarId) : -1;
   const isNpc = npcIndex !== undefined || avatarId === "cat";
@@ -548,6 +552,30 @@ function GameScreen({ view, theme, notice, clearNotice, leave }: { view: GameVie
     setSending(true); clearNotice();
     try {await api("/api/adventure/continue",{method:"POST",body:"{}"});setActiveTab("adventure");setText("");setLevelUpOpen(false);} finally {setSending(false);}
   };
+  const regionalJourney=async(kind:"explore"|"return")=>{
+    if(sending) return;
+    setSending(true);clearNotice();
+    try {await api("/api/region/journey",{method:"POST",body:JSON.stringify({kind})});setText("");setLevelUpOpen(false);setActiveTab("map");}
+    finally {setSending(false);}
+  };
+  const regionalTravel=async(destinationId:string)=>{
+    if(sending) return;
+    setSending(true);clearNotice();
+    try {await api("/api/region/travel",{method:"POST",body:JSON.stringify({destinationId})});setActiveTab("adventure");setText("");}
+    finally {setSending(false);}
+  };
+  const carriageTravel=async(serviceId:string)=>{
+    if(sending) return;
+    setSending(true);clearNotice();
+    try {await api("/api/region/carriage",{method:"POST",body:JSON.stringify({serviceId})});setActiveTab("adventure");setText("");}
+    finally {setSending(false);}
+  };
+  const localAct=async(actionText:string)=>{
+    if(sending) return;
+    setSending(true);clearNotice();
+    try {await api("/api/action",{method:"POST",body:JSON.stringify({mode:"act",text:actionText})});setActiveTab("adventure");setText("");}
+    finally {setSending(false);}
+  };
   const roll = async (sides: number) => { clearNotice(); await api("/api/roll", { method: "POST", body: JSON.stringify({ sides }) }); };
   const combatAttack = async (weaponName: string) => { clearNotice(); await api("/api/combat/attack", { method:"POST", body:JSON.stringify({ weaponName }) }); };
   const combatSpell = async (spellName: string) => { clearNotice(); await api("/api/combat/spell", { method:"POST", body:JSON.stringify({ spellName }) }); };
@@ -615,7 +643,7 @@ function GameScreen({ view, theme, notice, clearNotice, leave }: { view: GameVie
         </div>
       </section></div></>}
     {activeTab === "character" && <div className="character-page"><CharacterSheet player={view.player} label={theme.terms.characterSheet}/><ClassFeaturesPanel player={view.player}/><SpellcastingPanel player={view.player}/>{view.levelUp&&<LevelUpPanel key={`${view.player.id}-${view.levelUp.nextLevel}`} player={view.player} options={view.levelUp} combatActive={Boolean(view.combat?.active)} clearNotice={clearNotice} open={levelUpOpen} setOpen={setLevelUpOpen} workshop={Boolean(view.workshop)} onCompleted={view.workshop?undefined:()=>{setActiveTab("adventure");setLevelUpOpen(false);}}/>}</div>}
-    {activeTab === "map" && <><WorldMap world={view.world.name} campaign={view.campaign.title} theme={theme}/><FoundMaps theme={theme} inventory={view.party.flatMap((member)=>member.inventory.map((item)=>({owner:member.name,item})))}/><KnownMap campaign={view.campaign.title} locations={view.knownLocations} currentLocation={view.recap.currentLocation} theme={theme}/></>}
+    {activeTab === "map" && <>{view.regionalAtlas?.local&&<LocalAtlas atlas={view.regionalAtlas.local} busy={sending} travel={regionalTravel} act={localAct}/>} {view.regionalAtlas&&<WorldAtlas atlas={view.regionalAtlas} busy={sending} travel={regionalTravel} journey={regionalJourney} carriage={carriageTravel}/>}<FoundMaps theme={theme} inventory={view.party.flatMap((member)=>member.inventory.map((item)=>({owner:member.name,item})))}/>{!view.regionalAtlas?.exploring&&<KnownMap campaign={view.campaign.title} locations={view.knownLocations} currentLocation={view.recap.currentLocation} theme={theme}/>}</>}
   </main>;
 }
 
@@ -676,33 +704,6 @@ function LevelUpPanel({ player, options, combatActive, clearNotice, open, setOpe
   </section>;
 }
 
-function WorldMap({ world, campaign, theme }: { world:string; campaign:string; theme:UniverseTheme }) {
-  const stage=campaign.includes("Hollow Star")?2:campaign.includes("Briarwatch")?1:0;
-  const places=[
-    {name:"Eldervale City",detail:"The Crooked Lantern",x:280,y:333,kind:"city"},
-    {name:"Briarwatch",detail:"Eastern border road",x:690,y:242,kind:"watch"},
-    {name:"Astronomer's Court",detail:"The capital heights",x:430,y:102,kind:"court"},
-  ].slice(0,stage+1);
-  const current=places[places.length-1];
-  const trees=[[120,255],[142,280],[164,246],[181,298],[203,270],[225,310],[245,274],[536,337],[552,365],[575,347],[597,325],[620,366],[643,343],[667,375],[720,383],[741,358]];
-  const hills=[[128,152],[185,128],[242,158],[515,115],[568,91],[622,116],[774,292],[814,317]];
-  return <section className="world-map-view"><header><div><span className="eyebrow">Regional atlas · {theme.terms.map}</span><h1>{world}</h1><p>Routes are inked in only as the {theme.terms.party.toLowerCase()} discovers them. Distant terrain is illustrative, not a promise of a known destination.</p></div><div className="world-location"><span>You are here</span><strong>{current.name}</strong><small>{current.detail}</small></div></header><div className="world-map-frame"><svg viewBox="0 0 900 500" role="img" aria-label={`${theme.terms.map} of ${world}, with the ${theme.terms.party.toLowerCase()} at ${current.name}`}>
-    <defs><linearGradient id="atlas-paper" x2="1" y2="1"><stop stopColor="#f0e2c1"/><stop offset=".52" stopColor="#e7d3a9"/><stop offset="1" stopColor="#d4b98d"/></linearGradient><radialGradient id="atlas-relief"><stop stopColor="#aa8b5a" stopOpacity=".24"/><stop offset="1" stopColor="#aa8b5a" stopOpacity="0"/></radialGradient><pattern id="atlas-grain" width="27" height="27" patternUnits="userSpaceOnUse"><circle cx="3" cy="8" r="1"/><path d="M18 21l4-2"/></pattern><pattern id="atlas-grid" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50"/></pattern><pattern id="atlas-field" width="22" height="18" patternUnits="userSpaceOnUse"><path d="M2 15l5-2 M16 5l4-2"/></pattern><filter id="atlas-shadow"><feDropShadow dx="0" dy="5" stdDeviation="5" floodColor="#5b4227" floodOpacity=".25"/></filter></defs>
-    <rect className="atlas-paper" x="1" y="1" width="898" height="498" rx="3"/><rect className="atlas-grain" x="25" y="35" width="850" height="430"/><rect className="atlas-grid" x="25" y="35" width="850" height="430"/><path className="atlas-border" d="M22 22h856v456H22z M35 35h830v430H35z"/>
-    <ellipse className="atlas-relief" cx="193" cy="167" rx="193" ry="130"/><ellipse className="atlas-relief" cx="571" cy="119" rx="197" ry="115"/><ellipse className="atlas-relief" cx="789" cy="302" rx="137" ry="157"/>
-    <path className="atlas-fields" d="M45 281 C102 217 221 226 285 267 L328 372 C231 430 100 393 45 338Z M502 310 C599 267 731 291 844 361 L844 459 H506Z"/>
-    <path className="atlas-contour" d="M41 160 C86 102 157 65 241 78 C276 81 312 96 332 118 M43 178 C100 121 149 91 231 99 C279 103 318 128 342 151 M43 199 C111 143 169 115 230 125 C277 132 316 153 345 177 M470 95 C534 44 626 57 697 118 M468 117 C540 71 618 82 677 143 M474 143 C541 99 606 109 664 163 M725 233 C795 249 840 304 862 366 M709 255 C775 272 824 329 850 393 M700 279 C766 295 802 352 835 418 M74 419 C164 448 248 431 309 457 M461 428 C551 396 651 418 704 462"/>
-    <path className="atlas-river-bank" d="M379 40 C350 97 383 133 392 178 C401 227 356 255 325 285 C292 316 299 349 325 380 C349 411 368 435 378 465"/><path className="atlas-river" d="M379 40 C350 97 383 133 392 178 C401 227 356 255 325 285 C292 316 299 349 325 380 C349 411 368 435 378 465"/>
-    <path className="atlas-stream" d="M111 206 C173 218 223 208 286 259 C305 273 309 283 325 285 M560 449 C513 416 470 400 378 419"/>
-    {hills.map(([x,y],index)=><g className="atlas-mountain" key={index} transform={`translate(${x} ${y})`}><path d="M-35 35 0-30 34 35 M-13 6 0-30 12 4 M19 35 42-8 67 35"/><path className="atlas-hatch" d="M-12 30l10-18 M4 28l10-18 M36 30l9-13"/></g>)}
-    {trees.map(([x,y],index)=><g className="atlas-tree" key={index} transform={`translate(${x} ${y})`}><path d="M0-12-7 2h4l-5 10h16L3 2h4z M0 12v5"/></g>)}
-    {stage>=1&&<path className="atlas-road" d="M280 333 C375 341 443 304 531 287 C594 273 642 253 690 242"/>}{stage>=2&&<path className="atlas-road" d="M280 333 C302 255 368 178 430 102"/>}
-    <text className="atlas-region" x="103" y="68">THE WESTERN MARCHES</text><text className="atlas-region" x="615" y="431">ASHEN EAST</text><text className="atlas-water-label" x="353" y="235" transform="rotate(-69 353 235)">RIVER VEY</text><text className="atlas-cartouche" x="450" y="42" textAnchor="middle">THE ELDERVALE SURVEY</text>
-    <g className="atlas-compass" transform="translate(778 92)"><circle r="35"/><circle r="28"/><path d="M0-44V44 M-44 0H44 M0-28 7 0 0 28-7 0Z"/><text y="-51" textAnchor="middle">N</text></g>
-    {places.map((place,index)=><g className={`atlas-place ${index===places.length-1?"current":""}`} key={place.name} transform={`translate(${place.x} ${place.y})`}><circle className="place-halo" r="21"/><circle r="15"/><path className="place-settlement" d={place.kind==="city"?"M-10 8V-3h5v-7h6v7h4v-5h5V8Z M-4 8V2h7v6 M-13 8h26":place.kind==="watch"?"M-8 10V-6h16v16 M-11-6h22 M-4-6v-5h8v5 M-2 3h4v7":"M-11 9V-2L0-9 11-2V9 M-4 9V1h8v8 M-13 9h26"}/><text x="25" y="-4">{place.name}</text><text className="atlas-detail" x="25" y="12">{place.detail}</text></g>)}
-    <path className="atlas-scale" d="M60 438h100m-100-5v10m50-10v10m50-10v10"/><text className="atlas-note" x="60" y="457">DISTANCES APPROXIMATE · NORTH ABOVE</text>
-  </svg><div className="atlas-legend"><span><i className="current"/>Current region</span><span><i/>Known place</span><span><b/>Discovered route</span></div></div></section>;
-}
 
 function FoundMaps({ inventory, theme }: { inventory:Array<{owner:string;item:Player["inventory"][number]}>; theme:UniverseTheme }) {
   const maps=inventory.filter(({item})=>/\b(map|chart|floor ?plan|plans)\b/i.test(item.name));

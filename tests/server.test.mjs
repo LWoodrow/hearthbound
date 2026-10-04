@@ -796,7 +796,8 @@ test("human play wording cannot misroute drinks, split story state, or strand th
     const spokenOpen=await resolveAction(item.db,player,"speak","open the letter and read it");
     assert.equal(spokenOpen.rule,"state-neutral-speech");
     assert.equal(getPartyState(item.db,party.id,"world:lantern-below").flags.letterOpened,false);
-    assert.match(latestNarration(),/words do not perform a physical action/i);
+    assert.match(latestNarration(),/says this aloud.*company remains/i);
+    assert.doesNotMatch(latestNarration(),/Use Act/i);
 
     await resolveAction(item.db,player,"act","open the letter and read it");
     const compound=await resolveAction(item.db,player,"act","warm the silver moth and give the ink mite ink");
@@ -1462,7 +1463,7 @@ test("worlds keep distinct parties, characters, and level-rated adventures", () 
     const player = createPlayer(item.db, { partyId: created.party.id, name: "Bram", species: "Dwarf", className: "Cleric" });
     const world = buildLobby(item.db).worlds.find((entry) => entry.id === created.id);
     assert.equal(world.parties[0].characters[0].id, player.id);
-    assert.deepEqual(world.adventures.map((adventure) => adventure.minLevel), [1, 1, 3, 5]);
+    assert.deepEqual(world.adventures.map((adventure) => adventure.minLevel), [1, 1, 1, 3, 5]);
   } finally { item.close(); }
 });
 
@@ -1473,7 +1474,7 @@ test("the adventure shelf lists each adventure once when a world has multiple pa
     const world = firstLobby.worlds[0];
     createParty(item.db, { worldId:world.id, name:"Combat Testers" });
     const adventures = buildLobby(item.db).worlds[0].adventures;
-    assert.equal(adventures.length, 4);
+    assert.equal(adventures.length, 5);
     assert.equal(new Set(adventures.map((adventure) => adventure.id)).size, adventures.length);
   } finally { item.close(); }
 });

@@ -1,6 +1,7 @@
 import { lanternBelowAdventure } from "./adventures/lantern-below.mjs";
 import { visibleLocationDescription, visibleLocationFeatures } from "./world-state.mjs";
 import { canonicalStage } from "./interaction-engine.mjs";
+import {eldervaleRoads} from "./adventures/eldervale-roads.mjs";
 
 const legacyLanternLocations = [
   { key:"outside-inn", names:["outside the crooked lantern"], minimumStage:0, minimumArrivalStage:0, x:45, y:115, w:230, h:130, label:"Outside the Crooked Lantern", mapLabel:"Inn frontage", kind:"road", connectsTo:["inn"], features:["inn sign","front door","taproom windows"] },
@@ -69,8 +70,9 @@ const hollowStarLocations = [
 ];
 
 export const ADVENTURE_RULES = [
-  { suffix:"lantern-below", stateKey:"clueStage", mapHeight:700, locations:lanternLocations, events:{ keyedDoorOpened:{ minimumStage:3, locationKey:"cellar" }, keyedDoorCrossed:{ minimumStage:4, locationKey:"cellar-passage" } } },
-  { suffix:"ashes-briarwatch", stateKey:"clueStage", mapHeight:720, locations:briarwatchLocations },
+  {suffix:"eldervale-roads",stateKey:"clueStage",mapHeight:900,locations:Object.entries(eldervaleRoads.locations).map(([key,location])=>({key,names:[key,location.name.toLowerCase()],minimumStage:0,x:location.map.x*10,y:location.map.y*10,w:location.map.w*10,h:location.map.h*10,label:location.name,kind:location.map.kind,summary:location.description,features:location.features.map(feature=>feature.label),connectsTo:location.exits.map(exit=>exit.to)}))},
+  { suffix:"lantern-below", stateKey:"clueStage", mapHeight:700, locations:lanternLocations, regionalDeparture:{locations:["outside-inn","inn"],reason:"Return to the Crooked Lantern's taproom or frontage before taking a regional detour.",description:"Leave from the Crooked Lantern for the public roads. Your current adventure is saved."}, events:{ keyedDoorOpened:{ minimumStage:3, locationKey:"cellar" }, keyedDoorCrossed:{ minimumStage:4, locationKey:"cellar-passage" } } },
+  { suffix:"ashes-briarwatch", stateKey:"clueStage", mapHeight:720, locations:briarwatchLocations,regionalDeparture:{locations:["briarwatch-road","road-beyond-barrier","east-well"],reason:"Return to the Briarwatch approach road or East Well before taking a regional detour.",description:"Take the public road back to Eldervale City, then explore the river settlements. Your Briarwatch position and progress are saved for return."} },
   { suffix:"hollow-star", stateKey:"clueStage", mapHeight:620, locations:hollowStarLocations },
   { suffix:"combat-workshop", stateKey:"clueStage", mapHeight:540, locations:[] },
 ];
@@ -118,10 +120,11 @@ export function locationTransitionIsAllowed(adventureId, state, currentNameOrKey
 export function authoredRouteContext(adventureId, state, worldState = null) {
   const rules=adventureRules(adventureId);
   if (!rules.locations.length) return null;
+  const definition=String(adventureId || "").endsWith("eldervale-roads") ? eldervaleRoads : lanternBelowAdventure;
   const canonical = worldState && Number(worldState.schemaVersion || 1) >= 2
-    && String(adventureId || "").endsWith("lantern-below") ? worldState : null;
+    && ["lantern-below","eldervale-roads"].some(suffix=>String(adventureId || "").endsWith(suffix)) ? worldState : null;
   const projectedState = canonical
-    ? { ...state, currentLocationKey:canonical.currentLocation, [rules.stateKey]:canonicalStage(lanternBelowAdventure, canonical) }
+    ? { ...state, currentLocationKey:canonical.currentLocation, [rules.stateKey]:canonicalStage(definition, canonical) }
     : state;
   const stage=Number(projectedState?.[rules.stateKey] || 0);
   const revealed=rules.locations.filter((item)=>locationIsRevealed(adventureId,projectedState,item.key));
@@ -130,8 +133,8 @@ export function authoredRouteContext(adventureId, state, worldState = null) {
   const connectedKeys=(room)=>rules.locations
     .filter((item)=>revealedKeys.has(item.key) && (room.connectsTo.includes(item.key) || item.connectsTo.includes(room.key)))
     .map((item)=>item.key);
-  const presentedFeatures=(room)=>worldState && String(adventureId || "").endsWith("lantern-below")
-    ? visibleLocationFeatures(lanternBelowAdventure, worldState, room.key).map((feature)=>feature.label)
+  const presentedFeatures=(room)=>canonical
+    ? visibleLocationFeatures(definition, worldState, room.key).map((feature)=>feature.label)
     : room.features || [];
   return {
     instruction:"The currentLocation and room contents are authoritative. Only describe features listed in the current room. A character may enter only a revealed location directly connected to it, and crossing a doorway must be an explicit movement action.",

@@ -3,6 +3,19 @@ export const normaliseText = (value) => String(value || "").toLowerCase()
 
 export const textTokens = (value) => normaliseText(value).split(" ").filter(Boolean);
 
+// Normalize command shorthand, not entity names or player-visible speech.
+// This is deliberately lexical: no guessed destination, fuzzy noun match,
+// missing precondition or mode change is inferred.
+export const normaliseActionText = (value) => normaliseText(value).replace(/\bgoto\b/g,"go to");
+
+export function asksAboutNearbyPeople(value) {
+  const words=normaliseText(value);
+  return /\b(who|anyone|anybody|people|person|persons|occupants?|staff|innkeeper|keeper)\b/.test(words)
+    && /^(?:(?:are|is) there|who\b|any\b|anyone\b|anybody\b|(?:do|can) (?:i|we) see|people\b)/.test(words)
+    && /\b(here|around|nearby|present|inside|in)\b/.test(words);
+}
+export const isGreeting=(value)=>/^(?:hello|hi|hey|greetings|good morning|good afternoon|good evening)(?: everyone| everybody| there| all)?$/.test(normaliseText(value));
+
 // Short nouns (key, ink, map, Ada) still identify entities. Function words
 // don't: a scene-local exact tie must ask rather than choose the first match.
 const REFERENCE_STOP_WORDS = new Set(["the","and","for","with","from","into","that","this","them","some","somewhere","thing","things","place","places","area","areas","room","rooms","please","you","your","our","can","could","would","get","look","take","use","open","move","go","to","of","in","on","at","a","an","is","it","me","we","us"]);

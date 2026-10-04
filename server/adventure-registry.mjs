@@ -1,9 +1,10 @@
 import lanternBelow from "./adventures/lantern-below.mjs";
 import hysteriaImpossibleFossil from "./adventures/hysteria-impossible-fossil.mjs";
 import unmaskedClockmakerCase from "./adventures/unmasked-clockmaker-case.mjs";
+import eldervaleRoads from "./adventures/eldervale-roads.mjs";
 import { assertValidAdventure } from "./adventure-schema.mjs";
 
-const definitions = [lanternBelow, hysteriaImpossibleFossil, unmaskedClockmakerCase];
+const definitions = [lanternBelow, hysteriaImpossibleFossil, unmaskedClockmakerCase, eldervaleRoads];
 definitions.forEach(assertValidAdventure);
 
 function normalise(value) {

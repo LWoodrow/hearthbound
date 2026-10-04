@@ -8,6 +8,24 @@ Closing/input retest: an unmatched first turn must not narrate entry; polite qui
 
 ## Safe test instance
 
+Square/portrait retest (existing 4322 save; refresh, no reset): use Act with `any people around here in the square`, `who is here` and `is anyone nearby`; expect authored villagers/farm workers, no invented named NPC or movement. Say aloud `hello`; expect a villager acknowledgement, not Use Act. Private Party only must not receive that reply. Visit all six residents and check distinct permanent dialogue portraits; unencountered residents must not be disclosed in portrait metadata. Empty-scene greetings may receive no reply without being invalid.
+
+Willowford movement/conversation follow-up: from The Willow Cup try `goto village square`, `head back to village square` or `travel to village square`; each must follow the actual square exit. From the inn, direct movement to the smithy or undiscovered sluice still fails; Say aloud and observation never move you. Ask Merrin who lives locally or whom to visit: she may name the authored residents and usual workplaces, but not claim their current off-scene whereabouts, invent new townsfolk, reveal the repair solution or grant permission. Repeat with another resident. Introducing Ada must not mark the smithy visited.
+
+Briarwatch departure retest: at the opening approach road, road beyond the barrier or East Well, Known map → Explore the public roads should be enabled unless combat, any party member's pending check or a fallen member blocks travel. Depart, visit the region and return to City → Resume saved main adventure. Confirm the same Briarwatch scene, clue stage, danger clock, inventory and HP resume. Tower/vault departures must stay blocked with a Briarwatch-specific reason beside the button. Your saved Lantern location must not affect the result. Hollow Star currently explains that regional detours are not yet available in that chapter.
+
+Willowford follow-up (2026-10-04, existing 4322 preview; no restart/reset required):
+
+1. Reach Willowford through Market and Ferry. Known map now shows the illustrated village before the regional atlas. Confirm seven public places, no sluice marker and no unvisited NPC names.
+2. Visit the Willow Cup, smithy, shrine and landing via the square. Speak aloud to the present resident. Decoration must not imply purchases, free equipment, healing or extra destinations.
+3. Visit Thorn Orchard and investigate the irrigation channel, or investigate the feeder at Willow Landing. Both reveal the same sluice/footpath. It is reachable from the orchard, not remotely from the landing.
+4. At the sluice, attempt a repair before examining the blockage. It must remain unresolved. Examine it, then either clear the storm debris or visit Sister Fen to explicitly request overflow permission and return to use the lever. Repeat the chosen action and try the alternative after resolution; the first consequence must remain stable.
+5. Return to Bessa and report the restored water. Check the current orchard description, NPC conversation and map task state. The main adventure, inventory and levels must remain unchanged. Testing the other branch requires a separate test party/save, not resetting your existing campaign.
+6. Visit the coach yard. Its carriage controls appear in the regional atlas below the local plate. Ride to City, then back to Willowford. Unvisited connecting places and an unrepaired Stonecross crossing must block transport. City alone permits resuming the paused main adventure.
+7. Check marker labels, zoom/scroll, destination dropdowns and touch targets on desktop and tablet. The artwork is fixed; earlier markers/routes must not reposition as the sluice is revealed.
+
+Regional atlas retest (2026-10-04): open Known map and inspect the illustrated map, selectable markers, destination dropdown and zoom at desktop and iPad widths. At the Lantern frontage or public taproom choose Explore the public roads. Visit Market → Ferry → Willowford → Mosswood → Signal Hill → Greyfen → City (or reverse the loop). Check each NPC greeting, local Say aloud conversation and backtracking position. Repair the ferry mooring and share a traveller story with Iona; revisit to check persistent state and no duplicate rewards. Return to City and resume the exact paused main-story room. A saved completed Lantern must stay complete; no inventory, HP, class resource or level reward changes occur simply through detours. Dungeon departures, active combat, any party member's pending check and fallen members must block departure. Visible later chapter markers are not shortcuts. New NPCs have names but no unreviewed portrait assignments. The larger campaign extension and richer local encounters remain future content work.
+
 Run `npm run build`, then `npm run playtest`. The test instance uses:
 
 - Port `4321`, leaving the normal application on `4173` and the menu preview on `4318` untouched

@@ -1,5 +1,6 @@
 import { createServer as createHttpServer } from "node:http";
 import { aftermathView } from "./aftermath.mjs";
+import {regionalAtlasView,changeRegionalJourney,regionalTravelCommand,carriageTravelCommand} from "./regional-atlas.mjs";
 import { createServer as createHttpsServer } from "node:https";
 import { spawn } from "node:child_process";
 import { readFileSync, existsSync, statSync } from "node:fs";
@@ -203,6 +204,7 @@ export async function handleApi(request, response, url) {
       const ai = await modelRuntimeView();
       return json(response, 200, {
         build,
+        regionalAtlas:regionalAtlasView(db,player),
         world: { id: partyInfo.worldId, name: partyInfo.worldName },
         group: { id: partyInfo.id, name: partyInfo.name },
         campaign: { title: adventure?.title || "Untitled Adventure", chapter: adventure?.chapter || "A new beginning", scene: adventure?.scene || "At the threshold", minLevel: adventure?.minLevel || 1, maxLevel: adventure?.maxLevel || 1 },
@@ -225,6 +227,22 @@ export async function handleApi(request, response, url) {
         speech: { transcriptionConfigured: Boolean(process.env.WHISPER_URL) },
         art: { imageConfigured: Boolean(process.env.HEARTHBOUND_IMAGE_API_URL) },
       });
+    }
+    if (request.method === "POST" && ["/api/region/travel","/api/region/carriage"].includes(url.pathname)) {
+      const player=authenticatedPlayer(request);
+      if (!player) return json(response,401,{error:"Choose your character again."});
+      const body=await readJson(request);
+      try {
+        const text=url.pathname==="/api/region/carriage"?carriageTravelCommand(db,player,body.serviceId):regionalTravelCommand(db,player,body.destinationId);
+        return json(response,200,await resolveAction(db,player,"act",text));
+      } catch(error) {return json(response,409,{error:error.message});}
+    }
+    if (request.method === "POST" && url.pathname === "/api/region/journey") {
+      const player=authenticatedPlayer(request);
+      if (!player) return json(response,401,{error:"Choose your character again."});
+      const body=await readJson(request);
+      try {return json(response,200,{adventure:changeRegionalJourney(db,player,body.kind)});}
+      catch(error) {return json(response,409,{error:error.message});}
     }
     if (request.method === "POST" && url.pathname === "/api/adventure/continue") {
       const player = authenticatedPlayer(request);

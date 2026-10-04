@@ -1,5 +1,5 @@
 import { observationReferenceText, resolveEntityReferences } from "./intent-resolver.mjs";
-import { tokenEquivalent } from "./semantic-tokens.mjs";
+import { tokenEquivalent,normaliseActionText,asksAboutNearbyPeople } from "./semantic-tokens.mjs";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -171,7 +171,7 @@ export function abilityCheckForAction(action) {
 }
 
 export function classifyWorldAction(action, mode = "act") {
-  const words = normalise(action);
+  const words = normalise(normaliseActionText(action));
   if (mode === "speak") return "speech";
   if (/\b(?:call out|shout|yell|cry out)\b/.test(words)) return "call-out";
   // In a compound sentence the first explicit step determines the primary
@@ -185,6 +185,7 @@ export function classifyWorldAction(action, mode = "act") {
     if (first !== "other") return first;
   }
   if (/\b(is there|are there|what|which|who|how many)\b/.test(words)) return "observe";
+  if (asksAboutNearbyPeople(words)) return "observe";
   if (/\b(check|search|look|inspect|examine|scan|sweep|investigate|study|read)\b/.test(words)) return "observe";
   if (/\buse\b.*\bkey\b.*\b(door|lock|hatch|gate)\b/.test(words)) return "object";
   if (/\b(unlock|lock|open|close|shut|unfasten)\b|\blift (?:the )?lid\b/.test(words)) return "object";
@@ -446,8 +447,8 @@ function observationResult(definition, state, words, actorId) {
       ? { message:visibleNpc.appearance }
       : { message:`No further visible description is authored for ${visibleNpc.name}.` };
   }
-  const asksWhoIsPresent = /\b(who|anyone|anybody|people|person|persons|occupants?|staff|innkeeper|keeper)\b/.test(words)
-    && /\b(who|is there|are there|present|here|inside|in (?:the )?(?:room|inn|tavern|taproom))\b/.test(words);
+  const asksWhoIsPresent = asksAboutNearbyPeople(words) || (/\b(who|anyone|anybody|people|person|persons|occupants?|staff|innkeeper|keeper)\b/.test(words)
+    && /\b(who|is there|are there|present|here|inside|in (?:the )?(?:room|inn|tavern|taproom))\b/.test(words));
   if (asksWhoIsPresent) {
     const namedPeople = Object.values(definition.story?.npcs || {})
       .filter((npc) => npcLocations(npc,state).includes(state.currentLocation))
@@ -532,7 +533,7 @@ function observationResult(definition, state, words, actorId) {
 export function resolveWorldAction({ definition, state: suppliedState, action, actorId, inventory = [], mode = "act", turn = null }) {
   const state = createInitialWorldState(definition, suppliedState);
   const next = clone(state);
-  const words = normalise(action);
+  const words = normalise(normaliseActionText(action));
   // Compose two explicit ordinary actions in order. Do not split route
   // crossings: their destination and doorway must be resolved as one action.
   const compound = mode === "act" && !turn?.compoundStep

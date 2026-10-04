@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { createHash, randomBytes, randomUUID, scryptSync } from "node:crypto";
 import { enrichKnownLocations, locationIsRevealed } from "./adventure-rules.mjs";
 import { adventureDefinition } from "./adventure-registry.mjs";
+import {createCanonicalState,canonicalProjection} from "./interaction-engine.mjs";
 
 const DEFAULT_WORLD = "world-hearthbound";
 const DEFAULT_PARTY = "party-first-company";
@@ -283,6 +284,7 @@ const starterAdventures = [
   { slug: "ashes-briarwatch", title: "Ashes of Briarwatch", synopsis: "A border village burns each new moon, though its abandoned watchtower has been cold for a century.", min: 3, max: 5, milestone: 5, chapter: "Chapter One · Smoke Without Flame", scene: "The Briarwatch Road" },
   { slug: "hollow-star", title: "Crown of the Hollow Star", synopsis: "An empty constellation appears above the capital and forgotten heirs begin dreaming the same coronation.", min: 5, max: 8, milestone: 8, chapter: "Chapter One · The Missing Constellation", scene: "The Astronomer's Court" },
   { slug: "combat-workshop", title: "Testing · Combat Workshop", synopsis: "A disposable training arena for testing weapons, class abilities, spells, items, damage, healing, and combat turns without changing a real adventure.", min: 1, max: 20, milestone: 20, chapter: "Rules Laboratory · No Story Progress", scene: "The Brassbound Training Hall" },
+  { slug:"eldervale-roads", title:"The Roads of Eldervale", synopsis:"Optional river settlements, local people and small stories to explore between the chapters of the Hollow Road.", min:1, max:20, milestone:1, chapter:"The Open Roads · Choose Your Own Detour", scene:"Eldervale City" },
 ];
 
 function hasColumn(db, table, column) {
@@ -885,6 +887,12 @@ export function selectAdventure(db, partyId, adventureId) {
   db.prepare("UPDATE parties SET active_adventure_id = ? WHERE id = ?").run(adventureId, partyId);
   setPartyState(db, partyId, "dm", adventureStateWithSeries(db,partyId,adventureId,getPartyState(db,partyId,`dm:${adventureId}`)));
   setPartyState(db, partyId, "knownLocations", getPartyState(db, partyId, `knownLocations:${adventureId}`) || []);
+  const definition=adventureDefinition(adventure);
+  if (definition?.initializeOnSelection) {
+    const world=createCanonicalState(definition,getPartyState(db,partyId,`world:${definition.id}`)||{});
+    setPartyState(db,partyId,`world:${definition.id}`,world);
+    setPartyState(db,partyId,"dm",{...getPartyState(db,partyId,"dm"),...canonicalProjection(definition,world)});
+  }
   setPartyState(db, partyId, "combat", null);
   if (String(adventureId).endsWith("combat-workshop")) {
     db.prepare("UPDATE players SET hp = max_hp WHERE party_id = ?").run(partyId);

@@ -3,6 +3,7 @@ import { cottonForParty } from "./cotton.mjs";
 import { applyAdventureEvent, adventureRules, authoredRouteContext, featureLocationRule, locationIsRevealed, locationRule, locationTransitionIsAllowed } from "./adventure-rules.mjs";
 import { handleCombatAction, startLocationEncounter } from "./combat.mjs";
 import { projectScene, projectNpc, supportedNpcOutput } from "./scene-projection.mjs";
+import {unansweredSpeech} from "./ambient-speech.mjs";
 import { adventureDefinition } from "./adventure-registry.mjs";
 import { createInitialWorldState, requirementsMet, resolveWorldAction, npcCanHear, npcLocations } from "./world-state.mjs";
 import { currentModelProfile, isCurrentModelReady } from "./model-runtime.mjs";
@@ -1721,7 +1722,9 @@ export async function resolveAction(db, player, mode, action) {
   const npcConversation=await resolveNpcConversation(db,player,adventure,getPartyState(db,player.partyId,"dm") || dmState,mode,action);
   if (npcConversation) return npcConversation;
   if (mode === "speak") {
-    const text=`${player.name} says this aloud. The words do not perform a physical action, and the established scene remains unchanged. Use Act if ${player.name} intends to do it.`;
+    const definition=adventureDefinition(adventure);
+    const world=definition?createCanonicalState(definition,getPartyState(db,player.partyId,`world:${definition.id}`)||{currentLocation:dmState.currentLocationKey||definition.startLocation}):null;
+    const text=unansweredSpeech(definition,world,player.name,action);
     addEvent(db,{partyId:player.partyId,adventureId:adventure?.id,visibility:"public",playerId:player.id,kind:"narration",speaker:"Dungeon Master",text});
     setPlayerGuidance(db,player.id,player.partyId,[]);
     return {source:"rules",rule:"state-neutral-speech",accepted:true,publicFacts:[text],narration:text};

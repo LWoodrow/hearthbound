@@ -1,4 +1,4 @@
-import { tokenEquivalent, meaningfulReferenceWords } from "./semantic-tokens.mjs";
+import { tokenEquivalent, meaningfulReferenceWords,normaliseActionText } from "./semantic-tokens.mjs";
 
 const normalise = (value) => String(value || "").toLowerCase().replace(/[’']/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 const words = (value) => normalise(value).split(" ").filter(Boolean);
@@ -7,7 +7,7 @@ const meaningfulWords = (value) => meaningfulReferenceWords(value).filter((word)
 
 const VERB_FAMILIES = {
   observe:["look","inspect","examine","study","search","investigate","read","check"],
-  move:["go","move","enter","follow","sneak","slip","creep","walk","descend","ascend","leave","return"],
+  move:["go","move","enter","follow","sneak","slip","creep","walk","head","travel","descend","ascend","leave","return"],
   open:["open","unseal","break","unlock","unfasten"],
   use:["use","warm","heat","offer","give","apply","operate","place","add"],
   speak:["ask","tell","say","show","request","question","interrogate"],
@@ -55,7 +55,7 @@ function entityScore(action, entity) {
 }
 
 export function parseLiteralIntent(action, mode = "act") {
-  const actionWords = words(action);
+  const actionWords = words(normaliseActionText(action));
   const explicit = mode === "speak" ? "speak" : Object.entries(VERB_FAMILIES)
     .find(([, verbs]) => verbs.some((verb) => actionWords.includes(verb)))?.[0] || "other";
   const quantity = Number(actionWords.find((word) => /^\d+$/.test(word)) || 1);
@@ -82,7 +82,7 @@ export function resolveEntityReferences(action, entities = []) {
 }
 
 export function interactionMatch(interaction, action, mode = "act", turn = null) {
-  const scopedAction = turn?.worldIntent === "observe" ? turn.referenceText : action;
+  const scopedAction = normaliseActionText(turn?.worldIntent === "observe" ? turn.referenceText : action);
   const parsed = turn?.parsed || parseLiteralIntent(action, mode);
   const verbs = interaction.verbs || [];
   const modeMatch = !interaction.modes?.length || interaction.modes.includes(mode);

@@ -10,6 +10,8 @@ All structured generation uses one transport adapter for llama.cpp or Ollama, in
 
 ## Authority boundary
 
+Nearby-person observations use current canonical NPC presence and authored anonymous occupants, not presumed whereabouts from public directories. Named/hearable NPC conversation receives first refusal for Say aloud; a bounded authored ambient greeting may acknowledge speech otherwise. Unanswered speech is valid and state-neutral, never advice to perform a physical action. Ambient responses and model dialogue cannot grant movement, permissions, items or quest progress.
+
 The rules engine owns:
 
 - Current and previous location
@@ -20,6 +22,7 @@ The rules engine owns:
 - Combat initiative, resources, damage, conditions, and defeat
 - Clue stages, revelation gates, danger clocks, milestones, and completion
 - Private discoveries and player-specific knowledge
+- Regional current position, public charted geography, actual road traversal and optional detour/return eligibility. A place being visible on the atlas does not authorize teleportation, a future chapter or disclosure of its NPCs' knowledge.
 
 The model may:
 
@@ -100,6 +103,10 @@ A playable aftermath is a continuation of that canonical world, not a reversal o
 Trace assessment without authoritative fact terms is unassessed, not a claim that arbitrary dialogue was proven consistent. Existing term coverage and movement checks remain diagnostics, not semantic verification.
 
 ## Model evaluation
+
+An authored public community directory may let present residents introduce existing neighbours and recommend their usual workplaces before the player visits them. This does not create people/places, establish current remote whereabouts, mark a map location visited or grant quest knowledge/permission. Directory facts are explicitly permitted conversation facts, not a model-generated extension to geography.
+
+Local-settlement and carriage packets retain the same authority boundaries. The model may voice the currently present Willowford resident using projected facts; it cannot reveal the sluice before investigation, authorise a diversion in prose, sell items, grant healing, award campaign levels or invent travel. Discovery, permission, resolution, report-back and established-path transport are authored transitions. Artwork is presentation, not a source of reachable geography or occupant identity.
 
 Model comparisons should measure prose quality only after this contract is stable. Candidate models receive identical validated scene packets and are scored for voice, continuity, repetition, invention rate, latency, and hardware cost. No candidate receives additional authority because it performs well in prose evaluation.
 

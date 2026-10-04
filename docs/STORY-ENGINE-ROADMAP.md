@@ -1,6 +1,12 @@
 # Story-engine convergence roadmap
 
+2026-10-04 local follow-up: presence questions and unanswered spoken turns share generic deterministic handling; anonymous occupants/ambient greeting enrich Willowford Square without mechanical effects. Six reviewed resident portraits use the existing visible-event disclosure boundary. 268 tests/build/typecheck/four validations pass. Browser/live-model review remains before broader settlement expansion.
+
 Status: Active plan on `codex/story-engine-guardrails`
+
+2026-10-04 Willowford proof of reuse: a data-authored local settlement, two independent irrigation clues, two guarded solutions, persistent report-back, fixed illustrated local-map projection and data-authored established-route carriages now run through the existing shared executor. Zero central story-specific executor branches added/removed. All 256 tests and four adventure validations pass; build/typecheck passes. Human local-map/NPC review is next, before scaling this structure across the other stops. No claims of a fully completed long campaign or live prose validation.
+
+2026-10-04 regional exploration first slice: approved illustrated geography now has a server-owned atlas and a seven-stop structured optional adventure with bounded NPCs and persistent local activities. Detour/return endpoints preserve the Lantern save and completion at explicit safe boundaries, and later chapter markers do not bypass progression. This proves a small exploration loop, not completion of a large open-world campaign. Next content gate: structured Briarwatch/Hollow Star migration, richer authored side quests and reviewed regional gateways; browser/mobile atlas and live NPC prose review remain pending.
 
 2026-10-04 follow-up: shared short-reference/contextual-manipulation rules, opt-in social fragments, hearable-NPC speech and first-turn model-fallback rejection are implemented alongside an authored playable aftermath. Rescue awards once; the checked return journey moves Mara to the inn, keeps conversation open and offers an explicitly chosen, level-checked Briarwatch transition. Level choices stay in the Adventure view. Human review of the closing UI and local-model dialogue is the next gate; pre-v2 adapters remain isolated and Briarwatch is still legacy content.
 

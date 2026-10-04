@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { visibleNpcPortraits } from "../shared/portrait-catalogue.mjs";
+import { visibleNpcPortraits,NPC_PORTRAIT_FILES } from "../shared/portrait-catalogue.mjs";
+import roads from "../server/adventures/eldervale-roads.mjs";
+import {readFileSync} from "node:fs";
 import { lanternBelowAdventure } from "../server/adventures/lantern-below.mjs";
 
 test("NPC portraits are revealed only after that character speaks in visible history",()=>{
@@ -14,4 +16,16 @@ test("NPC portraits are revealed only after that character speaks in visible his
 test("unapproved portrait IDs cannot be sent to the player",()=>{
   const definition={story:{npcs:{stranger:{name:"Stranger",portraitId:"future-villain"}}}};
   assert.deepEqual(visibleNpcPortraits(definition,[{speaker:"Stranger"}]),{});
+});
+
+test("all six Willowford portraits are local assets and reveal only after that resident appears",()=>{
+  assert.deepEqual(visibleNpcPortraits(roads,[]),{});
+  for(const npc of Object.values(roads.story.npcs).filter(npc=>npc.portraitId)) {
+    assert.deepEqual(visibleNpcPortraits(roads,[{speaker:npc.name}]),{[npc.name]:npc.portraitId});
+    const asset=readFileSync(new URL("../public"+NPC_PORTRAIT_FILES[npc.portraitId],import.meta.url));
+    assert.equal(asset.subarray(1,4).toString(),"PNG");
+  }
+  const source=readFileSync(new URL("../src/App.tsx",import.meta.url),"utf8");
+  assert.match(source,/NPC_PORTRAIT_FILES\[npcId\]/);
+  assert.match(source,/backgroundSize:"cover"/);
 });

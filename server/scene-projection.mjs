@@ -7,6 +7,7 @@ export function projectScene(definition, world) {
   return {
     name: location.name,
     description: visibleLocationDescription(definition, world),
+    occupants:[...(location.occupants || [])],
     visibleFeatures: visibleLocationFeatures(definition, world).map(({id,label,kind}) => ({id,label,kind})),
     exits: (location.exits || []).filter((exit) => {
       const object = exit.object && world.objects?.[exit.object];

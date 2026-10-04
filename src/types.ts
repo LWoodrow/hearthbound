@@ -104,6 +104,7 @@ export type KnownLocation = {
 };
 
 export type GameView = {
+  regionalAtlas: null | RegionalAtlas;
   build: { branch:string; commit:string; startedAt:string };
   world: { id: string; name: string };
   group: { id: string; name: string };
@@ -165,4 +166,18 @@ export type GameView = {
   };
   speech: { transcriptionConfigured: boolean };
   art: { imageConfigured: boolean };
+};
+
+export type RegionalAtlas = {
+  departureDescription:string;
+  image:string; title:string; exploring:boolean; currentSite:string; canExplore:boolean; canReturn:boolean; reason:string; mainAdventure:string;hasPausedAdventure:boolean;
+  sites:Array<{id:string;name:string;x:number;y:number;kind:string;description:string;visited:boolean;current:boolean;available:boolean;travelText?:string;npcs:string[]}>;
+  routes:Array<{from:string;to:string;travelled:boolean}>;
+  activities:{ferryRepaired:boolean;storyRecorded:boolean};
+  local:LocalAtlasData|null;
+  carriages:Array<{id:string;label:string;text:string;available:boolean;reason:string}>;
+};
+export type LocalAtlasData={
+  id:string;title:string;image:string;sites:RegionalAtlas["sites"];routes:RegionalAtlas["routes"];
+  task:string;reason:string;actions:Array<{id:string;text:string}>;
 };

@@ -140,6 +140,8 @@ export function validateAdventure(adventure) {
 
   for (const [locationId, location] of Object.entries(adventure.locations)) {
     if (!location.name) errors.push(`locations.${locationId}.name is required.`);
+    if(location.occupants!=null&&(!Array.isArray(location.occupants)||location.occupants.some(value=>typeof value!=="string"||!value.trim()))) errors.push(`locations.${locationId}.occupants must contain non-empty descriptions.`);
+    if(location.ambientGreeting!=null&&(typeof location.ambientGreeting!=="string"||!location.ambientGreeting.trim()||!location.occupants?.length)) errors.push(`locations.${locationId}.ambientGreeting needs text and authored occupants.`);
     if (location.aliases != null && (!Array.isArray(location.aliases) || location.aliases.some((alias) => typeof alias !== "string" || !alias.trim()))) errors.push(`locations.${locationId}.aliases must contain non-empty strings.`);
     if (!Number.isFinite(location.stage) || location.stage < 0) {
       errors.push(`locations.${locationId}.stage must be a non-negative number.`);
