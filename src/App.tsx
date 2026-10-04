@@ -140,8 +140,8 @@ function avatarFor(player: Player): AvatarId {
   return chosen && AVATAR_IDS.has(chosen) ? chosen : (CLASS_AVATARS[player.className] || "wanderer");
 }
 
-function CharacterAvatar({ player, size = "party" }: { player: Player; size?: "lobby" | "party" | "sheet" }) {
-  return <span role="img" aria-label={`${player.name} portrait`}><Portrait avatarId={avatarFor(player)} className={`avatar-${size}`}/></span>;
+function CharacterAvatar({ player, size = "party" }: { player: Player; size?: "lobby" | "party" | "event" | "sheet" }) {
+  return <span className="portrait-frame" role="img" aria-label={`${player.name} portrait`}><Portrait avatarId={avatarFor(player)} className={`avatar-${size}`}/></span>;
 }
 
 function UniverseMark({ theme, compact = false }: { theme:UniverseTheme; compact?:boolean }) {
@@ -789,7 +789,7 @@ function EventCard({ event, ownPlayer, party, npcPortraits }: { event: StoryEven
   const speaker = party.find((member) => member.name.toLowerCase() === event.speaker.toLowerCase()
     || (event.kind === "roll" && event.text.toLowerCase().startsWith(`${member.name.toLowerCase()} `)));
   const npcId = npcPortraits[event.speaker] || (event.speaker.toLowerCase() === "ink-dark guardian" ? "ink-guardian" : undefined);
-  const portrait = speaker ? <CharacterAvatar player={speaker}/> : npcId ? <Portrait npcId={npcId} className="avatar-party"/> : null;
+  const portrait = speaker ? <CharacterAvatar player={speaker} size="event"/> : npcId ? <Portrait npcId={npcId} className="avatar-event"/> : null;
   if (event.kind === "narration") return <article className={`narration ${event.visibility === "player" ? "private" : ""}`}><div className="event-speaker">{portrait}<span>{event.visibility === "player" ? `Only ${ownPlayer.name} hears this` : event.speaker}</span></div><p>{event.text}</p></article>;
   if (event.kind === "roll") return <article className="roll-event">{portrait || <span className="die">◆</span>}<p>{event.text}</p></article>;
   return <article className="player-event"><div className="event-speaker">{portrait}<span>{event.speaker}</span></div><p>{event.text}</p></article>;
