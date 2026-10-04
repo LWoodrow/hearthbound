@@ -21,6 +21,8 @@ It is safe to run the launcher again when the services are already active. Use `
 
 1. Install Node.js 22 or newer.
 2. Clone this repository and run `npm install` followed by `npm run build`.
+
+For artwork updates, finish generating/copying the final images into `public` before building. The build checks every player portrait sheet exists in `dist`, has a PNG signature and matches its source bytes. Verify served artwork with a GET and its image content type/bytes, not only a successful status code: a SPA fallback can otherwise disguise missing images. Production now returns 404 for missing assets while retaining HTML fallback for navigation. Rebuild and restart the app service after code/art changes; do not reset an adventure just to refresh artwork.
 3. Copy `.env.example` to `.env`.
 4. Run `Start-Hearthbound.ps1` and open **AI connection** in the game library on the host computer at `http://127.0.0.1:4173`.
 5. Choose llama.cpp on this computer, or an existing server by URL. Save the connection after testing it.

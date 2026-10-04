@@ -16,6 +16,7 @@ function visibleExit(definition, state, sourceId, route) {
     sourceId,
     destinationId:route.to,
     destination:destination.name,
+    aliases:[...(destination.aliases || [])],
     via:route.via,
     direction:route.direction || null,
     objectId:route.object || null,

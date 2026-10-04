@@ -76,6 +76,11 @@ h1, h2, p { margin-top: 0; }
 .avatar-choice:hover { color:var(--cream); border-color:var(--gold); }
 .avatar-choice[aria-pressed="true"] { color:var(--gold-bright); border-color:var(--gold); background:#302615; box-shadow:inset 0 0 0 1px #d1a95555; }
 .avatar-choice-preview { width:70px; height:70px; }
+.adventurer-portrait-section .avatar-choice-preview { width:104px; height:104px; max-width:100%; }
+.adventurer-portrait-section .avatar-picker { grid-template-columns:repeat(auto-fit,minmax(125px,160px)); }
+.adventurer-portrait-section .avatar-choice { padding:12px; gap:8px; }
+.portrait-filter { max-width:240px; margin-top:16px; }
+.avatar-choice:focus-visible { outline:3px solid var(--gold-bright); outline-offset:3px; }
 .avatar-choice small { font-size:10px; font-weight:700; }
 .form-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .form-actions button, .send { border: 1px solid var(--gold); background: var(--gold); color: #1b160e; padding: 11px 18px; font-weight: 700; border-radius: 3px; }
@@ -427,7 +432,7 @@ h1, h2, p { margin-top: 0; }
 .combat-actions { padding:10px 12px 12px; }
 .combat-actions > div { display:flex; flex-wrap:wrap; gap:7px; }
 .combat-actions button { min-height:58px; display:grid; grid-template-columns:40px minmax(0,1fr); align-content:center; column-gap:9px; row-gap:3px; padding:8px 12px; border:1px solid #58452f; border-radius:3px; background:#271e14; color:var(--cream); text-align:left; }
-.combat-actions button::before { content:""; grid-row:1 / 3; width:40px; height:40px; border:0; border-radius:8px; background-image:url(/art/portraits/player-portraits-v1.png); background-size:400% 200%; background-position:var(--portrait-x,0%) var(--portrait-y,0%); }
+.combat-actions button::before { content:""; grid-row:1 / 3; width:40px; height:40px; border:0; border-radius:8px; background-image:var(--portrait-image,url(/art/portraits/player-portraits-v1.png)); background-size:var(--portrait-size,400% 200%); background-position:var(--portrait-position,var(--portrait-x,0%) var(--portrait-y,0%)); background-repeat:no-repeat; }
 .combat-actions button strong,.combat-actions button small { grid-column:2; }
 .game-shell[data-avatar="guardian"] { --portrait-x:0%; --portrait-y:0%; }
 .game-shell[data-avatar="wanderer"] { --portrait-x:33.333%; --portrait-y:0%; }
@@ -1028,6 +1033,7 @@ h1, h2, p { margin-top: 0; }
 .illustrated-atlas-roads path { fill:none; stroke:#f5dfaa; stroke-width:.24; stroke-dasharray:.65 .5; filter:drop-shadow(0 1px 1px #172b2b); opacity:.8; }
 .illustrated-atlas-roads path.travelled { stroke:#ffeabb; stroke-dasharray:none; stroke-width:.35; opacity:1; }
 .world-atlas .atlas-destination { position:absolute; transform:translate(-15px,-50%); padding:0; border:0; background:transparent; display:flex; align-items:center; gap:5px; min-height:44px; }
+.world-atlas .atlas-destination.label-left { flex-direction:row-reverse; transform:translate(calc(-100% + 15px),-50%); }
 .atlas-destination>span { display:grid; place-items:center; flex:0 0 30px; width:30px; height:30px; border:2px solid #f3dfad; border-radius:50%; background:#1d4141; font-size:24px; color:#fff3d1; box-shadow:0 1px 5px #000b; }
 .atlas-destination>strong { padding:5px 8px; color:#fff4dd; background:#162b28ed; border:1px solid #ac9571; border-radius:4px; font:600 14px var(--heading-font); white-space:nowrap; box-shadow:0 2px 5px #0005; }
 .world-atlas .atlas-destination:hover { background:transparent; }

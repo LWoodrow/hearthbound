@@ -4,12 +4,13 @@ import {eldervaleRoads,regionalSites,regionalLinks} from "./adventures/eldervale
 import {visibleLocationDescription,requirementsMet} from "./world-state.mjs";
 import {willowfordAtlas} from "./adventures/willowford.mjs";
 import {rivergateAtlas} from "./adventures/rivergate.mjs";
+import {stonecrossAtlas} from "./adventures/stonecross.mjs";
 import {carriageServices} from "./adventures/carriage-network.mjs";
 import {projectScene} from "./scene-projection.mjs";
 import {adventureRules,authoredRouteContext,locationIsRevealed} from "./adventure-rules.mjs";
 
 // Future settlements provide the same data shape; projection never creates geography.
-const settlements=[willowfordAtlas,rivergateAtlas];
+const settlements=[willowfordAtlas,rivergateAtlas,stonecrossAtlas];
 function localView(state,reason) {
   const settlement=settlements.find(entry=>entry.places.some(place=>place.id===state.currentLocation));
   if(!settlement) return null;

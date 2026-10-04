@@ -149,7 +149,7 @@ test("six reviewed Rivergate portraits and map assets are stable and only disclo
 test("Rivergate coach stand boards real services and preserves every connecting stop and crossing gate",async()=>{
   const f=fixture();try{
     await f.travel("market");await f.travel("rivergate-coach");
-    assert.equal(f.view().carriages.length,2);
+    assert.equal(f.view().carriages.length,3);
     const city=f.view().carriages.find(service=>service.id==="carriage-rivergate-coach-city");
     assert.equal(city.available,true);
     assert.equal(f.view().carriages.find(service=>service.id==="carriage-rivergate-coach-willow-coach").available,false);

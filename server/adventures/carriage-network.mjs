@@ -14,6 +14,18 @@ for(const destination of ["city","willow-coach"]) {
   carriageServices.push({id:"carriage-rivergate-coach-"+destination,location:"rivergate-coach",destination,label:base.label,text:"Ride carriage to "+base.label,journey:outward,requires:base.requires});
   carriageServices.push({id:"carriage-"+destination+"-rivergate-coach",location:destination,destination:"rivergate-coach",label:"Rivergate Coach Stand",text:"Ride carriage to Rivergate Coach Stand",journey:[...outward].reverse(),requires:base.requires});
 }
+// Stonecross is a physical local stop, not a remote shortcut. Its public
+// carriage uses the same crossing gate even when travelling back toward town.
+for(const [destination,label,journey] of [
+  ["city","Eldervale City",["stonecross-coach","ferry","market","city"]],
+  ["market","Rivergate Market",["stonecross-coach","ferry","market"]],
+  ["rivergate-coach","Rivergate Coach Stand",["stonecross-coach","ferry","market","rivergate-coach"]],
+  ["willow-coach","Willowford Coach Yard",["stonecross-coach","ferry","village","willow-coach"]],
+]) {
+  const requires=[{path:"flags.ferryRepaired",equals:true}];
+  carriageServices.push({id:"carriage-stonecross-coach-"+destination,location:"stonecross-coach",destination,label,text:"Ride carriage to "+label,journey,requires});
+  carriageServices.push({id:"carriage-"+destination+"-stonecross-coach",location:destination,destination:"stonecross-coach",label:"Stonecross Coach Stop",text:"Ride carriage to Stonecross Coach Stop",journey:[...journey].reverse(),requires});
+}
 export const carriageInteractions=carriageServices.map(service=>({
   id:service.id,location:service.location,once:false,modes:["act"],verbs:["ride","board"],targets:["carriage to "+service.label],journey:service.journey,requires:service.requires,effects:[],
   outcome:{message:"The company takes the public carriage along the established road to "+service.label+". The saved main adventure and character resources are unchanged."},

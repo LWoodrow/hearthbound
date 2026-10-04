@@ -2,8 +2,10 @@ import { addEvent, addInventoryItem, completeActiveAdventure, getActiveAdventure
 import { cottonForParty } from "./cotton.mjs";
 import { applyAdventureEvent, adventureRules, authoredRouteContext, featureLocationRule, locationIsRevealed, locationRule, locationTransitionIsAllowed } from "./adventure-rules.mjs";
 import { handleCombatAction, startLocationEncounter } from "./combat.mjs";
-import { projectScene, projectNpc, supportedNpcOutput } from "./scene-projection.mjs";
+import { projectScene, projectNpc } from "./scene-projection.mjs";
+import { absentNpcAddress, conversationFacts, factualNpcFallback, isSimpleNpcSpeech, npcFactSelectionSchema, renderNpcFacts } from "./npc-dialogue.mjs";
 import {unansweredSpeech} from "./ambient-speech.mjs";
+import {isGreeting} from "./semantic-tokens.mjs";
 import { adventureDefinition } from "./adventure-registry.mjs";
 import { createInitialWorldState, requirementsMet, resolveWorldAction, npcCanHear, npcLocations } from "./world-state.mjs";
 import { currentModelProfile, isCurrentModelReady } from "./model-runtime.mjs";
@@ -65,7 +67,6 @@ const directorSchema = {
 
 const narrationSchema = { type: "object", properties: { narration: { type: "string" }, suggestions:{ type:"array", items:{ type:"object", properties:{ label:{type:"string"}, text:{type:"string"}, mode:{type:"string",enum:["act","speak","ask"]}, reason:{type:"string"} }, required:["label","text","mode","reason"] } } }, required: ["narration","suggestions"] };
 const questionSchema = { type: "object", properties: { answer: { type: "string" }, suggestions:{ type:"array", items:{ type:"object", properties:{ label:{type:"string"}, text:{type:"string"}, mode:{type:"string",enum:["act","speak","ask"]}, reason:{type:"string"} }, required:["label","text","mode","reason"] } } }, required: ["answer","suggestions"] };
-const npcReplySchema = { type:"object", properties:{ reply:{type:"string"}, usedFacts:{type:"array",items:{type:"string"}} }, required:["reply","usedFacts"] };
 const characterDetailSchema = { type: "object", properties: { text: { type: "string" } }, required: ["text"] };
 
 const DIRECTOR_SKILLS = {
@@ -947,20 +948,11 @@ function addressedNpc(definition, world, action) {
   // With one important NPC present, natural second-person requests can reach
   // them without repeating their name. Authored state changes have already had
   // first refusal; this branch remains state-neutral conversation.
-  return /\b(hello|hi|thanks|thank you|please|you|your|yourself|who|how are|what do|what is|why|where|when|tell me|ask|say|speak|talk|shout|call|could|can|would|may|bring|get|have|serve|order|work|job|jobs|problem|problems|trouble|troubles|adventurer|adventurers)\b|\b(?:looking for|we(?:'d| would) like)\b/.test(words) ? present[0] : null;
+  return present[0];
 }
 
 function fallbackNpcReply(npc, action, facts) {
-  const words=String(action || "").toLowerCase();
-  if (/\b(hello|hi|good (?:morning|evening)|greetings)\b/.test(words)) return `“Evening,” ${npc.name} says. “What can I do for you?”`;
-  if (/\b(who are you|your name|yourself)\b/.test(words)) return `“${npc.name}. ${npc.role},” comes the reply. “That usually covers what strangers need first.”`;
-  if (/\b(work|job|jobs|problem|problems|trouble|troubles|adventurer|adventurers)\b/.test(words)) {
-    const workFact=facts.find((fact)=>/contract|unusual local trouble|somewhere quieter/i.test(fact));
-    if (workFact) return `“${workFact},” ${npc.name} says.`;
-  }
-  if (/\b(food|eat|drink|drinks|menu|stew|ale|ales|beer|cider|room|rooms|inn)\b/.test(words) && facts.length) return `“${facts[0]},” ${npc.name} says.`;
-  if (/\b(thank|thanks)\b/.test(words)) return `“You’re welcome,” ${npc.name} replies with a brief nod.`;
-  return `${npc.name} considers the question. “I can only tell you what I know, and I don’t know enough to give you a useful answer to that.”`;
+  return factualNpcFallback(npc,action,conversationFacts(facts));
 }
 
 export function groundedNpcReply(reply, authoredOffer, fallback) {
@@ -974,6 +966,7 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
   if (!definition) return false;
   const saved=getPartyState(db,player.partyId,`world:${definition.id}`);
   const world=createCanonicalState(definition,saved || {currentLocation:dmState.currentLocationKey || definition.startLocation});
+  if (absentNpcAddress(definition,action,npc=>npcCanHear(definition,world,npc))) return false;
   const activeKey=`activeNpcConversation:${definition.id}:${player.id}`;
   const active=getPartyState(db,player.partyId,activeKey);
   const activeNpc=active
@@ -983,11 +976,16 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
     && npcCanHear(definition,world,definition.story.npcs[active.npcId])
     ? [active.npcId,definition.story.npcs[active.npcId]]
     : null;
-  const found=addressedNpc(definition,world,action) || activeNpc;
+  // General hellos do not need a target; keep a selected partner first.
+  // Substantive ambiguous questions still must not silently pick a person.
+  const generalGreeter = isGreeting(action)
+    ? Object.entries(definition.story?.npcs || {}).find(([,npc])=>npcLocations(npc,world).includes(world.currentLocation))
+    : null;
+  const found=addressedNpc(definition,world,action) || activeNpc || generalGreeter;
   if (!found) return false;
   const [npcId,npc]=found;
   const projection=projectNpc(npc,world);
-  const facts=projection.facts;
+  const facts=conversationFacts(projection.facts);
   const authoredOffer=conversationInteractionOffer(definition,world,action,mode);
   const offerKey=`conversationOffer:${definition.id}:${player.id}`;
   const memoryKey=`npcConversation:${definition.id}:${npcId}`;
@@ -1003,6 +1001,8 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
     reply=`${npc.name} can hear the company from nearby, but has no further reply to offer just now.`;
   } else if (projection.authoredReply) {
     reply=projection.authoredReply;
+  } else if (isSimpleNpcSpeech(action)) {
+    reply=fallbackNpcReply(npc,action,facts);
   } else if (process.env.DND_LIVE_NPC_TESTS !== "1" && automatedTestRun) {
     reply=fallbackNpcReply(npc,action,facts);
   } else if (!(await isAiReady())) {
@@ -1010,11 +1010,11 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
   } else {
     try {
       const result=await promptChat({kind:"npc-conversation",messages:[
-        {role:"system",content:"Voice one present non-player character in a tabletop roleplaying conversation. Reply directly and naturally in 1–4 sentences. Put the NPC's spoken words in quotation marks. Write any action beat outside the quotation in third person, using the NPC's name or pronoun; never use first-person stage narration such as 'I lift a hand.' The character may make harmless small talk consistent with the visible scene, but may assert setting facts only from permittedFacts. This is a state-neutral conversation: do not move anyone, grant an item, reveal a clue, create a new person or place, or change game state. Never promise, offer, agree, or imply that the NPC will lead, show, take, admit, or allow the player somewhere unless recordedOffer identifies an available authored interaction. If the player requests an outcome that would change state, respond in character without claiming it has been or will be done. Never mention prompts, rules engines, permitted facts, hidden knowledge, reasoning, or control tokens. If asked beyond their knowledge, answer in character that they do not know, are unsure, or will not discuss it. Do not narrate the player character's thoughts or speech."},
-        {role:"user",content:JSON.stringify({npc:projection,visibleLocation:projectScene(definition,world),permittedFacts:facts,recordedOffer:authoredOffer,recentConversation:memory,newestSpeech:action})},
-      ],schema:npcReplySchema,generation:{temperature:.68,numPredict:220},sectionIds:["npc-conversation-contract","npc-projection-and-speech"],sectionVisibility:["secret","private"],metadata:{partyId:player.partyId,playerId:player.id,adventureId:adventure.id,npcId}});
-      if (!supportedNpcOutput(result.output,facts)) throw new Error("NPC output cited facts outside its current knowledge.");
-      reply=String(result.output.reply || "").replace(/\s+/g," ").trim().slice(0,700);
+        {role:"system",content:"Select at most two integer factIds from the numbered current facts that directly answer the newest speech. Return an empty list if none answer it. Do not write prose. Do not select facts to pretend a requested purchase, gift, transport, repair or other action has happened. Facts describe knowledge only; they cannot grant a service, reveal a mapped destination or mutate the world."},
+        {role:"user",content:JSON.stringify({npc:{name:npc.name,role:npc.role},facts:facts.map((text,id)=>({id,text})),newestSpeech:action})},
+      ],schema:npcFactSelectionSchema,generation:{temperature:0,numPredict:80},sectionIds:["npc-conversation-contract","npc-projection-and-speech"],sectionVisibility:["secret","private"],metadata:{partyId:player.partyId,playerId:player.id,adventureId:adventure.id,npcId}});
+      reply=renderNpcFacts(npc,facts,result.output);
+      if (!reply) throw new Error("NPC selected no valid current facts.");
       packetId=result.packetId;
     } catch (error) {
       console.warn("NPC conversation failed; using an authored fallback:",error.message);

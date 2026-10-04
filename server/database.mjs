@@ -5,6 +5,7 @@ import { createHash, randomBytes, randomUUID, scryptSync } from "node:crypto";
 import { enrichKnownLocations, locationIsRevealed } from "./adventure-rules.mjs";
 import { adventureDefinition } from "./adventure-registry.mjs";
 import {createCanonicalState,canonicalProjection} from "./interaction-engine.mjs";
+import {acceptedPlayerPortrait, PORTRAIT_SPECIES} from "../shared/player-portraits.mjs";
 
 const DEFAULT_WORLD = "world-hearthbound";
 const DEFAULT_PARTY = "party-first-company";
@@ -618,11 +619,10 @@ export function createPlayer(db, input) {
   const pinSalt = randomBytes(16).toString("hex");
   const pinHash = scryptSync(pin, pinSalt, 32).toString("hex");
   const classes = ["Barbarian","Bard","Cleric","Druid","Fighter","Monk","Paladin","Ranger","Rogue","Sorcerer","Warlock","Wizard"];
-  const species = ["Aasimar","Dragonborn","Dwarf","Elf","Gnome","Goliath","Halfling","Human","Orc","Tiefling"];
+  const species = PORTRAIT_SPECIES;
   const className = classes.includes(String(input.className)) ? String(input.className) : "Fighter";
   const speciesName = species.includes(String(input.species)) ? String(input.species) : "Human";
-  const allowedAvatarIds = new Set(["guardian", "wanderer", "mystic", "shadow", "wild", "scholar", "minstrel", "noble"]);
-  const avatarId = allowedAvatarIds.has(String(input.avatarId || "")) ? String(input.avatarId) : "";
+  const avatarId = acceptedPlayerPortrait(input.avatarId, speciesName);
   const abilities = input.abilities && typeof input.abilities === "object" ? input.abilities : { strength:15, dexterity:14, constitution:13, intelligence:12, wisdom:10, charisma:8 };
   const scores = [abilities.strength, abilities.dexterity, abilities.constitution, abilities.intelligence, abilities.wisdom, abilities.charisma].map(Number);
   if ([...scores].sort((a,b)=>b-a).join(",") !== "15,14,13,12,10,8") throw new Error("Assign each standard-array score exactly once.");

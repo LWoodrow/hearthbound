@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "node --env-file-if-exists=.env server/index.mjs --dev",
-    "build": "vite build && tsc --noEmit",
+    "build": "vite build && tsc --noEmit && node scripts/verify-portrait-assets.mjs",
     "start": "node --env-file-if-exists=.env server/index.mjs",
     "playtest": "node --env-file-if-exists=.env scripts/start-playtest.mjs",
     "test": "node --test --test-isolation=none tests/*.test.mjs",

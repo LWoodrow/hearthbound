@@ -7,7 +7,7 @@ const meaningfulWords = (value) => meaningfulReferenceWords(value).filter((word)
 
 const VERB_FAMILIES = {
   observe:["look","inspect","examine","study","search","investigate","read","check"],
-  move:["go","move","enter","follow","sneak","slip","creep","walk","head","travel","descend","ascend","leave","return"],
+  move:["go","move","visit","enter","follow","sneak","slip","creep","walk","head","travel","descend","ascend","leave","return"],
   open:["open","unseal","break","unlock","unfasten"],
   use:["use","warm","heat","offer","give","apply","operate","place","add"],
   speak:["ask","tell","say","show","request","question","interrogate"],
@@ -17,7 +17,7 @@ const VERB_FAMILIES = {
 const VERB_EQUIVALENTS = [
   ["offer","give","feed","place","apply","put","add"],
   ["warm","heat"],
-  ["go","move","enter","follow","walk","head","travel"],
+  ["go","move","visit","enter","follow","walk","head","travel"],
   ["look","inspect","examine","study","search","investigate","check"],
 ];
 

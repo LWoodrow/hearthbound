@@ -1,5 +1,7 @@
 # Story-engine convergence roadmap
 
+2026-10-04 shared dialogue/exploration package: reading observations and Visit movement are global families, sole-resident speech has no wording whitelist, and absent explicit addressees cannot fall through to remembered partners. The live NPC boundary now selects exact current fact IDs and renders authored text instead of trusting arbitrary reply prose plus citations. This is a factual consistency boundary, not proof of perfect relevance or natural conversation; richer authored voice and live local-model review remain next gates.
+
 Rivergate proof of reuse: second local settlement uses the same canonical executor, hearing/conversation, footprint and portrait disclosure mechanisms. Distinct investigation/social delivery task has independent evidence sources, alternative authority route, guarded physical correction and persistent report-back. Local task text/accessibility/directions/action selection now belong to settlement data, not Willowford-specific branches. No adventure-ID executor condition or main-story migration added.
 
 2026-10-04 local follow-up: presence questions and unanswered spoken turns share generic deterministic handling; anonymous occupants/ambient greeting enrich Willowford Square without mechanical effects. Six reviewed resident portraits use the existing visible-event disclosure boundary. 268 tests/build/typecheck/four validations pass. Browser/live-model review remains before broader settlement expansion.
@@ -363,3 +365,6 @@ Track these after each phase:
 - New-universe interactions implemented without engine changes
 
 The roadmap is complete when story authors add content chiefly by defining truths, entities, evidence, affordances, consequences, and voice—not by adding conditionals to the shared engine.
+# Stonecross content package (2026-10-04)
+
+Third detailed regional hub implemented using the shared authored settlement and combat systems: fixed local plate, reviewed portraits, independent bell evidence sources, nonviolent or combat resolution, physical repair, report-back and preserved ferry/save/travel gates. Human testing is the next gate. This expands optional local life, not the structured migration of Briarwatch or a claim of a completed long campaign.

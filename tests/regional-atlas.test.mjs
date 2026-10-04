@@ -197,7 +197,8 @@ test("Willowford reveals a fixed local plate with real adjacent places and no pr
     await arriveWillowford(f);
     assert.equal(f.view().local.sites.length,7);
     assert.ok(f.view().local.sites.filter(site=>site.id!=="village").every(site=>site.available));
-    assert.ok(f.view().local.sites.every(site=>site.npcs.length===0));
+    assert.ok(f.view().local.sites.filter(site=>site.id!=="village").every(site=>site.npcs.length===0));
+    assert.deepEqual(f.view().local.sites.find(site=>site.id==="village").npcs,["Pip Underbough"]);
     assert.throws(()=>regionalTravelCommand(f.db,f.player,"willow-sluice"),/connected road/);
     await f.travel("willow-inn");
     assert.equal(f.view().currentSite,"village","local subplaces retain their regional parent");
@@ -347,17 +348,18 @@ test("nearby-people questions and square greetings project authored life without
   const f=fixture();try {
     await arriveWillowford(f);
     const before=regionState(f);
+    const castCount=Object.keys(roads.story.npcs).length;
     for(const text of ["any people around here in the square","anyone nearby","are there people here","people around here?"]) {
       const result=await f.act(text);
       assert.match(result.narration,/villagers|farm workers/i,text);
       assert.deepEqual(regionState(f),before,"observation is state-neutral");
     }
     const reply=await resolveAction(f.db,f.player,"speak","hello");
-    assert.match(reply.narration,/villager.*hello/i);
+    assert.match(reply.narration,/Pip Underbough/i,"the present named resident receives the greeting before background villagers");
     assert.doesNotMatch(reply.narration,/Use Act|Bessa|Ada|permission|sluice/i);
     assert.deepEqual(regionState(f),before);
     assert.ok(!f.view().local.sites.some(site=>site.id==="willow-sluice"));
-    assert.equal(Object.keys(roads.story.npcs).length,16,"anonymous people do not create named identities");
+    assert.equal(Object.keys(roads.story.npcs).length,castCount,"anonymous people do not create named identities");
   }finally{f.close();}
 });
 

@@ -94,4 +94,8 @@ The Hearthbound test gate is satisfied when:
 5. The complete automated suite, adventure validator, production build, and diff check remain green.
 # Portrait inspection check (2026-10-04)
 
+## Stonecross hub test (2026-10-04)
+
+Use preview 4322 on `codex/stonecross-hub`; no save reset is required. Follow City → Rivergate → Stonecross. Check the hut, Reed & Oar, Pikebank Boatyard, Coach Stop and Reedbank; the boathouse marker must be absent before disclosure. Ask Jory about work or read either the inn journal or boatyard damage report. Check that discovery adds the same boathouse marker without moving other anchors. At the reedbank choose baiting the feeding bowl before entering, or enter without bait for the real marsh-rat encounter. Repair the bell only after advice and rat resolution, return to Jory and report. Revisit and reread to check truthful persistent descriptions, no respawn and no duplicate rewards. Ferry repair remains separate; restore its mooring and visit connected stops to test carriage trips. Check larger portrait/background popouts for all four residents, greetings, ordinary conversation and mobile map-label readability. Neither optional task advances or levels the saved main story.
+
 In the gameplay roster, click your portrait and Cotton's; then click an encountered NPC portrait in the story. Confirm a larger image and background appear without changing location, turn or selected tab. Escape, Close and clicking outside should dismiss it and restore focus to the portrait. Tab should remain within the popout. Check mobile layout and longer player backstories. Unencountered NPCs and private story facts must not appear. Character selection and combat action buttons must retain their original behaviour.

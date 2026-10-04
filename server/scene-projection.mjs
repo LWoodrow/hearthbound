@@ -30,6 +30,10 @@ export function projectNpc(npc, world) {
 }
 
 export function supportedNpcOutput(output, facts) {
+  // Legacy callers cannot use citations as permission for unrelated prose.
+  // Live conversations use integer selections and renderNpcFacts instead.
   return typeof output?.reply === "string" && Array.isArray(output.usedFacts)
-    && output.usedFacts.every((fact) => facts.includes(fact));
+    && output.usedFacts.length > 0 && output.usedFacts.length <= 2
+    && output.usedFacts.every((fact) => facts.includes(fact))
+    && output.reply === output.usedFacts.join(" ");
 }

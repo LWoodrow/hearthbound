@@ -178,7 +178,7 @@ export function classifyWorldAction(action, mode = "act") {
   // intent; a later "inspect" must not turn "walk there and inspect" into a
   // remote observation. Opening and crossing one doorway remains a move.
   if (/\b(open|unfasten|push)\b/.test(words)
-    && /\b(go|move|enter|cross|walk|run|travel|proceed|step|sneak|slip|creep|crawl|head)\b/.test(words)) return "move";
+    && /\b(go|move|visit|enter|cross|walk|run|travel|proceed|step|sneak|slip|creep|crawl|head)\b/.test(words)) return "move";
   const clauses = words.split(/\b(?:and|then)\b/);
   if (clauses.length > 1) {
     const first = classifyWorldAction(clauses[0], mode);
@@ -190,7 +190,7 @@ export function classifyWorldAction(action, mode = "act") {
   if (/\buse\b.*\bkey\b.*\b(door|lock|hatch|gate)\b/.test(words)) return "object";
   if (/\b(unlock|lock|open|close|shut|unfasten)\b|\blift (?:the )?lid\b/.test(words)) return "object";
   if (/\b(pick up|pickup|take|collect|grab)\b/.test(words)) return "pickup";
-  if (/\b(go|move|enter|cross|follow|descend|ascend|leave|return|walk|run|travel|proceed|advance|continue|step|sneak|slip|creep|crawl|head)\b|\bmake (?:my|our|your|their) way\b/.test(words)) return "move";
+  if (/\b(go|move|visit|enter|cross|follow|descend|ascend|leave|return|walk|run|travel|proceed|advance|continue|step|sneak|slip|creep|crawl|head)\b|\bmake (?:my|our|your|their) way\b/.test(words)) return "move";
   return "other";
 }
 
@@ -218,12 +218,16 @@ function mentionsNamedThing(words, ...candidates) {
 }
 
 function namedThingScore(words, ...candidates) {
-  if (matches(words, ...candidates)) return 100;
+  // A full, more specific phrase beats an incidental shorter label or ID:
+  // "register border samples" is not the nearby object called "register".
+  const exactLengths = candidates.filter(candidate=>matches(words,candidate))
+    .map(candidate=>normalise(candidate).split(" ").length);
+  if (exactLengths.length) return 100 + Math.max(...exactLengths);
   const actionTokens = normalise(words).split(" ").filter(Boolean);
   const generic = new Set(["area", "door", "item", "place", "room", "thing"]);
   return Math.max(0, ...candidates.map((candidate) => {
     const candidateTokens = normalise(candidate).split(" ").filter(Boolean);
-    const meaningful = candidateTokens.filter((token) => token.length >= 4 && !generic.has(token));
+    const meaningful = candidateTokens.filter((token) => token.length >= 3 && !generic.has(token) && !["the","and","for","with","from","into"].includes(token));
     const overlap = meaningful.filter((token) => actionTokens.some((item) => tokenEquivalent(item, token))).length;
     // The final meaningful noun is normally the entity being named. Weight it
     // above incidental modifiers: "note ... writing" should select the note,
@@ -486,7 +490,7 @@ function observationResult(definition, state, words, actorId) {
     .filter((entry) => entry.score > 0)
     .sort((left, right) => right.score - left.score)[0]?.feature;
   if (namedFeature) {
-    if (namedFeature.observation && /\b(look|see|peer|watch|view|inspect|examine|investigate|study|search|check)\b/.test(words)) {
+    if (namedFeature.observation && /\b(read|look|see|peer|watch|view|inspect|examine|investigate|study|search|check)\b/.test(words)) {
       return { message:namedFeature.observation };
     }
     if (namedFeature.contents?.length && /\b(on|upon|contains|holding|items|clues|what)\b/.test(words)) {

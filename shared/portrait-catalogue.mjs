@@ -1,5 +1,20 @@
 // A deliberately finite, reviewed NPC portrait set. Adventures choose an ID;
 // the client never invents a face for an unnamed or unrevealed character.
+import {playerPortrait} from "./player-portraits.mjs";
+
+// Explicit, story-reviewed assignments from existing approved artwork. These
+// NPC IDs are independent of player selections: no randomisation or save edits.
+export const NPC_PORTRAIT_CROPS = Object.freeze(Object.fromEntries([
+  ["sable","tiefling-female-v1"],["torra","dwarf-female-v1"],
+  ["varek","dragonborn-male-v1"],["pip","halfling-male-v1"],
+  ["nim","gnome-male-v1"],["ruka","orc-female-v1"],
+  ["korrin","goliath-male-v1"],["lethiel","mystic"],
+  ["seren","aasimar-female-v1"],["borin","dwarf-male-v1"],
+].map(([id,sourceId]) => {
+  const portrait = playerPortrait(sourceId);
+  if (!portrait) throw new Error("Unapproved NPC portrait source: " + sourceId);
+  return [id,Object.freeze({sourceId,file:portrait.file,size:portrait.size,position:portrait.position,species:portrait.species,gender:portrait.gender})];
+})));
 export const NPC_PORTRAIT_INDEX = Object.freeze({
   tamsin: 0,
   mara: 1,
@@ -9,6 +24,10 @@ export const NPC_PORTRAIT_INDEX = Object.freeze({
 
 // Individual portraits need no sprite-sheet repacking when a settlement grows.
 export const NPC_PORTRAIT_FILES=Object.freeze({
+  jory:"/art/portraits/stonecross-jory-v1.png",
+  mira:"/art/portraits/stonecross-mira-v1.png",
+  edda:"/art/portraits/stonecross-edda-v1.png",
+  bran:"/art/portraits/stonecross-bran-v1.png",
   elin:"/art/portraits/rivergate-elin-v1.png",
   dain:"/art/portraits/rivergate-dain-v1.png",
   vera:"/art/portraits/rivergate-vera-v1.png",
@@ -23,10 +42,19 @@ export const NPC_PORTRAIT_FILES=Object.freeze({
   cora:"/art/portraits/willowford-cora-v1.png",
 });
 
+export function npcPortraitStyle(id) {
+  const crop = Object.hasOwn(NPC_PORTRAIT_CROPS,id) ? NPC_PORTRAIT_CROPS[id] : undefined;
+  if (crop) return {backgroundImage:`url(${crop.file})`,backgroundSize:crop.size,backgroundPosition:crop.position};
+  const file = Object.hasOwn(NPC_PORTRAIT_FILES,id) ? NPC_PORTRAIT_FILES[id] : undefined;
+  if (file) return {backgroundImage:`url(${file})`,backgroundSize:"cover",backgroundPosition:"center"};
+  const index = Object.hasOwn(NPC_PORTRAIT_INDEX,id) ? NPC_PORTRAIT_INDEX[id] : undefined;
+  return index === undefined ? undefined : {backgroundImage:"url(/art/portraits/npc-portraits-v1.png)",backgroundSize:"400% 133.333%",backgroundPosition:`${index % 4 * 100 / 3}% 50%`};
+}
+
 export function visibleNpcPortraits(definition, events = []) {
   const appeared = new Set(events.map((event) => event.speaker));
   return Object.fromEntries(Object.values(definition?.story?.npcs || {})
-    .filter((npc) => (Object.hasOwn(NPC_PORTRAIT_INDEX, npc.portraitId)||Object.hasOwn(NPC_PORTRAIT_FILES,npc.portraitId)) && appeared.has(npc.name))
+    .filter((npc) => Boolean(npcPortraitStyle(npc.portraitId)) && appeared.has(npc.name))
     .map((npc) => [npc.name, npc.portraitId]));
 }
 

@@ -3,8 +3,9 @@ import { aftermathView } from "./aftermath.mjs";
 import {regionalAtlasView,changeRegionalJourney,regionalTravelCommand,carriageTravelCommand} from "./regional-atlas.mjs";
 import { createServer as createHttpsServer } from "node:https";
 import { spawn } from "node:child_process";
-import { readFileSync, existsSync, statSync } from "node:fs";
-import { extname, join, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { serveStaticFile } from "./static-files.mjs";
 import { fileURLToPath } from "node:url";
 import { addEvent, advancePartySpotlight, buildLobby, createDatabase, createParty, createPlayer, createWorld, deletePlayer, getActiveAdventure, getGuidanceMode, getKnownLocations, getLevelUpOptions, getParty, getPartySpotlight, getPartyState, getPlayerByToken, getPlayerGuidance, levelUpPlayer, listInventory, listPlayers, listVisibleEvents, loginPlayer, movePlayerToParty, resetPartyStory, selectAdventure, setGuidanceMode, setPartySpotlight } from "./database.mjs";
 import { actionUsesSpotlight, canSubmitOutsideCombat, normalizeSpeechAudience } from "./spotlight.mjs";
@@ -429,18 +430,13 @@ export async function handleApi(request, response, url) {
   }
 }
 
-const mimeTypes = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8", ".webmanifest": "application/manifest+json", ".png": "image/png", ".svg": "image/svg+xml" };
 export async function start() {
   if (dev) { const { createServer: createViteServer } = await import("vite"); vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" }); }
   const requestHandler = async (request, response) => {
     const url = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
     if (url.pathname.startsWith("/api/")) return handleApi(request, response, url);
     if (vite) return vite.middlewares(request, response, () => json(response, 404, { error: "Not found." }));
-    const dist = resolve("dist");
-    let filename = join(dist, decodeURIComponent(url.pathname) === "/" ? "index.html" : decodeURIComponent(url.pathname));
-    if (!filename.startsWith(dist) || !existsSync(filename) || statSync(filename).isDirectory()) filename = join(dist, "index.html");
-    response.writeHead(200, { "Content-Type": mimeTypes[extname(filename)] || "application/octet-stream" });
-    response.end(readFileSync(filename));
+    return serveStaticFile(request, response, url.pathname, resolve("dist"));
   };
   const secure = Boolean(process.env.HTTPS_KEY && process.env.HTTPS_CERT);
   const server = secure ? createHttpsServer({ key: readFileSync(resolve(process.env.HTTPS_KEY)), cert: readFileSync(resolve(process.env.HTTPS_CERT)) }, requestHandler) : createHttpServer(requestHandler);
