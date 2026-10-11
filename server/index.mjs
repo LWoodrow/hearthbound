@@ -1,5 +1,6 @@
 import { createServer as createHttpServer } from "node:http";
 import { aftermathView } from "./aftermath.mjs";
+import {movementForPlayer} from './movement-view.mjs';
 import {regionalAtlasView,changeRegionalJourney,regionalTravelCommand,carriageTravelCommand} from "./regional-atlas.mjs";
 import { createServer as createHttpsServer } from "node:https";
 import { spawn } from "node:child_process";
@@ -202,6 +203,9 @@ export async function handleApi(request, response, url) {
       if (!pendingCheck && (guidanceMode === "guided" || (guidanceMode === "standard" && guidance.length > 0))) {
         guidance = refreshPlayerGuidance(db, player);
       }
+      // Older stored guidance may still contain route cards during a check.
+      // Routine navigation now belongs to the independent live Move panel.
+      guidance=guidance.filter(suggestion=>!/^go to\b/i.test(suggestion.text));
       const ai = await modelRuntimeView();
       return json(response, 200, {
         build,
@@ -225,6 +229,7 @@ export async function handleApi(request, response, url) {
         aftermath:aftermathView(adventureDefinition(adventure),worldState,{status:adventure?.status,players:humanParty,adventures:buildLobby(db).worlds.find((world)=>world.id === partyInfo.worldId)?.adventures || []}),
         guidanceMode,
         guidance,
+        movement:movementForPlayer(db,player),
         ai: { ...ai, promptInspectorEnabled:promptInspectorEnabled() },
         speech: { transcriptionConfigured: Boolean(process.env.WHISPER_URL) },
         art: { imageConfigured: Boolean(process.env.HEARTHBOUND_IMAGE_API_URL) },

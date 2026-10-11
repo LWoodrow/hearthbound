@@ -1,5 +1,13 @@
 # Hearthbound handoff
 
+## Composer Move panel — verified, publishing (2026-10-11)
+
+User approved Act · Move · Speak · Help / Ask DM, with all eligible current destinations as cards, selecting prepares a command and Send confirms. Isolated codex/move-panel from fetched origin/main 8e6ee2e. Shared canonical scene projection, not another navigation authority; retain doors, briefings and whole-party blockers. Remove routine movement suggestions from Ask DM. Preserve saves, art and settings, test then publish and refresh usual main/4173. Main's unrelated .gitignore remains excluded.
+
+Implemented independent movement view from canonical command surface, available regardless of guidance level, all eligible routes without three-card limit. Hidden/locked/unbriefed and closed-unopenable routes excluded; combat, any party check or fallen companion blocks selection and Send. Dedicated accessible MovePanel reuses themed cards, selected/keyboard states and bounded scrolling; mobile toolbar gives four tabs room. Selection only prepares text, backend still receives ordinary Act, and location/withdrawn-route changes clear selected drafts. Routine exit guidance removed from generator; stale stored Go-to cards filtered on game view. Recorded social-offer guidance retained. No new map, model authority, travel graph, save schema or API action mode.
+
+Verification: 352/352 tests pass including complete Delvers list, actual chosen-command execution, briefing/return/hidden-room projection, door gates, whole-party blockers, Classic independence and actual component card rendering/selection/disabled state. Build/typecheck and 36 portraits passed, four adventures validate, diff whitespace check passes. Next: publish/rebuild/refresh usual main4173, then user tests Move from Last Lantern and Three Knots. Selecting requires Send; typed movement remains supported. Existing saves/settings retained.
+
 ## Open district walking and Delvers local life — deployed and verified (2026-10-11)
 
 User approved direct public walking without entering intermediate buildings, with controlled district boundaries and underground routes retained, plus residents and useful interactions at existing Delvers destinations. Worktree hearthbound-open-district-life, branch codex/open-district-life from origin/main 456de80. Implement an explicitly authored reusable public-area compiler, pilot Delvers only; illustrated lanes remain guidance. Add seven residents and persistent linked preparation/return activities, not unsupported commerce/healing or new artwork. Preserve saves/settings, all maps and portraits. Verify then integrate/rebuild/push usual main and refresh only port 4173 for testing from Last Lantern. Main's unrelated .gitignore change excluded.

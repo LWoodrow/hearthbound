@@ -23,7 +23,8 @@ function visibleExit(definition, state, sourceId, route) {
     objectName:definition.objects?.[route.object]?.name || null,
     objectOpen:objectState?.open === true,
     signposts,
-    available:requirementsMet(state, route.requires || []) && !objectState?.locked,
+    available:requirementsMet(state, route.requires || []) && !objectState?.locked
+      && !(objectState?.open === false && definition.objects?.[route.object]?.openable === false),
   };
 }
 
@@ -71,15 +72,6 @@ export function guidanceFromCommandSurface(surface, limit = 3) {
       mode:"speak",
       reason:`${npc.name} is currently present.`,
     }, `target:${normalise(npc.name)}`);
-  }
-  for (const route of surface.exits.filter((entry) => entry.available)) {
-    add({
-      sourceId:route.id,
-      label:`Go to ${route.destination}`,
-      text:`Go to ${route.destination} through the ${route.via}.`,
-      mode:"act",
-      reason:`This is a currently available exit from ${surface.location.name}.`,
-    }, `target:${normalise(route.destination)}`);
   }
   for (const item of surface.localPortableItems) {
     add({
