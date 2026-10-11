@@ -18,10 +18,11 @@ export function projectLocalAtlas(state,reason="",override=null) {
   const exits=projectScene(eldervaleRoads,state).exits;
   // Only an actually eligible cross-layer exit adds a descent/return marker.
   // Public city art must not disclose an unbriefed underground destination.
-  const boundary=exits.filter(exit=>!settlement.places.some(place=>place.id===exit.to)&&(settlement.schematic||settlements.some(atlas=>atlas.schematic&&atlas.places.some(place=>place.id===exit.to)))).map((exit,index)=>({id:exit.to,name:eldervaleRoads.locations[exit.to].name,x:12+index*24,y:5}));
-  const sites=[...settlement.places,...boundary].filter(place=>requirementsMet(state,place.requires||[])&&(!settlement.schematic||state.visited.includes(place.id)||exits.some(exit=>exit.to===place.id))).map(place=>({
-    id:place.id,name:place.name,x:place.x,y:place.y,kind:"local",
-    description:visibleLocationDescription(eldervaleRoads,state,place.id),
+  const boundary=exits.filter(exit=>!settlement.places.some(place=>place.id===exit.to)&&(settlement.schematic||settlements.some(atlas=>atlas.schematic&&atlas.places.some(place=>place.id===exit.to)))).map((exit,index)=>{const [x,y]=settlement.boundaryAnchors?.[exit.to]||[12+index*24,5];return {id:exit.to,name:eldervaleRoads.locations[exit.to].name,x,y};});
+  const gateways=(settlement.gateways||[]).filter(place=>eldervaleRoads.locations[settlement.id]?.exits.some(exit=>exit.to===place.id&&requirementsMet(state,exit.requires||[]))).map(place=>({...place,name:eldervaleRoads.locations[place.id].name,kind:'district-exit'}));
+  const sites=[...settlement.places,...boundary,...gateways].filter(place=>requirementsMet(state,place.requires||[])&&(!settlement.schematic||state.visited.includes(place.id)||exits.some(exit=>exit.to===place.id))).map(place=>({
+    id:place.id,name:place.name,x:place.x,y:place.y,kind:place.kind||"local",...(place.beyondView?{beyondView:true}:{}),...(place.labelSide?{labelSide:place.labelSide}:{}),
+    description:(place.kind==='district-exit'?'Neighbouring district exit. Take this street from the '+settlement.title+' junction. ':place.beyondView?'This destination continues beyond the edge of this close view. ':'')+visibleLocationDescription(eldervaleRoads,state,place.id),
     visited:state.visited.includes(place.id),current:state.currentLocation===place.id,
     available:!reason&&exits.some(exit=>exit.to===place.id),travelText:"Go to "+place.name,
     npcs:state.visited.includes(place.id)?Object.values(eldervaleRoads.story.npcs).filter(npc=>npc.locations.includes(place.id)).map(npc=>npc.name):[],
@@ -29,7 +30,7 @@ export function projectLocalAtlas(state,reason="",override=null) {
   const visible=new Set(sites.map(site=>site.id));
   const task=settlement.taskStages.find(stage=>requirementsMet(state,stage.requires))?.text||"Explore the public places.";
   return {id:settlement.id,title:settlement.title,image:settlement.image,imageAlt:settlement.imageAlt,imageViewport:settlement.imageViewport,schematic:settlement.schematic,introduction:settlement.introduction,returnHint:settlement.returnHint,sites,
-    routes:[...settlement.links,...boundary.map(place=>[state.currentLocation,place.id])].filter(([from,to])=>visible.has(from)&&visible.has(to)&&(!settlement.schematic||state.visited.includes(from)&&state.visited.includes(to)||exits.some(exit=>exit.to===from||exit.to===to))).map(([from,to])=>({from,to,travelled:traversed(state,from,to)})),
+    routes:[...settlement.links,...boundary.map(place=>[state.currentLocation,place.id]),...gateways.map(place=>[settlement.id,place.id])].filter(([from,to])=>visible.has(from)&&visible.has(to)&&(!settlement.schematic||state.visited.includes(from)&&state.visited.includes(to)||exits.some(exit=>exit.to===from||exit.to===to))).map(([from,to])=>{const geometry=settlement.routeGeometry?.find(route=>route.from===from&&route.to===to||route.from===to&&route.to===from);const points=geometry?(geometry.from===from?geometry.points:[...geometry.points].reverse()):gateways.find(place=>place.id===to)?.points;return {from,to,travelled:traversed(state,from,to),...(points?{points}:{})};}),
     task,actions:availableInteractions(eldervaleRoads,state).filter(action=>settlement.actionIds.includes(action.id)).map(action=>({id:action.id,text:action.verbs[0]+" "+action.targets[0]})),
     reason};
 }

@@ -1029,6 +1029,7 @@ h1, h2, p { margin-top: 0; }
 .illustrated-atlas-scroll { overflow:auto; border:1px solid #796847; border-radius:8px; max-height:78vh; background:#123e40; }
 .illustrated-atlas-plate { position:relative; min-width:720px; }
 .illustrated-atlas-plate>img { display:block; width:100%; height:auto; }
+.illustrated-atlas-plate>img[hidden] { display:none; }
 .illustrated-atlas-roads { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
 .illustrated-atlas-roads path { fill:none; stroke:#f5dfaa; stroke-width:.24; stroke-dasharray:.65 .5; filter:drop-shadow(0 1px 1px #172b2b); opacity:.8; }
 .illustrated-atlas-roads path.travelled { stroke:#ffeabb; stroke-dasharray:none; stroke-width:.35; opacity:1; }
@@ -1040,6 +1041,13 @@ h1, h2, p { margin-top: 0; }
 .atlas-destination.current>span { background:#e4b967; color:#191a14; box-shadow:0 0 0 5px #ffe5a044,0 1px 6px #000; }
 .atlas-destination.visited>strong { border-color:#e4c486; }
 .atlas-destination.selected>strong { background:#ecdbb4; color:#172b28; }
+.atlas-destination.district-exit>span { border-radius:6px; background:#765031; font-size:22px; }
+.atlas-destination.district-exit>strong { background:#4e3524ed; border-color:#edc98d; }
+.atlas-destination.district-exit.selected>strong { background:#ecdbb4; color:#172b28; }
+.atlas-destination.edge-destination>span { border-style:dashed; }
+.atlas-district-exits { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:16px 0; }
+.atlas-district-exits>span { flex-basis:100%; color:var(--muted); }
+.atlas-district-exits button[aria-pressed="true"] { border-color:#edc98d; background:#493722; }
 .atlas-exploration-panel { display:grid; grid-template-columns:1.15fr 1fr; gap:20px; margin-top:20px; }
 .atlas-place-picker { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:16px; color:var(--cream); }
 .atlas-place-picker select { padding:12px; min-height:44px; max-width:100%; color:#f1eadb; background:#29231b; border:1px solid #776447; border-radius:6px; font:inherit; }
@@ -1086,7 +1094,7 @@ h1, h2, p { margin-top: 0; }
 .local-atlas-actions,.carriage-options {display:grid;gap:.75rem}
 .local-atlas-actions button {text-transform:capitalize}
 .carriage-options>div {display:grid;gap:.4rem}
-.world-atlas.local-atlas .illustrated-atlas-roads path {opacity:.48}
+.world-atlas.local-atlas .illustrated-atlas-roads path {opacity:.75;filter:none;stroke:#fff2bd;stroke-width:.28;stroke-linecap:round;stroke-linejoin:round}
 .portrait-trigger { display:inline-flex; flex:0 0 auto; padding:0; border:0; border-radius:8px; background:transparent; color:inherit; cursor:zoom-in; line-height:0; }
 .portrait-trigger:focus-visible { outline:3px solid #d6b66c; outline-offset:4px; }
 .portrait-trigger:hover { filter:brightness(1.12); }
@@ -1102,6 +1110,7 @@ h1, h2, p { margin-top: 0; }
 .portrait-dialog .avatar-expanded { display:block; width:100%; height:100%; border-radius:12px; }
 .portrait-biography h3 { color:#d6b66c; font-size:16px; margin:0 0 12px; }
 .city-district-art,.city-survey-background { width:100%; aspect-ratio:3/2; background-repeat:no-repeat; }
+.atlas-detail-limit { margin:0 0 12px;color:#c7bc9f;font-size:13px;line-height:1.5; }
 .city-survey-background { background-color:#dfcda5; background-image:linear-gradient(#6d715222 1px,transparent 1px),linear-gradient(90deg,#6d715222 1px,transparent 1px);background-size:30px 30px; }
 .city-overview-panel { border:1px solid #8e795044;border-radius:12px;margin:20px 0;background:#211c15; }
 .city-overview-panel>summary { cursor:pointer;padding:20px;color:#e5c786;font-family:Georgia,serif;font-size:20px; }

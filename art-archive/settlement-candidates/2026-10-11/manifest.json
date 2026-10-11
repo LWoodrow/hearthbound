@@ -1,0 +1,74 @@
+{
+  "status": "Archived candidates only; not deployed or approved world locations",
+  "archivedOn": "2026-10-11",
+  "sourceDirectory": "C:/Users/Lee/.codex/generated_images/019ff61f-24b2-7bf1-b905-d35d88ec0ea7",
+  "note": "Original files and extensions retained byte-for-byte. Files named .png are JPEG-encoded; normalize extensions/references together only when preparing approved production assets.",
+  "assets": [
+    {
+      "file": "01-lantern-neighbourhood.png",
+      "sourceFile": "exec-d03dd874-b3c4-49b3-8d3d-ddf62a15b4ce.png",
+      "candidateRole": "Neighbourhood / trade town",
+      "width": 1536,
+      "height": 1024,
+      "encoding": "JPEG",
+      "bytes": 4505030,
+      "sha256": "CACA3D396762B3EF59117F58C2BB0843D74CBD5661A50BAF436FD08F7FF48F38",
+      "sourceCopyHashMatch": true
+    },
+    {
+      "file": "02-expedition-town.png",
+      "sourceFile": "exec-1eaf9437-17c9-446b-b252-ee79ef0e20cc.png",
+      "candidateRole": "Mining / expedition settlement",
+      "width": 1536,
+      "height": 1024,
+      "encoding": "JPEG",
+      "bytes": 4556334,
+      "sha256": "A35D25CBBF19F088FCA1C6A6A6F2E361A998897FAC0B6B53A1C79CBB46E370A1",
+      "sourceCopyHashMatch": true
+    },
+    {
+      "file": "03-civic-town.png",
+      "sourceFile": "exec-3a67b84d-cdba-4fab-b542-625b250677f7.png",
+      "candidateRole": "Affluent civic borough",
+      "width": 1536,
+      "height": 1024,
+      "encoding": "JPEG",
+      "bytes": 4496820,
+      "sha256": "22A7C72AEE5E9BF64699146313C65189B483299C8E7D97870CE9B47A0BC35349",
+      "sourceCopyHashMatch": true
+    },
+    {
+      "file": "04-historic-town.png",
+      "sourceFile": "exec-6fabb214-f7eb-413c-9bcd-26bf15afdaa6.png",
+      "candidateRole": "Historic river town",
+      "width": 1536,
+      "height": 1024,
+      "encoding": "JPEG",
+      "bytes": 4621934,
+      "sha256": "219C0B77BA71A9D0239540A5FCE032295AEF1C0429FAEA3E377044ADAA64F4EF",
+      "sourceCopyHashMatch": true
+    },
+    {
+      "file": "05-forge-town.png",
+      "sourceFile": "exec-70626468-ba36-422e-925f-698595aaa0f0.png",
+      "candidateRole": "Industrial canal / forge town",
+      "width": 1536,
+      "height": 1024,
+      "encoding": "JPEG",
+      "bytes": 4659664,
+      "sha256": "A761CCD46D3417660E29425D37E927366FC694B8F094D9EB9866567A64529B08",
+      "sourceCopyHashMatch": true
+    },
+    {
+      "file": "06-market-town.png",
+      "sourceFile": "exec-1e59d80b-ad0c-40f3-9276-45da816d4aad.png",
+      "candidateRole": "Market / river trading town",
+      "width": 1536,
+      "height": 1024,
+      "encoding": "JPEG",
+      "bytes": 4671541,
+      "sha256": "8AC5617A77E3ACAFB4B3472D25D93A073F0B7EA5D3F72B49722726F82F746B57",
+      "sourceCopyHashMatch": true
+    }
+  ]
+}

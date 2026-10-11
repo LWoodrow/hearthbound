@@ -41,7 +41,11 @@ test('composition never accumulates shared atlas actions or mutates supplied ori
 test('city artwork is a real local PNG and twelve maps use stable views rather than regenerated geography',()=>{
  const bytes=readFileSync(new URL('../public/art/maps/eldervale-city-v1.png',import.meta.url));
  assert.equal(bytes.subarray(1,4).toString(),'PNG');assert.ok(bytes.length>100000);
- assert.ok(cityAtlases.every(a=>a.image===cityOverview.image&&a.imageViewport));
+ assert.ok(cityAtlases.filter(a=>a.id!=='city-delvers').every(a=>a.image===cityOverview.image&&a.imageViewport));
+ const delvers=cityAtlases.find(a=>a.id==='city-delvers');
+ assert.equal(delvers.image,'/art/maps/eldervale-delvers-district-v5.png');assert.equal(delvers.imageViewport,undefined);
+ const approved=readFileSync(new URL('../art-archive/district-review/2026-10-11/delvers-people-v5.png',import.meta.url));
+ assert.deepEqual(readFileSync(new URL('../public'+delvers.image,import.meta.url)),approved);
 });
 test('public district charts disclose geography but no unvisited resident names or underground places',()=>{
  const view=projectLocalAtlas(stateAt('city-lantern'));

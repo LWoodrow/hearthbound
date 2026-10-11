@@ -172,8 +172,8 @@ export type GameView = {
 export type RegionalAtlas = {
   departureDescription:string;
   image:string; title:string; exploring:boolean; currentSite:string; canExplore:boolean; canReturn:boolean; reason:string; mainAdventure:string;hasPausedAdventure:boolean;
-  sites:Array<{id:string;name:string;x:number;y:number;kind:string;description:string;visited:boolean;current:boolean;available:boolean;travelText?:string;npcs:string[]}>;
-  routes:Array<{from:string;to:string;travelled:boolean}>;
+  sites:Array<{id:string;name:string;x:number;y:number;labelSide?:"left"|"right";beyondView?:boolean;kind:string;description:string;visited:boolean;current:boolean;available:boolean;travelText?:string;npcs:string[]}>;
+  routes:Array<{from:string;to:string;travelled:boolean;points?:Array<[number,number]>}>;
   activities:{ferryRepaired:boolean;storyRecorded:boolean};
   local:LocalAtlasData|null;
   city?:LocalAtlasData|null;

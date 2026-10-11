@@ -1,0 +1,22 @@
+// Static rendering of the actual local-map component; no game server or saves.
+import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+import {createRequire} from 'node:module';
+import {runInNewContext} from 'node:vm';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import ts from 'typescript';
+import roads from '../server/adventures/eldervale-roads.mjs';
+import {createCanonicalState} from '../server/interaction-engine.mjs';
+import {projectLocalAtlas} from '../server/regional-atlas.mjs';
+const require=createRequire(new URL('../src/LocalAtlas.tsx',import.meta.url));
+const compiled=ts.transpileModule(readFileSync(new URL('../src/LocalAtlas.tsx',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+const exports={};runInNewContext(compiled,{exports,require});
+const state=createCanonicalState(roads,{currentLocation:process.argv[2]||'city-delvers',visited:['city','city-delvers'],flags:{cityDescentBriefed:true}});
+const atlas=projectLocalAtlas(state);
+let html=renderToStaticMarkup(React.createElement(exports.LocalAtlas,{atlas,busy:false,travel:()=>{},act:()=>{}}));
+const image=readFileSync(new URL('../public'+atlas.image,import.meta.url));
+html=html.split(atlas.image).join('data:image/png;base64,'+image.toString('base64'));
+const css=readFileSync(new URL('../src/styles.css',import.meta.url),'utf8');
+const output=new URL('../outputs/local-atlas-review/',import.meta.url);mkdirSync(output,{recursive:true});
+writeFileSync(new URL(state.currentLocation+'.html',output),'<!doctype html><html><head><meta charset="utf-8"><style>'+css+'\nbody{margin:24px}.local-atlas{max-width:1392px;margin:auto}</style></head><body>'+html+'</body></html>');
+console.log('Static review rendered for '+atlas.id+'; no app started.');

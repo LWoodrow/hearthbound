@@ -1,0 +1,5 @@
+Built-in image generation. Review candidate only, not deployed.
+Source: public/art/maps/eldervale-city-v1.png
+User priorities: same fountain positions and count, house styles, towers and small waterways. Preserve source geography.
+
+undefined
