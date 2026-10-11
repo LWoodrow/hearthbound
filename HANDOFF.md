@@ -1,12 +1,14 @@
 # Hearthbound handoff
 
-## Composer Move panel — verified, publishing (2026-10-11)
+## Composer Move panel — deployed and verified (2026-10-11)
 
 User approved Act · Move · Speak · Help / Ask DM, with all eligible current destinations as cards, selecting prepares a command and Send confirms. Isolated codex/move-panel from fetched origin/main 8e6ee2e. Shared canonical scene projection, not another navigation authority; retain doors, briefings and whole-party blockers. Remove routine movement suggestions from Ask DM. Preserve saves, art and settings, test then publish and refresh usual main/4173. Main's unrelated .gitignore remains excluded.
 
 Implemented independent movement view from canonical command surface, available regardless of guidance level, all eligible routes without three-card limit. Hidden/locked/unbriefed and closed-unopenable routes excluded; combat, any party check or fallen companion blocks selection and Send. Dedicated accessible MovePanel reuses themed cards, selected/keyboard states and bounded scrolling; mobile toolbar gives four tabs room. Selection only prepares text, backend still receives ordinary Act, and location/withdrawn-route changes clear selected drafts. Routine exit guidance removed from generator; stale stored Go-to cards filtered on game view. Recorded social-offer guidance retained. No new map, model authority, travel graph, save schema or API action mode.
 
 Verification: 352/352 tests pass including complete Delvers list, actual chosen-command execution, briefing/return/hidden-room projection, door gates, whole-party blockers, Classic independence and actual component card rendering/selection/disabled state. Build/typecheck and 36 portraits passed, four adventures validate, diff whitespace check passes. Next: publish/rebuild/refresh usual main4173, then user tests Move from Last Lantern and Three Knots. Selecting requires Send; typed movement remains supported. Existing saves/settings retained.
+
+Completed: implementation d4ebde0 fast-forwarded into usual main, rebuilt and pushed to LWoodrow/hearthbound. Existing launcher refreshed port 4173; health confirms ok, main, running d4ebde0. Local main and origin/main agree; only unrelated user .gitignore remains modified. No saves, portraits, map artwork or AI settings changed. This final documentation record changes no runtime logic. Next: browser refresh and human test selecting Move from Last Lantern/Three Knots, selection-before-Send, direct public walks, briefing-gated descent and current options on return. No further implementation required for this package.
 
 ## Open district walking and Delvers local life — deployed and verified (2026-10-11)
 
