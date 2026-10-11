@@ -4,6 +4,8 @@ This document records agreed future work. It is a planning document; an item bei
 
 ## Delivery order
 
+Directional descent package (2026-10-11): explicit direction metadata for all three city approaches and returns; shared unique-direction navigation and bounded initial vertical-command typo correction, preserving all prerequisite/hidden/locked guards and speech boundaries. Ledger directions now locate the book inside the tavern and name the landing. User authorised main deployment. Portrait creation remains separate; map and saved progress unchanged.
+
 User approved Delvers v5 and authorised main/GitHub publication. Next: live test landmark/waypoint alignment, neighbour exits, return routes and source-detail zoom on usual port 4173. Then select the next district against the master geography, retaining restrained crowd style and district-specific layout. Older pending-approval notes below are historical and superseded.
 
 Published implementation 4d5498a to GitHub main; usual main checkout rebuilt. 333 tests, build/typecheck, portrait checks and all adventure validations pass. No game startup/reset. Ready for live testing.

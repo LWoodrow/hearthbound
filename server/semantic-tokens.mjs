@@ -6,7 +6,28 @@ export const textTokens = (value) => normaliseText(value).split(" ").filter(Bool
 // Normalize command shorthand, not entity names or player-visible speech.
 // This is deliberately lexical: no guessed destination, fuzzy noun match,
 // missing precondition or mode change is inferred.
-export const normaliseActionText = (value) => normaliseText(value).replace(/\bgoto\b/g,"go to");
+function oneEditApart(a,b) {
+  if(Math.abs(a.length-b.length)>1) return false;
+  let i=0,j=0,edits=0;
+  while(i<a.length&&j<b.length){
+    if(a[i]===b[j]){i++;j++;continue;}
+    if(++edits>1) return false;
+    if(a.length>=b.length)i++;
+    if(b.length>=a.length)j++;
+  }
+  return edits+(a.length-i)+(b.length-j)===1;
+}
+export const normaliseActionText = (value) => {
+  const text=normaliseText(value).replace(/\bgoto\b/g,"go to");
+  // Correct only an initial near-spelling of a vertical command. Never fuzzy
+  // match destinations, middle-of-sentence names, or change player speech.
+  return text.replace(/^(please )?([a-z]{5,8})(?=\s|$)/, (full,polite,verb)=>{
+    const commands=['descend','ascend'];
+    if(commands.includes(verb))return full;
+    const candidates=commands.filter(command=>oneEditApart(verb,command));
+    return candidates.length===1?(polite||'')+candidates[0]:full;
+  });
+};
 
 export function asksAboutNearbyPeople(value) {
   const words=normaliseText(value);

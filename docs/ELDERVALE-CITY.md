@@ -189,6 +189,8 @@ Three maintained surface approaches are playable:
 
 Only visited rooms and eligible adjacent rooms appear in the underground survey. Reading a briefing records knowledge; it never moves the party. Return stairs remain physically connected.
 
+Directional approaches carry explicit down/up exit metadata. After the required local briefing, ordinary commands such as “descend”, “go down” and “enter the lower area” use the unique authored downward route; “ascend” uses the return stair. Ambiguous routes, hidden/locked doors and unmet briefings never gain a shortcut. Upper Cistern remains a destination name, not an upward instruction. Hester identifies the ledger as inside The Last Lantern; briefing responses name their landing, including the independent Moth & Compass folio's Last Lantern approach. Initial near-spellings of descend/ascend are corrected only as command verbs; original transcript wording and speech mode are retained.
+
 Copy the municipal seal at Seal Plaza and report to Hester. This is an optional civic survey, not a main-story milestone. Ward Street contains a real persistent sentinel encounter. The Echo Gallery and refuge provide a noncombat route around that street. Defeat uses the existing combat rolls, blocks travel while active, commits its resolution flag and prevents respawning.
 
 Read either the refuge return-route chart or workshop gate instructions, then deliberately turn the workshop wheel. Reading does not open the gate. After operation the gate stays open for backtracking and current descriptions reflect that state. The Citadel Threshold is a sealed boundary, not a generated next corridor.

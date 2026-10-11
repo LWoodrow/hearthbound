@@ -119,6 +119,21 @@ test('actual city controls retain regional locality and reject remote destinatio
   assert.equal(view.local.sites.find(s=>s.id==='city-delvers-last').available,true,'the real return stair is available in map controls');
  }finally{f.close();}
 });
+test('actual DM dispatch resolves transcript descent wording and preserves briefing and speech boundaries',async()=>{
+ for(const text of ['enter the lower area','decend into the dark']){
+  const f=fixture('city-delvers-last');try{
+   await resolveAction(f.db,getPlayer(f.db,f.player.id),'act',text);
+   assert.equal(getPartyState(f.db,f.party.id,'world:eldervale-roads').currentLocation,'city-delvers-last');
+   await resolveAction(f.db,getPlayer(f.db,f.player.id),'act','read safety ledger');
+   const read=getPartyState(f.db,f.party.id,'world:eldervale-roads');assert.equal(read.flags.cityDescentBriefed,true);assert.equal(read.currentLocation,'city-delvers-last');
+   await resolveAction(f.db,getPlayer(f.db,f.player.id),'act',text);
+   assert.equal(getPartyState(f.db,f.party.id,'world:eldervale-roads').currentLocation,'city-under-landing');
+   await resolveAction(f.db,getPlayer(f.db,f.player.id),'act','ascend');
+   assert.equal(getPartyState(f.db,f.party.id,'world:eldervale-roads').currentLocation,'city-delvers-last');
+  }finally{f.close();}
+ }
+});
+
 test('ward combat uses real rolls, blocks city travel, persists victory and cannot respawn',async()=>{
  const f=fixture('city-under-plaza'),random=Math.random;try{Math.random=()=>.5;
   await resolveAction(f.db,getPlayer(f.db,f.player.id),'act','enter Ward Street');

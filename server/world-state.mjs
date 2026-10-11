@@ -276,8 +276,8 @@ function objectForAction(definition, state, words, selected = null) {
 }
 
 function requestedVerticalDirection(words) {
-  if (/\b(?:down|descend|downstairs|below)\b/.test(words)) return "down";
-  if (/\b(?:up|ascend|upstairs|above)\b/.test(words)) return "up";
+  if (/\b(?:down|descend|downstairs|below)\b|\blower (?:area|level|floor|ground)\b/.test(words)) return "down";
+  if (/\b(?:up|ascend|upstairs|above)\b|\bupper (?:area|level|floor|ground)\b/.test(words)) return "up";
   return "";
 }
 
@@ -317,6 +317,15 @@ function exitForMovement(definition, state, words, selected = null) {
   }).filter((candidate) => candidate.score > 0)
     .sort((left, right) => right.score - left.score);
   if (matchesTarget[0] && (!matchesTarget[1] || matchesTarget[0].score > matchesTarget[1].score)) return matchesTarget[0].exit;
+
+  // A unique authored vertical route supplies the destination for ordinary
+  // directional requests. Selecting it still goes through every travel guard.
+  // Do not replace an explicitly named conflicting exit with the stairs.
+  if(requestedDirection&&directionalExits.length&&exits.length===1){
+    const conflicting=authoredExits.some(exit=>exit!==exits[0]&&matches(words,exit.to,definition.locations[exit.to]?.name,...(definition.locations[exit.to]?.aliases||[])));
+    if(conflicting)return null;
+    return exits[0];
+  }
 
   const movesBackward = /\b(back|return|retreat)\b/.test(words);
   if (movesBackward) {
