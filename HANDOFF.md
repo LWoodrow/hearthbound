@@ -1,10 +1,12 @@
 # Hearthbound handoff
 
-## Directional descent fix verified; deployment authorised (2026-10-11)
+## Directional descent fix deployed and verified (2026-10-11)
 
 User reported Hester's ledger directions sounded local to the junction; after briefing at Last Lantern, 'enter the lower area' and 'decend into the dark' failed. Authorised shared directional navigation fix and deployment. Separate codex/directional-descents worktree from fetched main 6103a34. Add down/up metadata to all three city descent pairs, unique-direction selection without bypassing prerequisites/hidden/locked routes, bounded command-verb typo correction and explicit ledger location/destination guidance. Preserve saves, settings, portraits and approved map. Test then merge/rebuild/push main; single usual runtime port 4173, no save reset.
 
 Implemented and verified: shared direction selection for unique authored vertical exits; lower/upper area/level/floor/ground recognised without interpreting Upper Cistern as an up command. Initial one-edit near-spellings of descend/ascend corrected only at command start, retaining original literal/speech boundaries. All three city approach/return pairs carry down/up metadata; Hester identifies ledger inside tavern and briefings name landings. Regression coverage includes all three briefing gates/returns, synthetic unrelated-world guards, ambiguous/locked/hidden/conflicting routes and exact human transcript through actual DM/database dispatch. 338/338 tests pass, build/typecheck and 36 portraits pass, four adventures validate (146 Roads locations), diff whitespace check passes. Deploy to usual main, rebuild and refresh existing runtime; no new ports or state resets. Portraits remain separate work.
+
+Deployment completed: d165183 fast-forwarded to main, rebuilt and pushed to LWoodrow/hearthbound. Existing launcher refreshed usual service on 4173; /api/health confirms ok, branch main, running implementation d165183. Local main and origin/main match; user's .gitignore modification retained/excluded. No saves, characters, AI settings or map assets changed. User can refresh and continue the existing save after reading the ledger; 'descend', 'enter the lower area' and 'decend into the dark' tested. Final documentation record is published after this implementation; it changes no runtime logic.
 
 ## Approved Delvers map published to main and GitHub (2026-10-11)
 
