@@ -284,6 +284,17 @@ function requestedVerticalDirection(words) {
 function exitForMovement(definition, state, words, selected = null) {
   const location = definition.locations[state.currentLocation];
   const authoredExits = location?.exits || [];
+  // A fully named destination at the end of a command outranks a nearby
+  // place sharing one noun (Grand Exchange is not Delvers' Exchange).
+  // Match longest whole names/aliases; never turn an explicit remote request
+  // into a convenient local route. IDs are not prose destination aliases.
+  const named = Object.entries(definition.locations).flatMap(([id, entry]) =>
+    [entry.name,...(entry.aliases || [])].map(normalise)
+      .filter(name => name && (` ${words}`).endsWith(` ${name}`))
+      .map(name => ({id,length:name.length})))
+    .sort((a,b)=>b.length-a.length);
+  if (named.length && !named.filter(entry=>entry.length===named[0].length)
+    .some(entry=>authoredExits.some(exit=>exit.to===entry.id))) return null;
   const requestedDirection = requestedVerticalDirection(words);
   const directionalExits = authoredExits.filter((exit) => exit.direction);
   // If this location has authored vertical routes, a directional command must

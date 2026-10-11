@@ -6,9 +6,9 @@ Eldervale now has twelve connected districts, ninety-six public destinations and
 
 The regional gateway remains the stable location `city`, displayed as Eldervale City. Its description identifies Eldervale Waygate. It connects the existing public roads and the city’s Lantern Ward, Delvers’ Quarter and Greenwall entrances. District streets are bidirectional. Each district contains a public junction plus eight destinations connected by a perimeter circuit and several junction lanes, rather than eight disconnected markers.
 
-The city overview charts public districts. District maps chart public places without disclosing unseen residents. A marker can be charted but unreachable from the current street. Travel still requires a real adjacent exit, all prerequisites, and no active combat, pending party check or fallen companion.
+The city overview charts public districts. District maps chart public places without disclosing unseen residents. Delvers now opts into an explicitly authored **open public walking area**: all nine public destinations can be reached in one action without entering intermediate premises. Drawn lanes are guides, not compulsory room hops. District boundaries still leave through the junction; the shaft still requires the local safety briefing inside the Last Lantern. Other districts retain their reviewed adjacency until separately classified. All travel retains prerequisites and whole-party combat/check/fallen-companion guards.
 
-Fifteen new named residents are authored: twelve district guides, Selka at the Last Lantern, Bora in the underground refuge and Arven at the cistern. They supplement, rather than replace, the existing cast. Their species, voice, recollections and present-tense knowledge are authored. No reviewed portraits have been assigned to this new cast: names are shown instead of borrowed or mismatched faces.
+Twenty-two city residents are authored: twelve district guides, Selka at the Last Lantern, Bora in the underground refuge, Arven at the cistern and seven Delvers neighbours. They supplement, rather than replace, the existing cast. Their species, voice, recollections and present-tense knowledge are authored. No reviewed portraits have been assigned to this new cast: names are shown instead of borrowed or mismatched faces.
 
 Ten small district jobs change persistent flags, current observations and resident knowledge. Five additional local pastimes record visits without awarding inventory or campaign levels. These are intentionally modest community interactions, not a full economic or faction simulation.
 
@@ -170,6 +170,24 @@ Orchards, stables, wide parks, festivals and the city wall's sheltering shadow. 
 - Greenward Pavilion: An open pavilion shelters festival records and gardeners' notes.
 - Wallwalk Lookout: A guarded public terrace overlooks rooftops and the river valley.
 
+
+## Delvers public walking and local life (2026-10-11)
+
+`server/public-areas.mjs` compiles reviewed public-area membership into ordinary canonical exits. Navigation, interpretation, scene guidance and map-button availability consequently share one source of truth. It does not search arbitrary graphs, visit intermediate buildings, award their greetings or discover their interiors. Existing guarded edges are retained, and member entrance requirements/doors apply to additional public walks too. Unknown/overlapping members are rejected. Private rooms, canal barriers, district crossings and underground rooms must not be added merely because they appear on one illustration. The first explicitly reviewed area is Delvers only. Map geometry stays sparse and unchanged: we do not draw a complete graph over the artwork.
+
+Seven additive residents have local entry greetings, distinctive voices, public background, safe expedition advice and remembered contributions:
+
+- Tavi Thimbleknot, gnome ropeworker, at Three Knots Ropeworks.
+- Lethriel Mossink, elf cartographer, at Moth & Compass Maps.
+- Dorrik Slate, dwarf expedition clerk, at Delvers' Exchange.
+- Nima Dawnstone, aasimar memorial keeper, at Returners' Wall.
+- Brakka Copperbuckle, orc outfitter, at Copper Buckle Outfitters.
+- Fen Underbough, halfling hostel steward, at The Forty Beds.
+- Ysra Glassscale, dragonborn survey archivist, at Surveyors' Hall.
+
+Play the linked preparation circuit: read either existing briefing, **tie practice rope**, **check expedition kit**, then **register expedition plan** at the Exchange. Each step records a persistent contribution; registration requires all three. This circuit is optional and does not introduce another descent gate. Kit checking is a useful advisory demonstration, not a purchase, repair, inventory grant or bonus. At the Wall **leave return promise**; at Forty Beds **leave return notice**. After copying the real seal and reporting to Hester, **share survey record** at Surveyors' Hall. Nima and Fen acknowledge a safe reported return if you left their corresponding promise/notice. Repeats have stable responses and no duplicate effects. Inspecting a feature only teaches the activity; it does not perform it. Map guidance and local action buttons show current eligible activities.
+
+Testing from Last Lantern: walk to Three Knots, then directly to Moth & Compass; Last Lantern must not become an intermediate visit. Visit the outfitter, register the prepared plan, leave a promise and notice, and return directly to the tavern. Descend only after briefing. After the seal report, compare it at the hall and talk to the memorial/hostel keepers. This package preserves all location IDs, approved v5 art, saves and main-story progress. NPC portraits, paid commerce, bookings, mechanical healing/rest and deeper citadel content remain separate work.
 
 ## The two taverns
 

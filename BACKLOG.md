@@ -4,6 +4,8 @@ This document records agreed future work. It is a planning document; an item bei
 
 ## Delivery order
 
+Open public walking and Delvers local life (2026-10-11): reusable explicit public-area compiler; Delvers pilot permits one-action public walking without intermediate building visits. District crossings and underground gates remain controlled. Seven additive residents and a persistent briefing/knot/kit/registration circuit, return promises/notices and reported-survey comparison deepen existing destinations without imaginary commerce or rewards. Next: human test from Last Lantern, reviewed NPC portraits, and classify further public districts against real barriers before opting them into open walking. Paid shopping/lodging/healing and deeper depths remain separately specified work.
+
 Directional descent package (2026-10-11): explicit direction metadata for all three city approaches and returns; shared unique-direction navigation and bounded initial vertical-command typo correction, preserving all prerequisite/hidden/locked guards and speech boundaries. Ledger directions now locate the book inside the tavern and name the landing. User authorised main deployment. Portrait creation remains separate; map and saved progress unchanged.
 
 User approved Delvers v5 and authorised main/GitHub publication. Next: live test landmark/waypoint alignment, neighbour exits, return routes and source-detail zoom on usual port 4173. Then select the next district against the master geography, retaining restrained crowd style and district-specific layout. Older pending-approval notes below are historical and superseded.
