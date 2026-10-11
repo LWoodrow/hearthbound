@@ -6,6 +6,8 @@ This document records agreed future work. It is a planning document; an item bei
 
 User approved Delvers v5 and authorised main/GitHub publication. Next: live test landmark/waypoint alignment, neighbour exits, return routes and source-detail zoom on usual port 4173. Then select the next district against the master geography, retaining restrained crowd style and district-specific layout. Older pending-approval notes below are historical and superseded.
 
+Published implementation 4d5498a to GitHub main; usual main checkout rebuilt. 333 tests, build/typecheck, portrait checks and all adventure validations pass. No game startup/reset. Ready for live testing.
+
 Latest Delvers revision: v5 is wired locally, with much smaller and sparser painted figures. Both v4 fountains, architecture and waypoint geometry retained. All earlier artwork preserved; no new routes/gameplay. User review before deployment, no merge/push/startup.
 
 Delvers art correction: v4 is wired locally after user rejected v3's crowd and missing western fountain. Two plaza fountains and muted painted figures; existing markers/routes, gameplay and all earlier artwork retained. Exact prompt archived as delvers-crowd-fountains-v4-prompt.txt. Await user visual review before deployment. No merge/push or startup.

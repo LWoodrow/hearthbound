@@ -1,10 +1,12 @@
 # Hearthbound handoff
 
-## Approved Delvers map publication authorised (2026-10-11)
+## Approved Delvers map published to main and GitHub (2026-10-11)
 
 User approved v5 and explicitly authorised merge into main and push to LWoodrow/hearthbound for normal app testing. Fetched origin: main, origin/main and this branch base match a9e2f03. Main has only user's unrelated .gitignore modification, preserved/excluded. Publishing approved v5, Delvers anchors/street geometry/district exit projection, shared labels/native-detail zoom, regression tests and art-preservation documentation/archive. Other eleven districts retain their original city crops; incomplete twelve-image experiment is superseded and not deployed. Exclude obsolete unused public images, redundant misnamed archive copy, generated previews/build outputs and all saves/settings. No runtime startup requested; usual port stays 4173. Verification and publication result recorded after checks.
 
 Final pre-publication checks: 333/333 tests pass, production build/typecheck pass, 36 portrait assets verified, all four adventures valid (Roads retains 146 locations), git diff --check passes. Actual-component static map rendering succeeds without starting game or touching saves. Approved fountain/crowd asset and real gateway regressions included. User approval supersedes earlier pending-art-review notes below. Publication is in progress; do not interpret those historical notes as current blockers.
+
+Completed: implementation 4d5498a fast-forwarded into C:/Users/Lee/Documents/GitHub/hearthbound main and pushed successfully to https://github.com/LWoodrow/hearthbound (a9e2f03..4d5498a). Main rebuilt successfully, including TypeScript and 36 portrait checks. Only unrelated user .gitignore remains modified there. No game started, no saves/settings changed. Normal runtime remains main on port 4173; restart using existing launcher and refresh for testing. Previous art and six unused settlement candidates are backed up in the committed archive; obsolete public drafts/misnamed duplicate remain locally untracked, not removed. Next: human waypoint/exit/zoom test before another district. This completion record supersedes the in-progress language above and historical pending-deployment notes below.
 
 ## Delvers people-only correction implemented locally (2026-10-11)
 
