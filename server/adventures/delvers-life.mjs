@@ -1,3 +1,4 @@
+import {addDelversConversations} from './delvers-conversations.mjs';
 const flag = name => ({path:'flags.'+name, equals:true});
 const set = name => ({op:'set',path:'flags.'+name,value:true});
 const stories={
@@ -39,12 +40,13 @@ export function addDelversLife(locations, npcs, interactions, initialFlags) {
     const location='city-delvers-'+key, id=location+'-resident';
     npcs[id]={name,role,appearance,locations:[location],voice:voices[key],
       goals:['Help neighbours and returning crews'],knows:facts,mustNotKnow:['Private campaign discoveries','Unopened citadel depths'],
-      conversation:{publicFacts:[appearance,greeting,...facts,stories[key]],conditionalFacts:[]},
+      conversation:{publicFacts:[...facts,stories[key]],conditionalFacts:[]},
       publicBackground:appearance+' '+stories[key]};
     locations[location].features.push({id,label:name,kind:'npc'});
     locations[location].occupants=[name,'neighbours and visiting crews'];
     locations[location].entryBeats.push({id:id+'-welcome',npc:id,text:greeting});
   }
+  addDelversConversations(npcs);
   const tasks=[
     ['gear','kit-check',['check','review'],['expedition kit','kit display'], 'cityDelversKitChecked',
      'Brakka checks the demonstration straps with the company and reviews lights, a second knot check and a return route. Your preparation is recorded. Display equipment stays here; no inventory, repairs or combat bonuses are granted.',[]],

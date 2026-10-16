@@ -20,7 +20,7 @@ test('only Delvers switches to approved full-frame artwork; every referenced dis
 test('authored street bends reach exact markers and every rendered route is a bidirectional canonical exit',()=>{
  assert.equal(atlas.routeGeometry.length,atlas.links.length);
  for(const [from,to] of atlas.links){const route=atlas.routeGeometry.find(r=>r.from===from&&r.to===to);const a=atlas.places.find(p=>p.id===from),b=atlas.places.find(p=>p.id===to);assert.deepEqual(route.points[0],[a.x,a.y]);assert.deepEqual(route.points.at(-1),[b.x,b.y]);assert.ok(route.points.length>2);for(const p of route.points)assert.ok(p.length===2&&p.every(n=>Number.isFinite(n)&&n>=0&&n<=100));for(const [a,b] of [[from,to],[to,from]]){assert.ok(roads.locations[a].exits.some(e=>e.to===b));assert.equal(resolveWorldAction({definition:roads,state:stateAt(a),action:'Go to '+roads.locations[b].name,actorId:'test'}).accepted,true);}}
- const view=projectLocalAtlas(stateAt('city-delvers'));for(const route of view.routes){const authored=atlas.routeGeometry.find(r=>r.from===route.from&&r.to===route.to)||atlas.gateways.find(p=>p.id===route.to);assert.deepEqual(route.points,authored.points);}
+ const view=projectLocalAtlas(stateAt('city-delvers'));assert.deepEqual(view.routes,[],'open public area has no misleading route web');
  assert.equal(view.sites.find(s=>s.id==='city-delvers-guild').available,true,'public walking is not restricted to the illustrated lane graph');
  assert.equal(view.sites.find(s=>s.id==='city-delvers-last').available,true);
 });
@@ -29,7 +29,7 @@ test('district arrows expose exactly the canonical neighbours without shortcuts 
  const root=projectLocalAtlas(stateAt('city-delvers'));
  const expected=['city','city-crown','city-lantern','city-old','city-temples'];
  assert.deepEqual(root.sites.filter(s=>s.kind==='district-exit').map(s=>s.id).sort(),expected.sort());
- for(const id of expected){const marker=root.sites.find(s=>s.id===id);assert.equal(marker.available,true);const route=root.routes.find(r=>r.to===id);assert.deepEqual(route.points[0],[58,86]);assert.deepEqual(route.points.at(-1),[marker.x,marker.y]);assert.ok(route.points.every(p=>p.every(n=>n>=0&&n<=100)));assert.equal(resolveWorldAction({definition:roads,state:stateAt('city-delvers'),action:'Go to '+roads.locations[id].name,actorId:'test'}).accepted,true);}
+ for(const id of expected){const marker=root.sites.find(s=>s.id===id);assert.equal(marker.available,true);assert.ok(!root.routes.some(r=>r.to===id));const route=atlas.gateways.find(r=>r.id===id);assert.deepEqual(route.points[0],[58,86]);assert.deepEqual(route.points.at(-1),[marker.x,marker.y]);assert.ok(route.points.every(p=>p.every(n=>n>=0&&n<=100)));assert.equal(resolveWorldAction({definition:roads,state:stateAt('city-delvers'),action:'Go to '+roads.locations[id].name,actorId:'test'}).accepted,true);}
  const remote=projectLocalAtlas(stateAt('city-delvers-last'));
  assert.equal(remote.sites.filter(s=>s.kind==='district-exit').length,5);
  assert.ok(remote.sites.filter(s=>s.kind==='district-exit').every(s=>!s.available));

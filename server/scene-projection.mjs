@@ -26,6 +26,7 @@ export function projectNpc(npc, world) {
     name:npc.name, role:npc.role, appearance:presentation?.appearance || npc.appearance,
     goals:presentation?.goals || npc.goals, voice:presentation?.voice || npc.voice,
     mustNotKnow:npc.mustNotKnow, facts, authoredReply:presentation?.reply,
+    topics:(npc.conversation?.topics || []).filter(topic=>requirementsMet(world,topic.requires || [])),
   };
 }
 

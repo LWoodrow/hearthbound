@@ -89,6 +89,18 @@ function validateStory(adventure, errors, warnings) {
       if (!disclosure?.fact || !Array.isArray(disclosure?.requires) || !disclosure.requires.length) errors.push(`story.npcs.${npcId}.conversation.conditionalFacts[${index}] needs fact and requirements.`);
       validateRequirements(disclosure?.requires, `story.npcs.${npcId}.conversation.conditionalFacts[${index}].requires`, errors);
     }
+    const topics=npc.conversation?.topics;
+    if(topics!=null&&!Array.isArray(topics))errors.push(`story.npcs.${npcId}.conversation.topics must be an array.`);
+    const topicIds=new Set();
+    for(const [index,topic] of (Array.isArray(topics)?topics:[]).entries()){
+      const path=`story.npcs.${npcId}.conversation.topics[${index}]`;
+      if(!topic||typeof topic.id!=='string'||!topic.id.trim()||typeof topic.text!=='string'||!topic.text.trim()
+        ||!['greeting','local-news','personal'].includes(topic.kind))errors.push(`${path} needs a stable id, supported kind and reply text.`);
+      if(topicIds.has(topic?.id))errors.push(`${path} duplicates a topic id.`);
+      topicIds.add(topic?.id);
+      if(topic&&Object.keys(topic).some(key=>!['id','kind','text','requires'].includes(key)))errors.push(`${path} may contain only reply data and prerequisites, not effects.`);
+      validateRequirements(topic?.requires,`${path}.requires`,errors);
+    }
   }
 
   const clues = story.clues || {};

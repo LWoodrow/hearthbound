@@ -3,7 +3,7 @@ import { cottonForParty } from "./cotton.mjs";
 import { applyAdventureEvent, adventureRules, authoredRouteContext, featureLocationRule, locationIsRevealed, locationRule, locationTransitionIsAllowed } from "./adventure-rules.mjs";
 import { handleCombatAction, startLocationEncounter } from "./combat.mjs";
 import { projectScene, projectNpc } from "./scene-projection.mjs";
-import { absentNpcAddress, conversationFacts, factualNpcFallback, isSimpleNpcSpeech, npcFactSelectionSchema, renderNpcFacts } from "./npc-dialogue.mjs";
+import { absentNpcAddress, conversationFacts, factualNpcFallback, isSimpleNpcSpeech, npcFactSelectionSchema, renderNpcFacts, authoredNpcConversation } from "./npc-dialogue.mjs";
 import {unansweredSpeech} from "./ambient-speech.mjs";
 import {isGreeting} from "./semantic-tokens.mjs";
 import { adventureDefinition } from "./adventure-registry.mjs";
@@ -995,12 +995,15 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
   let packetId;
   const automatedTestRun=process.argv.some((argument)=>/\.test\.mjs$/i.test(String(argument)));
   const heardOnly = !npcLocations(npc,world).includes(world.currentLocation);
+  const topicReply=heardOnly?null:authoredNpcConversation(projection,action,memory);
   if (heardOnly && npc.callResponse && requirementsMet(world,npc.callResponse.requires || [])) {
     reply=npc.callResponse.text;
   } else if (heardOnly) {
     reply=`${npc.name} can hear the company from nearby, but has no further reply to offer just now.`;
   } else if (projection.authoredReply) {
     reply=projection.authoredReply;
+  } else if (topicReply) {
+    reply=topicReply.reply;
   } else if (isSimpleNpcSpeech(action)) {
     reply=fallbackNpcReply(npc,action,facts);
   } else if (process.env.DND_LIVE_NPC_TESTS !== "1" && automatedTestRun) {
@@ -1023,7 +1026,7 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
   }
   if (!reply) reply=fallbackNpcReply(npc,action,facts);
   reply=groundedNpcReply(reply,authoredOffer,fallbackNpcReply(npc,action,facts));
-  const nextMemory=[...memory,{worldRevision:world.revision,player:player.name,speech:String(action).slice(0,500),npc:npc.name,reply}].slice(-8);
+  const nextMemory=[...memory,{worldRevision:world.revision,player:player.name,speech:String(action).slice(0,500),npc:npc.name,reply,...(topicReply?.reply===reply?{topicId:topicReply.topicId,topicKind:topicReply.topicKind}:{})}].slice(-8);
   setPartyState(db,player.partyId,memoryKey,nextMemory);
   setPartyState(db,player.partyId,activeKey,{npcId,locationId:world.currentLocation,worldRevision:Number(world.revision || 0)});
   if (authoredOffer) setPartyState(db,player.partyId,offerKey,{

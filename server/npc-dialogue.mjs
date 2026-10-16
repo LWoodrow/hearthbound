@@ -22,7 +22,47 @@ export function renderNpcFacts(npc, facts, selection) {
   if (!selection || Object.keys(selection).some(key=>key!=="factIds") || !Array.isArray(selection.factIds)
     || selection.factIds.length>2 || selection.factIds.some(id=>!Number.isInteger(id)||id<0||id>=facts.length)
     || new Set(selection.factIds).size!==selection.factIds.length) return null;
-  return selection.factIds.length ? `“${selection.factIds.map(id=>facts[id]).join(" ")}”` : null;
+  // Authored lines can already contain speech, attribution or plain facts.
+  // Preserve that formatting; an outer speech wrapper creates nested quotes
+  // and makes third-person scene narration sound like the NPC quoting itself.
+  return selection.factIds.length ? selection.factIds.map(id=>facts[id]).join(" ") : null;
+}
+
+export function npcConversationTopic(action) {
+  const words=normaliseText(action);
+  if(isGreeting(action))return 'greeting';
+  if(/^(?:and )?(?:what else|anything else|tell me more|go on|and then)(?: please)?$/.test(words))return 'follow-up';
+  if(/\b(?:news|gossip|rumou?rs)\b/.test(words) || /\b(?:whats|what is|what has been|anything) (?:been )?(?:new|happening|going on)\b/.test(words)
+    || /\b(?:how are things|(?:hows|how is) (?:life|business))\b/.test(words)) {
+    // A named subject is a factual question, not a licence to change topic.
+    const subject=words.match(/\b(?:about|regarding|concerning) (.+)$/)?.[1];
+    if(subject&&!/^(?:here|the (?:town|district|quarter|neighbourhood)|town|around here)$/.test(subject))return null;
+    return 'local-news';
+  }
+  if(/\b(?:tell me about yourself|your story|your background|how did you|why did you|what do you enjoy)\b/.test(words))return 'personal';
+  return null;
+}
+
+// Topics contain reviewed player-facing replies, not model-authored events.
+// Projection filters their prerequisites; memory controls variety, never truth.
+export function authoredNpcConversation(projection, action, memory=[]) {
+  // A known addressee is not part of the question's subject. This supports
+  // "hello Ada" and "Ada, any news?" without a name-specific phrase list.
+  let speech=normaliseText(action);
+  const names=[normaliseText(projection.name),normaliseText(projection.name).split(' ')[0]].filter(Boolean);
+  for(const name of names){
+    if(speech.startsWith(name+' '))speech=speech.slice(name.length+1);
+    else if(speech.endsWith(' '+name))speech=speech.slice(0,-name.length-1);
+  }
+  let kind=npcConversationTopic(speech);
+  if(kind==='follow-up')kind=memory.at(-1)?.topicKind;
+  if(!kind)return null;
+  const topics=(projection.topics || []).filter(topic=>topic.kind===kind&&typeof topic.text==='string'&&topic.text.trim());
+  if(!topics.length)return null;
+  const used=new Set(memory.map(entry=>entry.reply));
+  const next=topics.find(topic=>!used.has(topic.text));
+  if(next)return {reply:next.text,topicId:next.id,topicKind:kind};
+  return {reply:kind==='greeting'?`“Good to see you again,” ${projection.name} says.`:'“That is all I can vouch for on that just now. Is there something specific you wanted to ask?”',topicId:null,topicKind:kind};
 }
 export function factualNpcFallback(npc, action, facts) {
   const words=normaliseText(action);

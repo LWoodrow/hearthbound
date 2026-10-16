@@ -37,7 +37,7 @@ test("Visit is movement globally but retains adjacency and speech boundaries",()
 
 test("model output can select exact facts but cannot publish arbitrary or uncited prose",()=>{
   const npc={name:"Test",role:"resident"},facts=["The bell is damaged.","The mooring is repaired."];
-  assert.equal(renderNpcFacts(npc,facts,{factIds:[1]}),'“The mooring is repaired.”');
+  assert.equal(renderNpcFacts(npc,facts,{factIds:[1]}),'The mooring is repaired.');
   assert.equal(supportedNpcOutput({reply:"Invented beer.",usedFacts:[]},facts),false);
   assert.equal(supportedNpcOutput({reply:"The bell is at the landing.",usedFacts:[facts[0]]},facts),false);
   for(const output of [{reply:"Beer is served.",usedFacts:[]},{factIds:[0],reply:"The bell is at the landing."},{factIds:[2]},{factIds:[-1]},{factIds:["0"]},{factIds:[0,0]},{factIds:[0,1,0]},{}])

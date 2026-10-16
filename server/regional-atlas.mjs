@@ -28,9 +28,15 @@ export function projectLocalAtlas(state,reason="",override=null) {
     npcs:state.visited.includes(place.id)?Object.values(eldervaleRoads.story.npcs).filter(npc=>npc.locations.includes(place.id)).map(npc=>npc.name):[],
   }));
   const visible=new Set(sites.map(site=>site.id));
+  // Reviewed open public areas are walkable spaces, not a room-hop graph.
+  // Keep destinations and gateway arrows, but draw only real cross-layer
+  // thresholds here. Strict settlements/underground keep their route lines.
+  const openArea=!settlement.schematic && Boolean(eldervaleRoads.locations[settlement.id]?.publicArea);
+  const drawnLinks=openArea?[]:settlement.links;
+  const drawnGateways=openArea?[]:gateways.map(place=>[settlement.id,place.id]);
   const task=settlement.taskStages.find(stage=>requirementsMet(state,stage.requires))?.text||"Explore the public places.";
   return {id:settlement.id,title:settlement.title,image:settlement.image,imageAlt:settlement.imageAlt,imageViewport:settlement.imageViewport,schematic:settlement.schematic,introduction:settlement.introduction,returnHint:settlement.returnHint,sites,
-    routes:[...settlement.links,...boundary.map(place=>[state.currentLocation,place.id]),...gateways.map(place=>[settlement.id,place.id])].filter(([from,to])=>visible.has(from)&&visible.has(to)&&(!settlement.schematic||state.visited.includes(from)&&state.visited.includes(to)||exits.some(exit=>exit.to===from||exit.to===to))).map(([from,to])=>{const geometry=settlement.routeGeometry?.find(route=>route.from===from&&route.to===to||route.from===to&&route.to===from);const points=geometry?(geometry.from===from?geometry.points:[...geometry.points].reverse()):gateways.find(place=>place.id===to)?.points;return {from,to,travelled:traversed(state,from,to),...(points?{points}:{})};}),
+    routes:[...drawnLinks,...boundary.map(place=>[state.currentLocation,place.id]),...drawnGateways].filter(([from,to])=>visible.has(from)&&visible.has(to)&&(!settlement.schematic||state.visited.includes(from)&&state.visited.includes(to)||exits.some(exit=>exit.to===from||exit.to===to))).map(([from,to])=>{const geometry=settlement.routeGeometry?.find(route=>route.from===from&&route.to===to||route.from===to&&route.to===from);const points=geometry?(geometry.from===from?geometry.points:[...geometry.points].reverse()):gateways.find(place=>place.id===to)?.points;return {from,to,travelled:traversed(state,from,to),...(points?{points}:{})};}),
     task,actions:availableInteractions(eldervaleRoads,state).filter(action=>settlement.actionIds.includes(action.id)).map(action=>({id:action.id,text:action.verbs[0]+" "+action.targets[0]})),
     reason};
 }
