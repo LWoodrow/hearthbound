@@ -4,6 +4,8 @@ export function deriveCanonicalEvents(before = {}, after = {}, { interactionIds 
   const revision = Number(after.revision || 0);
   if (revision <= Number(before.revision || 0)) return [];
   const events = [];
+  for(const [npcId,players] of Object.entries(after.social || {}))for(const [playerId,relationship] of Object.entries(players))
+    if(stable(before.social?.[npcId]?.[playerId])!==stable(relationship))events.push({type:'social-state-changed',revision,npcId,playerId});
   if (before.currentLocation !== after.currentLocation) events.push({ type:"location-entered", revision, locationId:after.currentLocation, previousLocationId:before.currentLocation || null });
   for (const id of after.discoveries || []) if (!(before.discoveries || []).includes(id)) events.push({ type:"discovery-recorded", revision, discoveryId:id });
   for (const [flag,value] of Object.entries(after.flags || {})) if (stable(before.flags?.[flag]) !== stable(value))

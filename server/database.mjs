@@ -1073,6 +1073,7 @@ export function resetPartyStory(db, partyId) {
     db.prepare("DELETE FROM party_state WHERE party_id = ? AND (key IN ('dm', 'knownLocations', 'combat', 'pendingLevelUps', 'cotton') OR key LIKE 'pendingCheck:%' OR key LIKE 'guidance:%' OR key LIKE 'turnTraces:%' OR key LIKE 'turnRevision:%' OR key LIKE 'npcConversation:%' OR key LIKE 'conversationOffer:%' OR key LIKE 'sceneEntry:%')").run(partyId);
     const structuredAdventureId = adventureDefinition(party.active_adventure_id)?.id || String(party.active_adventure_id || "");
     db.prepare("DELETE FROM party_state WHERE party_id = ? AND key IN (?, ?)").run(partyId, `world:${structuredAdventureId}`, `interactions:${party.active_adventure_id}`);
+    db.prepare("DELETE FROM party_state WHERE party_id = ? AND (key LIKE ? OR key LIKE ?)").run(partyId,`npcNaturalHistory:${structuredAdventureId}:%`,`npcDialogueStatus:${structuredAdventureId}:%`);
     if(adventure)db.prepare("UPDATE party_adventures SET status='active',completed_at=NULL WHERE party_id=? AND adventure_id=?").run(partyId,adventure.id);
     db.prepare("UPDATE players SET hp = max_hp WHERE party_id = ?").run(partyId);
     if (adventure) db.prepare("DELETE FROM inventory_items WHERE source_adventure_id = ? AND player_id IN (SELECT id FROM players WHERE party_id = ?)").run(adventure.id, partyId);

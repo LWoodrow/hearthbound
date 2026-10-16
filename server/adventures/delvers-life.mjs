@@ -1,4 +1,5 @@
 import {addDelversConversations} from './delvers-conversations.mjs';
+import {addDelversSocial} from './delvers-social.mjs';
 const flag = name => ({path:'flags.'+name, equals:true});
 const set = name => ({op:'set',path:'flags.'+name,value:true});
 const stories={
@@ -80,4 +81,5 @@ export function addDelversLife(locations, npcs, interactions, initialFlags) {
   npcs['city-delvers-memorial-resident'].conversation.conditionalFacts.push({requires:[flag('cityDelversReturnPromise'),flag('citySealReported')],fact:'“You kept your return promise,” Nima says. “Hester has the survey record, and you are upstairs again. That is the part worth remembering.”'});
   npcs['city-delvers-hostel-resident'].conversation.conditionalFacts.push({requires:[flag('cityDelversReturnNotice'),flag('citySealReported')],fact:'Fen marks your public notice returned after Hester’s survey report. “Good. One fewer name for somebody to worry about.”'});
   npcs['city-last-host'].conversation.publicFacts.push('Tavi at Three Knots teaches a practice bowline; Brakka at Copper Buckle checks the display kit; Dorrik at the Exchange registers prepared expedition plans. These are optional preparation, not extra descent requirements.','Nima keeps the Returners’ Wall and Fen the hostel return board. Ysra compares municipal survey records after you report to Hester.');
+  addDelversSocial(npcs,initialFlags);
 }

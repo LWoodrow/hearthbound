@@ -1,5 +1,6 @@
 const REQUIRED_ADVENTURE_FIELDS = ["id", "title", "startLocation", "locations"];
 import { validateInteractions } from "./interaction-engine.mjs";
+import {validateNpcSocial} from './npc-social-schema.mjs';
 
 function pushUnique(target, message) {
   if (!target.includes(message)) target.push(message);
@@ -71,6 +72,7 @@ function validateStory(adventure, errors, warnings) {
 
   const npcs = story.npcs || {};
   for (const [npcId, npc] of Object.entries(npcs)) {
+    errors.push(...validateNpcSocial(npc,npcId,adventure));
     if (!npc?.name || !npc?.role) errors.push(`story.npcs.${npcId} needs name and role.`);
     for (const locationId of npc?.locations || []) {
       if (!adventure.locations[locationId]) errors.push(`story.npcs.${npcId} references unknown location '${locationId}'.`);

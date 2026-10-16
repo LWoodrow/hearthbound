@@ -52,6 +52,7 @@ export function createCanonicalState(definition, persisted = {}) {
     resources:{ ...(definition.initialResources || {}), ...(persisted.resources || {}) },
     clocks:{ ...(definition.initialClocks || {}), ...(persisted.clocks || {}) },
     knowledge:{ ...(persisted.knowledge || {}) },
+    social:clone(persisted.social || {}),
     outcomes:Array.isArray(persisted.outcomes) ? persisted.outcomes.slice(-100) : [],
   };
 }

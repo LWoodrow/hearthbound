@@ -3,7 +3,7 @@ import { cottonForParty } from "./cotton.mjs";
 import { applyAdventureEvent, adventureRules, authoredRouteContext, featureLocationRule, locationIsRevealed, locationRule, locationTransitionIsAllowed } from "./adventure-rules.mjs";
 import { handleCombatAction, startLocationEncounter } from "./combat.mjs";
 import { projectScene, projectNpc } from "./scene-projection.mjs";
-import { absentNpcAddress, conversationFacts, factualNpcFallback, isSimpleNpcSpeech, npcFactSelectionSchema, renderNpcFacts, authoredNpcConversation } from "./npc-dialogue.mjs";
+import { absentNpcAddress, conversationFacts, factualNpcFallback, isSimpleNpcSpeech, npcFactSelectionSchema, renderNpcFacts, authoredNpcConversation,npcConversationTopic } from "./npc-dialogue.mjs";
 import {unansweredSpeech} from "./ambient-speech.mjs";
 import {isGreeting} from "./semantic-tokens.mjs";
 import { adventureDefinition } from "./adventure-registry.mjs";
@@ -17,6 +17,14 @@ import { buildSceneCommandSurface } from "./scene-command-surface.mjs";
 import { recordCanonicalTransition } from "./canonical-events.mjs";
 import { interpretSceneTurn } from "./turn-interpretation.mjs";
 import { generateStructured } from "./ai-transport.mjs";
+import {npcRelationship,npcPersonality,conversationEvidence,planSocialAttempt,resolveSocialAttempt} from './npc-social-engine.mjs';
+import {naturalNpcReply} from './npc-natural-dialogue.mjs';
+
+function socialTransaction(db,operation){
+  db.exec('SAVEPOINT npc_social_turn');
+  try{const result=operation();db.exec('RELEASE npc_social_turn');return result;}
+  catch(error){db.exec('ROLLBACK TO npc_social_turn');db.exec('RELEASE npc_social_turn');throw error;}
+}
 
 export async function isAiReady() {
   return isCurrentModelReady();
@@ -984,6 +992,27 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
   const found=addressedNpc(definition,world,action) || activeNpc || generalGreeter;
   if (!found) return false;
   const [npcId,npc]=found;
+  const socialPlan=planSocialAttempt({npc,npcId,playerId:player.id,world,action});
+  if(socialPlan){
+    if(socialPlan.kind==='blocked'){
+      setPartyState(db,player.partyId,`npcDialogueStatus:${definition.id}:${player.id}`,{npcId,source:'rules',reason:'social-request-blocked'});
+      addEvent(db,{partyId:player.partyId,playerId:player.id,visibility:'public',kind:'narration',speaker:npc.name,text:socialPlan.reply});return {source:'rules',rule:'social-request-blocked',accepted:false,publicFacts:[socialPlan.reply]};
+    }
+    if(getPartyState(db,player.partyId,'combat')?.active || listPlayers(db,player.partyId).some(member=>getPartyState(db,player.partyId,`pendingCheck:${member.id}`))){
+      addEvent(db,{partyId:player.partyId,visibility:'public',kind:'narration',speaker:'Dungeon Master',text:'Finish the current combat or pending check before resolving another consequential request.'});return true;
+    }
+    if(socialPlan.kind==='check'){
+      queueAbilityCheck(db,player,{ability:socialPlan.ability,skill:socialPlan.skill,modifier:skillModifier(player,socialPlan.ability,socialPlan.skill),dc:socialPlan.dc,reason:socialPlan.reason,
+        social:{...socialPlan,adventureId:adventure.id,definitionId:definition.id}});return true;
+    }
+    return socialTransaction(db,()=>{
+      const resolved=resolveSocialAttempt({definition,world,playerId:player.id,pending:socialPlan,success:true});
+      if(resolved.accepted){setPartyState(db,player.partyId,`world:${definition.id}`,resolved.state);setPartyState(db,player.partyId,'dm',{...dmState,...canonicalProjection(definition,resolved.state)});}
+      setPartyState(db,player.partyId,`npcDialogueStatus:${definition.id}:${player.id}`,{npcId,source:'rules',reason:'authored-social-outcome'});
+      addEvent(db,{partyId:player.partyId,playerId:player.id,visibility:'public',kind:'narration',speaker:npc.name,text:resolved.reply});
+      return {source:'rules',rule:'authored-social-outcome',accepted:resolved.accepted,canonicalEvents:resolved.canonicalEvents || [],publicFacts:[resolved.reply]};
+    });
+  }
   const projection=projectNpc(npc,world);
   const facts=conversationFacts(projection.facts);
   const authoredOffer=conversationInteractionOffer(definition,world,action,mode);
@@ -992,16 +1021,32 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
   const savedMemory=getPartyState(db,player.partyId,memoryKey);
   const memory=Array.isArray(savedMemory) ? savedMemory.filter((entry)=>entry.worldRevision === world.revision).slice(-8) : [];
   let reply="";
+  let groundedFallback='';
   let packetId;
   const automatedTestRun=process.argv.some((argument)=>/\.test\.mjs$/i.test(String(argument)));
   const heardOnly = !npcLocations(npc,world).includes(world.currentLocation);
   const topicReply=heardOnly?null:authoredNpcConversation(projection,action,memory);
+  const naturalKey=`npcNaturalHistory:${definition.id}:${npcId}:${player.id}`;
+  const naturalHistory=getPartyState(db,player.partyId,naturalKey) || [];
+  let naturalSource=null;
   if (heardOnly && npc.callResponse && requirementsMet(world,npc.callResponse.requires || [])) {
     reply=npc.callResponse.text;
   } else if (heardOnly) {
     reply=`${npc.name} can hear the company from nearby, but has no further reply to offer just now.`;
   } else if (projection.authoredReply) {
     reply=projection.authoredReply;
+  } else if(npc.conversation?.natural){
+    const evidence=conversationEvidence(npc,projection,world,action,naturalHistory);
+    const fallback=topicReply?.reply || (isSimpleNpcSpeech(action)?fallbackNpcReply(npc,action,facts):evidence.length?evidence.map(entry=>entry.text).join(' '):'“I am not sure about that. What did you have in mind?”');
+    groundedFallback=fallback;
+    const packet={npc:{name:npc.name,role:npc.role},personality:npcPersonality(npc,npcRelationship(world,npcId,player.id)),evidence,
+      newestSpeech:action,history:naturalHistory.slice(-6).map(entry=>({speech:entry.speech,reply:entry.reply})),
+      instructions:'History is conversation, not current evidence. Do not repeat a previous answer word for word.'};
+    const live=(!automatedTestRun || process.env.DND_LIVE_NPC_TESTS==='1') && await isAiReady();
+    const result=live?await naturalNpcReply({packet,fallback,generate:request=>promptChat({...request,sectionIds:['npc-performance-contract','npc-current-evidence'],sectionVisibility:['secret','private'],metadata:{partyId:player.partyId,playerId:player.id,adventureId:adventure.id,npcId}})}):{reply:fallback,source:'authored-fallback',reason:'model-unavailable-or-test'};
+    reply=result.reply;naturalSource={source:result.source,reason:result.reason};
+    const topicKind=topicReply?.topicKind || (npcConversationTopic(action)==='follow-up'?naturalHistory.at(-1)?.topicKind:npcConversationTopic(action));
+    setPartyState(db,player.partyId,naturalKey,[...naturalHistory,{speech:String(action).slice(0,500),reply,topicKind,evidenceIds:result.evidenceIds || evidence.map(entry=>entry.id)}].slice(-8));
   } else if (topicReply) {
     reply=topicReply.reply;
   } else if (isSimpleNpcSpeech(action)) {
@@ -1025,8 +1070,9 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
     }
   }
   if (!reply) reply=fallbackNpcReply(npc,action,facts);
-  reply=groundedNpcReply(reply,authoredOffer,fallbackNpcReply(npc,action,facts));
+  reply=groundedNpcReply(reply,authoredOffer,groundedFallback || fallbackNpcReply(npc,action,facts));
   const nextMemory=[...memory,{worldRevision:world.revision,player:player.name,speech:String(action).slice(0,500),npc:npc.name,reply,...(topicReply?.reply===reply?{topicId:topicReply.topicId,topicKind:topicReply.topicKind}:{})}].slice(-8);
+  setPartyState(db,player.partyId,`npcDialogueStatus:${definition.id}:${player.id}`,{npcId,...(naturalSource || {source:'rules',reason:'authored-dialogue'})});
   setPartyState(db,player.partyId,memoryKey,nextMemory);
   setPartyState(db,player.partyId,activeKey,{npcId,locationId:world.currentLocation,worldRevision:Number(world.revision || 0)});
   if (authoredOffer) setPartyState(db,player.partyId,offerKey,{
@@ -1343,6 +1389,24 @@ export async function resolvePendingCheck(db, player, roll) {
   const key = `pendingCheck:${player.id}`;
   const pending = getPartyState(db, player.partyId, key);
   if (!pending || !Number.isFinite(Number(pending.dc))) return null;
+  if(pending.social){
+    const raw=Number(roll);
+    if(!Number.isInteger(raw)||raw<1||raw>20)throw new Error('A social check requires a d20 result from 1 to 20.');
+    return socialTransaction(db,()=>{
+      const adventure=getActiveAdventure(db,player.partyId),definition=adventureDefinition(adventure);
+      if(adventure.id!==pending.social.adventureId || definition?.id!==pending.social.definitionId){setPartyState(db,player.partyId,key,null);return {success:false,source:'rules',rule:'stale-social-check'};}
+      const world=createCanonicalState(definition,getPartyState(db,player.partyId,`world:${definition.id}`) || {});
+      const total=raw+pending.modifier,success=total>=pending.dc;
+      const result=resolveSocialAttempt({definition,world,playerId:player.id,pending:pending.social,success});
+      setPartyState(db,player.partyId,key,null);
+      if(result.accepted){setPartyState(db,player.partyId,`world:${definition.id}`,result.state);setPartyState(db,player.partyId,'dm',{...(getPartyState(db,player.partyId,'dm') || {}),...canonicalProjection(definition,result.state)});}
+      setPartyState(db,player.partyId,`npcDialogueStatus:${definition.id}:${player.id}`,{npcId:pending.social.npcId,source:'rules',reason:'authored-social-check'});
+      addEvent(db,{partyId:player.partyId,playerId:player.id,visibility:'public',kind:'roll',speaker:'Dice',text:`${player.name} rolled ${raw} + ${pending.modifier} = ${total} for ${pending.skill} against DC ${pending.dc}: ${success?'success':'failure'}.`});
+      addEvent(db,{partyId:player.partyId,playerId:player.id,visibility:'public',kind:'narration',speaker:definition.story.npcs[pending.social.npcId].name,text:result.reply});
+      refreshPlayerGuidance(db,player);
+      return {success:result.accepted&&success,total,dc:pending.dc,source:'rules',rule:'authored-social-check',canonicalEvents:result.canonicalEvents || [],publicFacts:[result.reply]};
+    });
+  }
   const raw = Number(roll);
   const modifier = Number(pending.modifier || 0);
   const total = raw + modifier;

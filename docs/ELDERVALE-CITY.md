@@ -173,6 +173,12 @@ Orchards, stables, wide parks, festivals and the city wall's sheltering shadow. 
 
 ## Delvers public walking and local life (2026-10-11)
 
+### Natural conversation and social-engine focus (2026-10-16)
+
+The nine contacts now opt into shared personality-driven AI performance, with current relevant evidence, disclosure tiers, bounded per-player history and a separate grounding/consequence review. Prepared lines remain a safe fallback, not the only available conversation. The model menu reports which path produced the latest reply. Individual relationship and mood changes require authored social outcomes; free greetings/news do not farm trust. Lethriel's practical map recommendation is separated from route details and puzzle solutions.
+
+Four first social situations are authored: Lethriel's unfinished annotations, Insight into her guarded manner, Selka's personal reflection, and Dorrik's confidence in a prepared crew. They use existing roll controls and explicit evidence/retry/boundary rules. Private annotations and endorsement do not create a new route, item, membership or campaign reward. All profile/permission data are additive to existing saves. See [NPC-SOCIAL-ENGINE.md](NPC-SOCIAL-ENGINE.md) for the detailed architecture, authoring reference, limitations and human test route. Further districts and portraits wait while this conversation foundation is tested.
+
 `server/public-areas.mjs` compiles reviewed public-area membership into ordinary canonical exits. Navigation, interpretation, scene guidance and map-button availability consequently share one source of truth. It does not search arbitrary graphs, visit intermediate buildings, award their greetings or discover their interiors. Existing guarded edges are retained, and member entrance requirements/doors apply to additional public walks too. Unknown/overlapping members are rejected. Private rooms, canal barriers, district crossings and underground rooms must not be added merely because they appear on one illustration. The first explicitly reviewed area is Delvers only. Open-area plates now omit internal lane webs and long gateway lines: destination markers and district-exit arrows remain. Only eligible actual cross-layer thresholds are drawn. Strict settlement and underground route maps retain their lines; navigation and approved bitmap artwork are unchanged.
 
 ### Conversational life follow-up (2026-10-16)

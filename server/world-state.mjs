@@ -111,6 +111,7 @@ export function createInitialWorldState(definition, persisted = {}) {
     resources: { ...(saved.resources || {}) },
     clocks: { ...(saved.clocks || {}) },
     knowledge: { ...(saved.knowledge || {}) },
+    social: clone(saved.social || {}),
     outcomes: Array.isArray(saved.outcomes) ? saved.outcomes.slice(-100) : [],
   };
 }

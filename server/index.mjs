@@ -230,6 +230,7 @@ export async function handleApi(request, response, url) {
         guidanceMode,
         guidance,
         movement:movementForPlayer(db,player),
+        dialogue:getPartyState(db,player.partyId,`npcDialogueStatus:${structuredAdventureId}:${player.id}`) || null,
         ai: { ...ai, promptInspectorEnabled:promptInspectorEnabled() },
         speech: { transcriptionConfigured: Boolean(process.env.WHISPER_URL) },
         art: { imageConfigured: Boolean(process.env.HEARTHBOUND_IMAGE_API_URL) },
