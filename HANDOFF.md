@@ -1,5 +1,9 @@
 # Hearthbound handoff
 
+## Experimental answerability deployment — user authorized (2026-10-16)
+
+After the explicit report of failed live semantic acceptance, the user requests “deploy now”. Deploy saved 8dbc1da and its continuity base to usual main/GitHub/4173 as an EXPERIMENTAL TESTING SLICE, not a quality-approved fix. Prior failure evidence below remains valid. Previous verification:416 tests, production build/typecheck,36 portraits and four adventure validations pass. Preserve real saves, loaded model/settings, art and unrelated main .gitignore. No additional engine changes or model switch. Integration is a fast-forward from f9462b9; rebuild usual checkout, push origin/main and refresh only existing4173 with model warmup skipped. Verify health commit and remote/main equality; record completion below. Next human checks: current Nima apology→food→family reference, known sister biography, unknown first-hand experience. Expect possible invented detail/withheld replies and45–106s observed latency; do not call semantic quality solved.
+
 ## Bounded answerability testing slice — saved, live quality NOT ACCEPTED (2026-10-16)
 
 User has twenty minutes and requests a useful slice for tomorrow's testing. Separate codex/conversation-answerability worktree from fetched main f9462b9; prior unshipped ab6f43e retained as the starting candidate, not considered accepted. Focus: distinguish missing personal knowledge from a negative life-history claim, retain conversational references, evaluate real local-model behaviour before deployment. Add an AI-led scoped answerability plan before personal-experience prose rather than new phrase matchers or invented Nima dining biography. Preserve saves, shared model/settings, art and the user's unrelated main .gitignore. No model switch or extra game port. Full tests/build/adventure checks and honest live evidence required; do not deploy as fixed if acceptance still fails.

@@ -4,7 +4,7 @@
 
 ### Continuity and active knowledge review (current protocol v2)
 
-**Release status: bounded answerability slice retained, NOT DEPLOYED.** Both the previous v2 candidate and this follow-up fail live grounding acceptance despite416 automated passes. The small unknown assessor caught a fabricated lifestyle claim, but its repair still added an unsupported aside; the final food test passed unsupported details with zero source receipts. Input reference tracking and draft-discard behaviour improved, but these are not a complete quality pass. Running main remains f9462b9. Full results and timing are in HANDOFF.md; do not describe this as a universal conversation fix.
+**Release status: experimental deployment explicitly requested after disclosure of the live failures.** Both the previous v2 candidate and this follow-up fail live grounding acceptance despite416 automated passes. The small unknown assessor caught a fabricated lifestyle claim, but its repair still added an unsupported aside; the final food test passed unsupported details with zero source receipts. Input reference tracking and draft-discard behaviour improved, but these are not a complete quality pass. See the latest HANDOFF.md deployment record for integration/runtime status; do not describe this as a universal conversation fix.
 
 ### Personal answerability boundary
 
