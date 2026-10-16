@@ -1,7 +1,7 @@
 // Reviewed local knowledge shared by the Delvers cast, not invented by the
 // narrator. Stable geography/advice only: no clock, current weather or commerce.
 const shared=[
- {id:'delvers-food',subjects:['everyday:food','hungry','eat','recommend','meal'],text:'“For somewhere nearby, I would try the Last Lantern, here in Delvers’ Quarter. If you fancy seeing more of the city, there is Nine Kitchens Court in the Grand Exchange, or Hearthcrumb Bakery in Lantern Ward. Which sounds more like what you want?”'},
+ {id:'delvers-food',subjects:['everyday:food','hungry','eat','recommend','meal'],text:'Food recommendations: the Last Lantern is nearby in Delvers’ Quarter; Nine Kitchens Court is in the Grand Exchange; Hearthcrumb Bakery is in Lantern Ward. These are public recommendations, not evidence of anyone’s past visits, favourite dish, menu, prices or current ambience.'},
  {id:'delvers-weather',subjects:['everyday:weather','hot','cold','weather'],text:'“These stone streets can feel quite different in sunshine and in shade. I would keep a layer handy rather than trust one sheltered corner. Are you too warm, or wishing you had brought a coat?”'},
 ];
 

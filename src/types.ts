@@ -158,7 +158,7 @@ export type GameView = {
     currentSpellbook:string[]; currentPrepared:string[]; currentAbilities:Record<string,number>;
   };
   guidanceMode: "guided" | "standard" | "classic";
-  dialogue?:null|{npcId:string;source:'ai-reviewed'|'authored-fallback'|'rules';reason:string;interpretation?:'ai'|'fallback';interpretationReason?:string;inputTool?:string;repaired?:boolean;unavailable?:boolean};
+  dialogue?:null|{npcId:string;source:'ai-reviewed'|'authored-fallback'|'rules';reason:string;interpretation?:'ai'|'fallback';interpretationReason?:string;inputTool?:string;repaired?:boolean;unavailable?:boolean;lookupCount?:number;claimCount?:number};
   movement: {locationId:string;locationName:string;reason:string;options:Array<{id:string;label:string;text:string;detail:string}>};
   guidance: Array<{ label: string; text: string; mode: "act" | "speak" | "ask"; reason: string }>;
   ai: {

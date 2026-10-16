@@ -21,7 +21,7 @@ function fixture(location='city-delvers-memorial'){
  selectAdventure(db,player.partyId,getParty(db,player.partyId).worldId+'-eldervale-roads');setPartyState(db,player.partyId,'world:eldervale-roads',world(location));
  return {db,player,say:(text,npcGenerate)=>resolveAction(db,getPlayer(db,player.id),'speak',text,{npcGenerate}),state:()=>getPartyState(db,player.partyId,'world:eldervale-roads'),last:()=>listVisibleEvents(db,player).at(-1)};
 }
-function transport(interpretation,reply,calls=[]){return async request=>{calls.push(request);return {output:request.kind==='npc-conversation-input'?{tool:interpretation.challengeId?'consider_social_goal':'read_knowledge',reply:''}:request.kind==='npc-conversation-interpretation'?interpretation:request.kind==='npc-natural-performance'?{reply,evidenceIds:[...new Set(interpretation.goals.flatMap(goal=>goal.evidenceIds))]}:verdict};};}
+function transport(interpretation,reply,calls=[]){return async request=>{calls.push(request);const ids=[...new Set(interpretation.goals.flatMap(goal=>goal.evidenceIds))];return {output:request.kind==='npc-conversation-input'?{tool:interpretation.challengeId?'consider_social_goal':'read_knowledge',reply:''}:request.kind==='npc-conversation-interpretation'?interpretation:request.kind==='npc-natural-performance'?{reply,evidenceIds:ids}:request.kind==='npc-claim-review'?{decision:'accept',feedback:'',claims:ids.length?[{text:reply,evidenceIds:ids}]:[],lookupIds:[]}:verdict};};}
 
 test('planner catalogue is per-resident/current, hides gated facts and detail content, and exposes no rule outcomes',async()=>{
  const state=world('city-delvers-maps'),projection=projectNpc(maps,state),calls=[];
@@ -66,8 +66,8 @@ test('AI interpretation, not a keyword category, selects facts for paraphrases a
   ];
   for(const [speech,interpretation,reply] of cases){
    const calls=[];await f.say(speech,transport(interpretation,reply,calls));
-   assert.equal(f.last().text,reply);assert.deepEqual(calls.map(call=>call.kind),['npc-conversation-input','npc-conversation-interpretation','npc-natural-performance','npc-natural-review']);
-   const performance=JSON.parse(calls[2].messages[1].content);assert.deepEqual(performance.evidence.map(e=>e.id),[...new Set(interpretation.goals.flatMap(goal=>goal.evidenceIds))]);
+   assert.equal(f.last().text,reply);assert.deepEqual(calls.map(call=>call.kind),['npc-conversation-input','npc-natural-performance','npc-claim-review']);
+   const performance=JSON.parse(calls[1].messages[1].content);assert.ok(interpretation.goals.flatMap(goal=>goal.evidenceIds).every(id=>performance.evidence.some(entry=>entry.id===id)));
    const status=getPartyState(f.db,f.player.partyId,'npcDialogueStatus:eldervale-roads:'+f.player.id);assert.equal(status.interpretation,'ai');assert.equal(status.source,'ai-reviewed');
    assert.deepEqual(f.state(),before);assert.equal(getPartyState(f.db,f.player.partyId,'pendingCheck:'+f.player.id),null);
   }
@@ -119,7 +119,7 @@ test('transaction/injection requests never turn valid IDs into inventory, permis
    return {reply:'You now have a free meal and are allowed into the guild.',evidenceIds:['delvers-food']};
   });
   assert.match(f.last().text,/could not be verified/i);assert.doesNotMatch(f.last().text,/now have|guildmaster/);assert.deepEqual(f.state(),before);
-  assert.equal(calls.length,4);
+  assert.equal(calls.length,5);
  }finally{f.db.close();}
 });
 
@@ -141,7 +141,7 @@ test('invalid/unavailable planner degrades visibly without blocking chat or writ
 });
 
 test('context changed during inference discards stale prose and cannot apply a social plan elsewhere',async()=>{
- for(const changeAt of ['npc-conversation-interpretation','npc-natural-performance']){
+ for(const changeAt of ['npc-conversation-input','npc-natural-performance','npc-claim-review']){
   const f=fixture();try{
    const result=await f.say('Talk about your family.',async request=>{
     if(request.kind===changeAt)setPartyState(f.db,f.player.partyId,'world:eldervale-roads',world('city-delvers-maps'));

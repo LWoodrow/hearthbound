@@ -1,4 +1,5 @@
 import {conversationUnavailable} from './npc-conversation-tools.mjs';
+import {groundedConversation} from './npc-grounded-conversation.mjs';
 export const naturalReplySchema={type:'object',properties:{reply:{type:'string'},evidenceIds:{type:'array',items:{type:'string'}}},required:['reply','evidenceIds'],additionalProperties:false};
 const reviewSchema={type:'object',properties:{grounded:{type:'boolean'},relevant:{type:'boolean'},inCharacter:{type:'boolean'},noConsequences:{type:'boolean'}},required:['grounded','relevant','inCharacter','noConsequences'],additionalProperties:false};
 const consequenceClaim=/\b(?:i(?:'ll| will) (?:give|bring|lead|take|escort|sell)|you (?:now have|receive|gain|are allowed)|(?:door|gate|passage) (?:opens|is now open)|quest (?:is )?complete|roll (?:a |the )?d20)\b/i;
@@ -16,7 +17,8 @@ export function validNaturalReply(output,packet) {
 }
 
 // Injectable transport makes the actual live orchestration adversarially testable.
-export async function naturalNpcReply({packet,fallback,generate,initialCandidate,assessed=false}) {
+export async function naturalNpcReply({packet,fallback,generate,initialCandidate,assessed=false,availableKnowledge=[]}) {
+ if(assessed&&packet.focusVersion===2)return groundedConversation({packet,generate,initialCandidate,availableKnowledge,schema:naturalReplySchema,validateCandidate:validNaturalReply});
  const safeFallback=assessed?conversationUnavailable:fallback;
  let failure='structure-or-claim';
  try{

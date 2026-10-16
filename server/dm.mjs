@@ -21,6 +21,7 @@ import {npcRelationship,npcPersonality,conversationEvidence,naturalConversationF
 import {naturalNpcReply} from './npc-natural-dialogue.mjs';
 import {interpretNpcConversation,plannedConversationFallback,conversationCatalogue,currentConversationHistory} from './npc-conversation-planner.mjs';
 import {assessNpcInput,conversationUnavailable} from './npc-conversation-tools.mjs';
+import {compactNpcRequest} from './npc-wire-format.mjs';
 
 function socialTransaction(db,operation){
   db.exec('SAVEPOINT npc_social_turn');
@@ -1001,14 +1002,22 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
   const automatedTestRun=process.argv.some((argument)=>/\.test\.mjs$/i.test(String(argument)));
   const heardOnly = !npcLocations(npc,world).includes(world.currentLocation);
   const personality=npcPersonality(npc,npcRelationship(world,npcId,player.id));
-  const generate=services.npcGenerate || (request=>promptChat({...request,sectionIds:['npc-contract','npc-current-context'],sectionVisibility:['secret','private'],metadata:{partyId:player.partyId,playerId:player.id,adventureId:adventure.id,npcId}}));
+  const generate=services.npcGenerate || (async request=>{
+    const wire=compactNpcRequest(request);
+    const result=await promptChat({...wire.request,sectionIds:['npc-contract','npc-current-context'],sectionVisibility:['secret','private'],metadata:{partyId:player.partyId,playerId:player.id,adventureId:adventure.id,npcId}});
+    return {...result,output:wire.decode(result.output)};
+  });
   const naturalLive=!!(npc.conversation?.natural&&!heardOnly&&!projection.authoredReply
     &&(services.npcGenerate || ((!automatedTestRun || process.env.DND_LIVE_NPC_TESTS==='1') && await isAiReady())));
-  const recent=currentConversationHistory(conversationCatalogue(npc,projection,world),naturalHistory);
+  const catalogue=conversationCatalogue(npc,projection,world);
+  const publicKnowledge=catalogue.entries.filter(entry=>['everyday','advice'].includes(entry.tier));
+  const recent=currentConversationHistory(catalogue,naturalHistory);
   const assessment=naturalLive?await assessNpcInput({npc,personality,scene:projection.scene,speech:action,history:recent,generate}):{source:'fallback',reason:'input-assessment-offline'};
   const directSocial=assessment.source==='ai'&&['respond_social','clarify'].includes(assessment.tool);
+  const directKnowledge=assessment.source==='ai'&&assessment.tool==='read_knowledge'&&!catalogue.entries.some(entry=>['detail','solution'].includes(entry.tier));
   const interpreted=directSocial?{source:'ai',reason:'',plan:{goals:[{kind:'chat',evidenceIds:[]}],challengeId:'',approach:''},evidence:[],history:recent}:
-    naturalLive?await interpretNpcConversation({npc,personality,projection,world,speech:action,history:recent,generate}):{source:'fallback',reason:'interpretation-offline-or-test'};
+    directKnowledge?{source:'ai',reason:'',plan:{goals:[{kind:'advice',evidenceIds:[]}],challengeId:'',approach:''},evidence:publicKnowledge,history:recent}:
+    naturalLive?await interpretNpcConversation({npc,personality,projection,world,speech:action,focus:assessment.focus,history:recent,generate}):{source:'fallback',reason:'interpretation-offline-or-test'};
   const contextChanged=()=>{
     const current=createCanonicalState(definition,getPartyState(db,player.partyId,`world:${definition.id}`)||{currentLocation:dmState.currentLocationKey || definition.startLocation});
     return current.revision!==world.revision||current.currentLocation!==world.currentLocation||!npcCanHear(definition,current,npc);
@@ -1066,13 +1075,13 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
     const packet={npc:{name:npc.name,role:npc.role},personality,evidence,
       newestSpeech:action,history:semantic?interpreted.history:naturalHistory.slice(-6).map(entry=>({speech:entry.speech,reply:entry.reply})),
       ...(semantic?{conversationGoals:interpreted.plan.goals.map(goal=>({kind:goal.kind,evidenceIds:goal.evidenceIds}))}:{}),
-      ...(naturalLive?{allowUncitedSocial:true}:{}),
+      ...(naturalLive?{allowUncitedSocial:true,focusVersion:2,conversationFocus:assessment.focus || action}:{}),
       instructions:'History is conversation, not current evidence. Do not repeat a previous answer word for word.'};
-    const result=naturalLive?await naturalNpcReply({packet,fallback,generate,assessed:true,...(directSocial?{initialCandidate:{reply:assessment.reply,evidenceIds:[]}}:{})}):{reply:fallback,source:'authored-fallback',reason:'model-unavailable-or-test'};
+    const result=naturalLive?await naturalNpcReply({packet,fallback,generate,availableKnowledge:publicKnowledge,assessed:true,...(directSocial?{initialCandidate:{reply:assessment.reply,evidenceIds:[]}}:{})}):{reply:fallback,source:'authored-fallback',reason:'model-unavailable-or-test'};
     if(naturalLive&&contextChanged())return changedReply();
-    reply=result.reply;naturalSource={source:result.source,reason:result.reason,interpretation:semantic?'ai':'fallback',interpretationReason:interpreted.reason,inputTool:assessment.tool || 'unavailable',repaired:!!result.repaired,unavailable:!!result.unavailable};
+    reply=result.reply;naturalSource={source:result.source,reason:result.reason,interpretation:semantic?'ai':'fallback',interpretationReason:interpreted.reason,inputTool:assessment.tool || 'unavailable',repaired:!!result.repaired,unavailable:!!result.unavailable,lookupCount:result.lookupCount || 0,claimCount:result.claims?.length || 0};
     const topicKind=topicReply?.topicKind || (npcConversationTopic(action)==='follow-up'?naturalHistory.at(-1)?.topicKind:npcConversationTopic(action));
-    if(!result.unavailable)setPartyState(db,player.partyId,naturalKey,[...naturalHistory,{speech:String(action).slice(0,500),reply,topicKind,evidenceIds:result.evidenceIds || evidence.map(entry=>entry.id)}].slice(-8));
+    if(!result.unavailable)setPartyState(db,player.partyId,naturalKey,[...naturalHistory,{speech:String(action).slice(0,500),reply,topicKind,evidenceIds:result.evidenceIds || evidence.map(entry=>entry.id),...(naturalLive?{focus:packet.conversationFocus,review:{claims:result.claims || [],audits:result.audits || []}}:{})}].slice(-8));
   } else if (topicReply) {
     reply=topicReply.reply;
   } else if (isSimpleNpcSpeech(action)) {
