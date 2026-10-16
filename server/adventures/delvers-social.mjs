@@ -1,3 +1,4 @@
+import {addDelversEveryday} from './delvers-everyday.mjs';
 const flag=(name,value=true)=>({path:'flags.'+name,equals:value});
 const set=name=>({op:'set',path:'flags.'+name,value:true});
 const profiles={
@@ -39,6 +40,7 @@ export function addDelversSocial(npcs,initialFlags) {
   {id:'maps-ward-bypass',tier:'solution',subjects:['avoid','sentinel','bypass','ward'],text:'The gallery and refuge route avoids the sentinel on Ward Street.'},
   {id:'maps-private-annotation',tier:'detail',subjects:['private annotations','margin notes'],requires:[flag('cityLethrielAnnotationsShared')],text:'Lethriel’s private margin notes compare conflicting dates on two surveys. They are careful working notes, not a new confirmed passage.'},
  ];
+ addDelversEveryday(npcs,Object.keys(profiles));
  maps.socialChallenges=[challenge('lethriel-annotations',['private annotations','margin notes','working notes','unfinished notes'],{Persuasion:{dc:13},Deception:{dc:15}},'Convince Lethriel to share unfinished working notes. Failure leaves her asking for first-hand evidence; threats cannot buy her confidence.',
   {reply:'“All right. My private margin notes compare conflicting dates on two surveys. They are working notes, not proof of another passage.”',effects:[set('cityLethrielAnnotationsShared')],relationship:{trust:1,respect:1},mood:'engaged',memory:'Shared working annotations after a deliberate, successful request.'},
   {reply:'“Not yet. Bring back something you observed yourself. Then we can compare notes rather than confidence.”',relationship:{respect:-1},mood:'cautious',memory:'Declined the request for unfinished annotations and asked for first-hand evidence.'},

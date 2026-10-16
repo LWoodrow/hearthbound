@@ -1,7 +1,7 @@
 import {normaliseText,meaningfulReferenceWords,tokenEquivalent} from './semantic-tokens.mjs';
 import {requirementsMet,npcLocations} from './world-state.mjs';
 import {applyEffects} from './interaction-engine.mjs';
-import {npcConversationTopic} from './npc-dialogue.mjs';
+import {npcConversationTopic,everydayConversationIntent,factualNpcFallback} from './npc-dialogue.mjs';
 import {recordCanonicalTransition} from './canonical-events.mjs';
 
 const clone=value=>JSON.parse(JSON.stringify(value));
@@ -24,21 +24,33 @@ const solutionRequest=action=>/\b(?:solve|solution|bypass|avoid|operate|mechanis
 const detailRequest=action=>solutionRequest(action)||/\b(?:directions|exact route|which turn|how do (?:i|we) (?:reach|get)|how to (?:reach|get)|route to)\b/i.test(action);
 export function conversationEvidence(npc,projection,world,action,memory=[]) {
   const tokens=meaningfulReferenceWords(action).filter(token=>!['what','would','good','tell','know','about','anything','please','could','happening','here','below','there','exploring'].includes(token));
-  const kind=npcConversationTopic(action),last=memory.at(-1);
+  const intent=everydayConversationIntent(action);
+  const kind=intent?null:npcConversationTopic(action),last=memory.at(-1);
   const broad=kind==='greeting'||kind==='local-news'||kind==='personal'||kind==='follow-up';
   const topics=(projection.topics || []).filter(topic=>topic.kind===(kind==='follow-up'?last?.topicKind:kind));
   const used=new Set(memory.map(entry=>entry.reply)),usedIds=new Set(memory.flatMap(entry=>entry.evidenceIds || []));
   const topic=topics.find(topic=>!used.has(topic.text)&&!usedIds.has(topic.id));
   const explicit=(npc.conversation?.knowledge || []).filter(entry=>requirementsMet(world,entry.requires || []));
   const source=explicit.length?explicit:projection.facts.map((text,index)=>({id:'legacy-'+index,text,tier:'advice',subjects:[]}));
-  const refersBack=/\b(?:you said|you mentioned|what did you mean|why is that|why do you say|that map|those notes|more about that)\b/i.test(action);
-  const previousIds=new Set(refersBack?memory.slice(-2).flatMap(entry=>entry.evidenceIds || []):[]);
+  const refersBack=/\b(?:you said|you mentioned|what did you mean|why is that|why do you say|that map|those notes|more about that|tell me more|what else|go on|\b(?:she|he|they|her|him|their)\b)\b/i.test(action);
+  const previousIds=new Set(refersBack&&!intent?memory.slice(-1).flatMap(entry=>entry.evidenceIds || []):[]);
   const knowledge=source.filter(entry=>entry.tier!=='solution'||solutionRequest(action)||previousIds.has(entry.id))
     .filter(entry=>entry.tier!=='detail'||detailRequest(action)||previousIds.has(entry.id))
     .filter(entry=>! /\b(?:playable|implemented|inventory|campaign levels?|combat bonus|mechanical rest|backend)\b/i.test(entry.text))
-    .map(entry=>{const terms=meaningfulReferenceWords((entry.subjects || []).join(' ')+' '+entry.text);return {...entry,score:(previousIds.has(entry.id)?5:0)+tokens.filter(token=>terms.some(term=>tokenEquivalent(token,term))).length};})
-    .filter(entry=>!broad&&entry.score>0).sort((a,b)=>b.score-a.score).slice(0,2);
+    .filter(entry=>!intent || (entry.subjects || []).includes('everyday:'+intent))
+    .map(entry=>{const terms=meaningfulReferenceWords((entry.subjects || []).join(' ')+' '+entry.text);return {...entry,score:(intent?10:0)+(previousIds.has(entry.id)?10:0)+tokens.filter(token=>terms.some(term=>tokenEquivalent(token,term))).length};})
+    .filter(entry=>(!broad||previousIds.has(entry.id))&&entry.score>0).sort((a,b)=>b.score-a.score).slice(0,2);
   return [...(topic?[{id:topic.id,text:topic.text,tier:'everyday'}]:[]),...knowledge].slice(0,3);
+}
+
+export function naturalConversationFallback(npc,action,evidence,topicReply) {
+ const intent=everydayConversationIntent(action);
+ if(intent==='transaction')return factualNpcFallback(npc,action,[]);
+ if(evidence.length)return evidence.map(entry=>entry.text).join(' ');
+ if(intent==='family')return '“I would rather leave my family out of this conversation for now. Was there something else you wanted to ask?”';
+ if(intent==='weather')return '“I have not paid much attention to the weather. Are you finding it uncomfortable?”';
+ if(intent==='wellbeing')return '“Thank you for asking. How are you getting on?”';
+ return topicReply?.reply || factualNpcFallback(npc,action,[]);
 }
 
 function approachFor(action) {

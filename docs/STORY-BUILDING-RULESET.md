@@ -4,6 +4,8 @@ Use this ruleset when creating or revising any Hearthbound, Hysteria, Unmasked, 
 
 The core principle is simple: **author truth and meaningful outcomes; let the model perform character voice and prose.** A story must remain logically playable with the prose model switched off.
 
+Natural residents need actual reviewed everyday knowledge as well as personality: stable biography/family relationships, interests, occupational capabilities and scoped public recommendations. Keep biography individual; share only genuinely public neighbourhood knowledge. A recommendation is not a purchase or delivery. Pronoun follow-ups may reference currently eligible evidence, never promote prior generated prose or player assertions into truth. Do not fabricate current weather, time of day, family whereabouts or events to make small talk. Unknown details invite an honest answer, not a roll or an invented quest.
+
 ## 1. Build the story around player freedom
 
 Define:

@@ -17,7 +17,7 @@ import { buildSceneCommandSurface } from "./scene-command-surface.mjs";
 import { recordCanonicalTransition } from "./canonical-events.mjs";
 import { interpretSceneTurn } from "./turn-interpretation.mjs";
 import { generateStructured } from "./ai-transport.mjs";
-import {npcRelationship,npcPersonality,conversationEvidence,planSocialAttempt,resolveSocialAttempt} from './npc-social-engine.mjs';
+import {npcRelationship,npcPersonality,conversationEvidence,naturalConversationFallback,planSocialAttempt,resolveSocialAttempt} from './npc-social-engine.mjs';
 import {naturalNpcReply} from './npc-natural-dialogue.mjs';
 
 function socialTransaction(db,operation){
@@ -1037,7 +1037,7 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
     reply=projection.authoredReply;
   } else if(npc.conversation?.natural){
     const evidence=conversationEvidence(npc,projection,world,action,naturalHistory);
-    const fallback=topicReply?.reply || (isSimpleNpcSpeech(action)?fallbackNpcReply(npc,action,facts):evidence.length?evidence.map(entry=>entry.text).join(' '):'“I am not sure about that. What did you have in mind?”');
+    const fallback=naturalConversationFallback(npc,action,evidence,topicReply);
     groundedFallback=fallback;
     const packet={npc:{name:npc.name,role:npc.role},personality:npcPersonality(npc,npcRelationship(world,npcId,player.id)),evidence,
       newestSpeech:action,history:naturalHistory.slice(-6).map(entry=>({speech:entry.speech,reply:entry.reply})),

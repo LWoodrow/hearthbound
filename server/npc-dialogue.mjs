@@ -64,6 +64,22 @@ export function authoredNpcConversation(projection, action, memory=[]) {
   if(next)return {reply:next.text,topicId:next.id,topicKind:kind};
   return {reply:kind==='greeting'?`“Good to see you again,” ${projection.name} says.`:'“That is all I can vouch for on that just now. Is there something specific you wanted to ask?”',topicId:null,topicKind:kind};
 }
+// Classify conversational goals, not nouns: asking where to eat is not buying
+// dinner. Categories also index reviewed everyday knowledge for any resident.
+export function everydayConversationIntent(action) {
+  const words=normaliseText(action);
+  if(/\b(?:family|parents?|mother|father|siblings?|sisters?|brothers?|children|married|partner)\b/.test(words))return 'family';
+  if(/\b(?:weather|hot|cold|warm|chilly|rain|sunshine)\b/.test(words))return 'weather';
+  if(/\b(?:how are you|how (?:are|do) you feel|feeling|how has your day|how was your day)\b/.test(words))return 'wellbeing';
+  if(/\b(?:what can you (?:arrange|offer|do|help with)|what do you do|your work|your job)\b/.test(words))return 'capabilities';
+  const food=/\b(?:food|eat|eating|hungry|meals?|bread|bakery|restaurant|soup|dinner|lunch|breakfast|oatcakes?|stew|drinks?|beers?|cider|ales?)\b/.test(words);
+  const advice=/\b(?:where|anywhere|recommend|recommendation|suggest|somewhere|good place|places|tell me about|what is|whats|menu)\b/.test(words);
+  if(food&&advice)return 'food';
+  if(food&&/\b(?:can|could|may) (?:i|we) (?:get|have|buy|order)\b/.test(words))return 'transaction';
+  if(/\b(?:(?:can|could|would|will) you (?:please )?(?:give|bring|serve|sell|rent|book|order)|i (?:want|would like|will have|ll have) (?:to (?:buy|order|rent)|a |some )|(?:buy|purchase|order|rent|hire|give me|bring me|serve me))\b/.test(words))return 'transaction';
+  if(food)return 'food';
+  return null;
+}
 export function factualNpcFallback(npc, action, facts) {
   const words=normaliseText(action);
   if(isGreeting(action))return `“Hello,” ${npc.name} says. “What would you like to know?”`;
@@ -71,11 +87,15 @@ export function factualNpcFallback(npc, action, facts) {
   if(/^(?:thank you|thanks)(?: very much| so much)?$/.test(words))return `“You're welcome,” ${npc.name} replies.`;
   // A conversation cannot fulfil commerce. This is a capability boundary, not
   // a pretend transaction or a list of provider-specific forbidden phrases.
-  if(/\b(buy|purchase|order|serve|give|bring|food|eat|drink|menu|stew|ales?|beer|cider|oatcakes?|bread|rent|hire|lodging)\b/.test(words)) {
+  if(everydayConversationIntent(action)==='transaction') {
     const serviceFacts=facts.filter(fact=>/\b(serves?|food|drink|menu|stew|ales?|beer|cider|oatcakes?|bread|lodging)\b/i.test(fact));
     const answer=renderNpcFacts(npc,serviceFacts,{factIds:serviceFacts.length?[0]:[]});
     return answer ? answer + " “That's what I can tell you; I can't arrange a purchase or hand anything over.”"
       : `“We can talk here, but I can't arrange that for you.”`;
+  }
+  if(everydayConversationIntent(action)==='food') {
+    const serviceFacts=facts.filter(fact=>/\b(serves?|food|drink|menu|stew|ales?|beer|cider|oatcakes?|bread|lodging)\b/i.test(fact));
+    if(serviceFacts.length)return renderNpcFacts(npc,serviceFacts,{factIds:[0]});
   }
   return renderNpcFacts(npc,facts,{factIds:relevantNpcFacts(action,facts)})
     || `${npc.name} considers the question. “I don't know enough to give you a useful answer to that.”`;

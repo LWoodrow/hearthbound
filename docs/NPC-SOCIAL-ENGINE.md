@@ -40,6 +40,18 @@ Deferred: autonomous schedules, ambient event simulation, procedural quests, mod
 
 ## Authoring reference
 
+### Everyday conversation pilot: Nima
+
+Nima now has reviewed public family lore (younger sister Maren, a clothes mender; their shared repair-first upbringing), a personal wellbeing response and a clear description of her work at the Wall. These are authored biography, not generated events or new visitable NPCs. No address, current whereabouts, tragedy or family quest is implied. Other residents do not inherit this biography.
+
+All nine Delvers contacts share scoped public recommendations for existing food destinations and stable stone-street/sun/shade advice. This is not current weather or a running calendar. Wellbeing performance uses current personality/social mood; authored interest lines do not override changed relationship moods. Ordinary family questions, small talk and recommendations never require a social check.
+
+Reusable `everydayConversationIntent` distinguishes advice, wellbeing, weather, family, capabilities and transactions. Knowledge entries opt into concepts through `subjects: ['everyday:food']` etc., using the existing validated knowledge schema. Intent labels are indexing hints, not permission to invent facts. Recommendation intent retrieves relevant advice before commerce refusals; actual orders retain the no-transfer boundary. Natural fallback uses the same current evidence rather than unrelated greetings/refusals. General food facts remain compatible for legacy residents.
+
+Pronoun/continuation questions can reuse the immediately previous evidence IDs, but each ID must still exist and satisfy current prerequisites. Chat text and player assertions never create evidence. New explicit intent switches clear that reference. Retrieval is bounded concept/lexical matching, not universal language understanding; broad family enquiries are supported, arbitrary compound questions may still need clarification. Unknown family facts remain private/unknown instead of being generated.
+
+`scripts/evaluate-nima-conversation.mjs --live` is an opt-in, read-only multi-turn local-model evaluation. Run it from the configured app checkout; it makes inference requests using existing settings and prints replies, source, model name and latency. It neither opens gameplay databases nor changes settings/models. Unit tests cover the full human exchange through actual speech dispatch, recommendations versus transactions across residents, biography follow-ups, withdrawn/private knowledge and fabricated clock/precipitation claims. Existing historical chat is preserved; new replies use current evidence.
+
 `npc.personality` declares `traits`, `values`, `interests`, `mannerisms`, `boundaries`, `bonds` (arrays of strings), plus `mood`. These are character-performance inputs, not a place for undisclosed campaign secrets. Hidden motives stay in private story authority, outside the prose packet. Mood is an authored initial condition; subsequent changes come only from a resolved social outcome.
 
 `npc.conversation.natural: true` opts a resident into generated performance plus review. Existing `publicFacts`, `conditionalFacts`, `topics`, appearances and entry beats remain compatible. Entry beats are scene narration, not automatically spoken conversation. Facts and topics used as performance evidence must be written in-world. Internal availability warnings belong in UI/authoring notes, not a character's mouth.

@@ -8,6 +8,8 @@ export function validNaturalReply(output,packet) {
  if(packet.evidence.length&&!output.evidenceIds.length)return false;
  // New numbers are particularly easy to disguise as prices, DCs or directions.
  const permitted=packet.evidence.map(entry=>entry.text).join(' ');
+ // A social question is not evidence for a clock or a weather simulation.
+ if((output.reply.match(/\b(?:morning|afternoon|evening|tonight|raining|snowing)\b/gi)||[]).some(term=>!new RegExp('\\b'+term+'\\b','i').test(permitted)))return false;
  if((output.reply.match(/\b\d+\b/g)||[]).some(number=>!permitted.includes(number)))return false;
  return true;
 }
