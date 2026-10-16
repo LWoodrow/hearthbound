@@ -3,6 +3,7 @@
 export function compactNpcRequest(request){
  if(!['npc-natural-performance','npc-natural-repair','npc-claim-review'].includes(request.kind))return {request,decode:value=>value};
  let input;try{input=JSON.parse(request.messages[1].content);}catch{return {request,decode:value=>value};}
+ if(request.kind==='npc-claim-review'&&!input.candidate)return {request,decode:value=>value};
  if(request.kind!=='npc-claim-review'&&input.focusVersion!==2)return {request,decode:value=>value};
  const evidence=input.evidence || [],catalogue=input.availableKnowledge || [];
  const toWire=new Map(evidence.map((entry,index)=>[entry.id,'e'+index])),fromWire=new Map([...toWire].map(([id,short])=>[short,id]));

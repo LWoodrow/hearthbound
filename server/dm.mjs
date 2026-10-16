@@ -1075,11 +1075,11 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
     const packet={npc:{name:npc.name,role:npc.role},personality,evidence,
       newestSpeech:action,history:semantic?interpreted.history:naturalHistory.slice(-6).map(entry=>({speech:entry.speech,reply:entry.reply})),
       ...(semantic?{conversationGoals:interpreted.plan.goals.map(goal=>({kind:goal.kind,evidenceIds:goal.evidenceIds}))}:{}),
-      ...(naturalLive?{allowUncitedSocial:true,focusVersion:2,conversationFocus:assessment.focus || action}:{}),
+      ...(naturalLive?{allowUncitedSocial:true,focusVersion:2,conversationFocus:assessment.focus || action,answerScope:assessment.scope || 'unspecified'}:{}),
       instructions:'History is conversation, not current evidence. Do not repeat a previous answer word for word.'};
     const result=naturalLive?await naturalNpcReply({packet,fallback,generate,availableKnowledge:publicKnowledge,assessed:true,...(directSocial?{initialCandidate:{reply:assessment.reply,evidenceIds:[]}}:{})}):{reply:fallback,source:'authored-fallback',reason:'model-unavailable-or-test'};
     if(naturalLive&&contextChanged())return changedReply();
-    reply=result.reply;naturalSource={source:result.source,reason:result.reason,interpretation:semantic?'ai':'fallback',interpretationReason:interpreted.reason,inputTool:assessment.tool || 'unavailable',repaired:!!result.repaired,unavailable:!!result.unavailable,lookupCount:result.lookupCount || 0,claimCount:result.claims?.length || 0};
+    reply=result.reply;naturalSource={source:result.source,reason:result.reason,interpretation:semantic?'ai':'fallback',interpretationReason:interpreted.reason,inputTool:assessment.tool || 'unavailable',repaired:!!result.repaired,unavailable:!!result.unavailable,lookupCount:result.lookupCount || 0,claimCount:result.claims?.length || 0,...(result.answerKnowledge?{answerKnowledge:result.answerKnowledge}:{})};
     const topicKind=topicReply?.topicKind || (npcConversationTopic(action)==='follow-up'?naturalHistory.at(-1)?.topicKind:npcConversationTopic(action));
     if(!result.unavailable)setPartyState(db,player.partyId,naturalKey,[...naturalHistory,{speech:String(action).slice(0,500),reply,topicKind,evidenceIds:result.evidenceIds || evidence.map(entry=>entry.id),...(naturalLive?{focus:packet.conversationFocus,review:{claims:result.claims || [],audits:result.audits || []}}:{})}].slice(-8));
   } else if (topicReply) {
