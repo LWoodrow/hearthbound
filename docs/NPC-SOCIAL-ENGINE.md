@@ -1,5 +1,9 @@
 # Natural NPC and social engine
 
+## Current deployment: AI-led interpretation
+
+The live opt-in path now uses semantic AI planning over current eligible knowledge before performance and independent review. Keyword everyday/topic/social matching is degraded-mode compatibility, not the primary conversational interpreter. AI can select relevant public facts from unfamiliar wording, use recent references, combine ordinary topics and propose one authored social goal/approach. Code validates IDs/disclosure/conditions and retains all consequential authority. See [AI-LED-CONVERSATION.md](AI-LED-CONVERSATION.md) for the complete decision, contracts, privacy, failure modes, budgets, tests and deployment checklist. Historical descriptions of bounded lexical retrieval below describe the fallback/previous stage, not the new normal live path.
+
 ## Product goal and ownership
 
 The player talks to people, not a database interface. Ordinary conversation is free, contextual and expressed in a character's own voice. More locations are secondary until this works. Canonical world truth, hearing, permissions, inventory, dice and consequences remain engine-owned. Changing the narrator model cannot change those rules.

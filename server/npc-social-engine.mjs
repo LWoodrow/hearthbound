@@ -62,11 +62,17 @@ function approachFor(action) {
  return 'Persuasion';
 }
 const fingerprint=(challenge,world)=>JSON.stringify((challenge.retryOn || []).map(path=>[path,read(world,path) ?? null]));
-export function planSocialAttempt({npc,npcId,playerId,world,action}) {
+export function planSocialAttempt({npc,npcId,playerId,world,action,interpretation}) {
  const words=normaliseText(action);
- if(!/\b(?:can|could|may|please|let|show|share|persuade|convince|lie|pretend|bluff|threaten|intimidate|insight|intentions|size|perform|entertain|sing|recite|want|like|see|tell)\b/.test(words))return null;
- if(/\b(?:what (?:are|is)|tell me about|explain)\b/.test(words)&&!/\b(?:share|show|let|persuade|convince|lie|threaten|intimidate|see|read)\b/.test(words))return null;
- const matches=(npc.socialChallenges || []).filter(challenge=>challenge.targets.some(target=>words.includes(normaliseText(target))));
+ // Semantic interpretation proposes an existing goal/approach, never a DC or
+ // effect. Existing phrase matching is exclusively the degraded-mode path.
+ if(interpretation!==undefined){
+  if(!interpretation.challengeId||!['Persuasion','Deception','Intimidation','Insight','Performance'].includes(interpretation.approach))return null;
+ }else{
+  if(!/\b(?:can|could|may|please|let|show|share|persuade|convince|lie|pretend|bluff|threaten|intimidate|insight|intentions|size|perform|entertain|sing|recite|want|like|see|tell)\b/.test(words))return null;
+  if(/\b(?:what (?:are|is)|tell me about|explain)\b/.test(words)&&!/\b(?:share|show|let|persuade|convince|lie|threaten|intimidate|see|read)\b/.test(words))return null;
+ }
+ const matches=(npc.socialChallenges || []).filter(challenge=>interpretation?challenge.id===interpretation.challengeId:challenge.targets.some(target=>words.includes(normaliseText(target))));
  if(!matches.length)return null;
  if(matches.length>1)return {kind:'blocked',reply:'Which request did you mean? Please choose one thing to discuss.'};
  const challenge=matches[0],relationship=npcRelationship(world,npcId,playerId),signature=fingerprint(challenge,world);
@@ -74,7 +80,7 @@ export function planSocialAttempt({npc,npcId,playerId,world,action}) {
  if(previous?.status==='success')return {kind:'blocked',reply:challenge.success.reply};
  if(previous?.signature===signature)return {kind:'blocked',reply:challenge.retryReply || 'Their answer has not changed. Bring something new to the discussion rather than repeating the request.'};
  if(!requirementsMet(world,challenge.requires || []))return {kind:'blocked',reply:challenge.blockedReply};
- const approach=approachFor(action),method=challenge.approaches[approach];
+ const approach=interpretation?.approach || approachFor(action),method=challenge.approaches[approach];
  const base={challengeId:challenge.id,npcId,playerId,signature,locationId:world.currentLocation,approach};
  if(!method)return {kind:'automatic',...base,result:'boundary',reply:challenge.boundary.reply};
  const evidence=(challenge.evidence || []).find(entry=>requirementsMet(world,entry.requires));

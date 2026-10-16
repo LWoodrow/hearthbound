@@ -75,6 +75,8 @@ Observing a mechanism may reveal how to operate it, but must not set an object's
 
 ## 4. Important NPCs need bounded conversational lives
 
+For `conversation.natural` residents, author coherent knowledge/personality rather than lists of expected questions. The normal live AI interprets the newest speech and history, selects current knowledge IDs and can propose an existing social goal; code enforces disclosure eligibility and consequential rules. Keywords are only degraded-mode compatibility. Guarded knowledge needs informative subject labels without answer text, explicit prerequisites and correct detail/solution tiers. Keep everyday/public advice distinct from guarded material. Test unfamiliar paraphrases, pronouns and multi-subject questions through actual dispatch, plus offline fallback and unintended social-check cases. See [AI-LED-CONVERSATION.md](AI-LED-CONVERSATION.md) for deployment contracts and acceptance criteria.
+
 Every important NPC needs:
 
 - Name, role, appearance, locations, goals, and voice.

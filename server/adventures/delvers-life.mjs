@@ -70,7 +70,7 @@ export function addDelversLife(locations, npcs, interactions, initialFlags) {
     locations[location].features.push({id:id+'-feature',label:targets[0],kind:'scenery',
       observation:key==='board'?'The register asks for a safety briefing, a checked practice knot and an expedition kit review. Registering is a deliberate action.':message.replace(/^.*?\. /,'')});
     const npc=npcs[location+'-resident'];
-    npc.conversation.conditionalFacts.push({requires:[{path:'flags.'+name,equals:false}],fact:'If you would like help or something useful to do here, '+verbs[0]+' the '+targets[0]+'. '+(key==='board'?'First read a safety briefing, tie the practice rope at Three Knots and check the expedition kit at Copper Buckle.':key==='guild'?'First report the municipal seal to Hester at the junction.':'This is an optional local contribution, not a purchase or combat reward.')});
+    npc.conversation.conditionalFacts.push({requires:[{path:'flags.'+name,equals:false}],fact:'If you would like help or something useful to do here, '+verbs[0]+' the '+targets[0]+'. '+(key==='board'?'First read a safety briefing, tie the practice rope at Three Knots and check the expedition kit at Copper Buckle.':key==='guild'?'First report the municipal seal to Hester at the junction.':'You are welcome to contribute if you wish.')});
     npc.conversation.conditionalFacts.push({requires:[flag(name)],fact:'Your visit is remembered. '+message});
   }
   // Inspection teaches what to do; it must not claim an unperformed service.
