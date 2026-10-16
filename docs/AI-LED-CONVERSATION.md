@@ -2,6 +2,35 @@
 
 ## Decision
 
+### Current update: AI input/output assessment and bounded conversation tools
+
+Human play exposed a gap: an apology was incorrectly mapped to food, generated speech failed validation, and the old prepared fallback then printed the selected food text without checking relevance. That fallback is no longer allowed on the live assessed path. The input/output assessment described here supersedes the older prepared-fallback publication behaviour below.
+
+Before exposing the knowledge catalogue, AI assesses the conversational act using current public scene, personality and bounded eligible history. It chooses a strict internal capability:
+
+| Capability | Behaviour |
+| --- | --- |
+| `respond_social` | Draft a relevant acknowledgement/reassurance/humour/companionship response without a knowledge lookup |
+| `read_knowledge` | Retrieve current scene or resident knowledge through the existing prerequisite/disclosure-checked catalogue |
+| `consider_social_goal` | Propose an existing social situation, with code retaining all rules/consequence authority |
+| `clarify` | Draft a relevant clarification question without forcing a factual topic |
+
+This is **MCP-inspired, in-process tool orchestration**, not an installed/exposed MCP server, external connector or unconstrained agent. The model requests an enumerated capability; code dispatches the existing scoped reader/adjudicator. Unknown tool names, extra arguments, rule effects and fabricated capabilities are rejected. There is no generic code executor, file access, arbitrary NPC lookup or world-write tool.
+
+Pure social speech needs no new fact and may return an empty citation list. The input assessor sees no food/quest catalogue to distract it into inventing a topic. Its social draft goes directly to independent outgoing assessment; it does not bypass review. Factual questions retain semantic knowledge selection and a generated reply. A current-scene entry is built from the visible description/features, not raw default or hidden room contents. A non-consequential input assessment cannot start a check merely because the later planner proposes one.
+
+The outgoing AI assessor sees the actual newest speech, history, personality, current evidence, proposed reply and cited IDs. It checks grounding, **conversational relevance**, voice and absence of consequences. True facts can still be a bad answer; a citation does not approve a topic change. It may accept a non-factual acknowledgement with no citation. An apology does not establish offence, and ordinary speech does not update mood or relationships.
+
+After an invalid/rejected draft there is at most **one AI repair**, followed by another independent outgoing assessment. The selected evidence is optional context, not an obligation to recite it. A repair may set aside irrelevant food facts and offer a natural uncited acknowledgement. No generated repair is trusted just because it is a repair. If assessment/repair fails or the model is unavailable, the live path displays a neutral **service notice**, not an unchecked factual line spoken by the NPC. Failed notices do not enter that NPC's natural conversation memory. Legacy offline authored behaviour remains compatible, but the live rejected-output path never copies selected facts as fallback.
+
+The model menu now distinguishes the chosen input capability, accepted AI speech, an AI-repaired reply and a reply withheld from publication. Exact apology, paraphrased conversational repair, humour/companionship, wrong incoming food selection, output rejection/repair, double rejection, outage, tool/schema misuse and unchanged state are regression-tested through real dispatch or injected orchestration. This is a reusable conversational boundary, not an apology phrase matcher or fixed reassuring sentence.
+
+Live social turns normally use two model calls: input assessment/draft then independent outgoing assessment. Knowledge turns normally use four: input, selection, performance, review. Repair can add two calls, with no unbounded loop. Input timeout is 60 seconds; selection remains 75 seconds, generation/review 45 seconds per stage. This improves the architecture, not a guarantee of low latency; the theoretical six-call timeout ceiling is 315 seconds. Do not hide rejection or timeout as a successful conversation.
+
+Use `scripts/evaluate-conversation-assessment.mjs --live` from the configured checkout for the exact user apology with seeded transcript context and an in-memory test save. `--faulty-lookup` deliberately injects the wrong food lookup/draft and uses the real model to assess, repair and reassess it. It does not touch real saves, settings, model selection or ports. The older `evaluate-nima-conversation` script remains an isolated semantic-stage evaluator, not the current end-to-end acceptance harness.
+
+Release evidence: 401 automated tests pass, with production build/typecheck, 36 portrait checks and all four adventure validations. On configured Tiel-Coder-35B-A3B-UD-IQ4_XS, the exact apology selected `respond_social` and produced an accepted natural reassurance in 48.0 seconds (29.6 input/draft, 18.4 output assessment), with unchanged in-memory canonical state. A deliberately injected wrong food lookup/draft was rejected, repaired, rejected again and safely withheld in 46.4 seconds. The reviewer marked relevance true but grounding false on the injected run, so this is evidence of safe withholding, not perfect semantic classification or a successful live repair. Scripted tests establish accepted repair execution; the live runs establish the actual apology path and refusal to publish failed drafts. No universal conversation-quality or latency guarantee is claimed.
+
 Use the model to understand conversation, not merely decorate a keyword-selected answer. Keep authored world truth and deterministic game consequences. The first rollout covers every existing `conversation.natural` resident: the nine Delvers contacts, including Nima. Other residents retain their compatible dialogue until their knowledge/disclosure data is reviewed.
 
 This supersedes keyword categories as the normal interpretation path. It does not remove the last-resort offline matcher, erase character lore, grant models world-write access, or claim that the whole city now has complete lives.

@@ -10,6 +10,8 @@ All structured generation uses one transport adapter for llama.cpp or Ollama, in
 
 ## Authority boundary
 
+Natural conversations now assess the incoming conversational act before exposing factual knowledge, using bounded internal capabilities (`respond_social`, `read_knowledge`, `consider_social_goal`, `clarify`). This is an MCP-inspired in-process interface, not an external MCP server. Non-factual social acknowledgement can require no evidence lookup. Every live candidate, including the one bounded repair attempt, still passes independent outgoing grounding/relevance/voice/consequence assessment. Failure produces a neutral service notice rather than unchecked selected facts in an NPC's voice; failed notices are not remembered as NPC conversation. Current scene knowledge is projected from visible state. No capability exposes arbitrary execution or world mutation. See AI-LED-CONVERSATION.md for contracts, latency and tests.
+
 Nearby-person observations use current canonical NPC presence and authored anonymous occupants, not presumed whereabouts from public directories. Named/hearable NPC conversation receives first refusal for Say aloud; a bounded authored ambient greeting may acknowledge speech otherwise. Unanswered speech is valid and state-neutral, never advice to perform a physical action. Ambient responses and model dialogue cannot grant movement, permissions, items or quest progress.
 
 The rules engine owns:

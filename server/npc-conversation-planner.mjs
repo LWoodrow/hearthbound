@@ -15,7 +15,8 @@ export function conversationCatalogue(npc,projection,world) {
  const explicit=npc.conversation?.knowledge;
  const knowledge=explicit?.length?explicit.filter(entry=>requirementsMet(world,entry.requires || [])):
   (projection.facts || []).map((text,index)=>({id:'legacy-'+index,text,tier:'advice',subjects:[]}));
- const entries=[...knowledge,...(projection.topics || []).map(topic=>({id:topic.id,text:topic.text,tier:'everyday',subjects:[topic.kind]}))]
+ const entries=[...knowledge,...(projection.topics || []).map(topic=>({id:topic.id,text:topic.text,tier:'everyday',subjects:[topic.kind]})),
+  ...(projection.scene?[{id:'scene-current',tier:'everyday',subjects:['current scene','room','surroundings'],text:projection.scene.name+'. '+projection.scene.description+' Visible here: '+projection.scene.visibleFeatures.map(feature=>feature.label).join(', ')+'.'}]:[])]
   .filter(entry=>! /\b(?:playable|implemented|inventory|campaign levels?|combat bonus|mechanical rest|backend)\b/i.test(entry.text))
   .map(({id,text,tier,subjects})=>({id,text,tier,subjects:subjects || []}));
  const challenges=(npc.socialChallenges || []).map(({id,targets})=>({id,goals:targets}));
@@ -47,13 +48,16 @@ export function plannedConversationFallback(plan,evidence) {
  return parts.join(' ') || '“Help me understand what you mean. What would you like to know?”';
 }
 
+export function currentConversationHistory(catalogue,history=[]) {
+ const available=new Set(catalogue.entries.map(entry=>entry.id));
+ return history.slice(-6).map(entry=>({speech:String(entry.speech || '').slice(0,500),
+  reply:(entry.evidenceIds || []).some(id=>!available.has(id))?'[Earlier knowledge is no longer available.]':String(entry.reply || '').slice(0,1000),
+  evidenceIds:(entry.evidenceIds || []).filter(id=>available.has(id))}));
+}
 export async function interpretNpcConversation({npc,personality,projection,world,speech,history=[],generate}) {
  const catalogue=conversationCatalogue(npc,projection,world);
  const entries=catalogue.entries.map(({id,text,tier,subjects})=>({id,tier,subjects,...(['everyday','advice'].includes(tier)?{text}:{})}));
- const available=new Set(catalogue.entries.map(entry=>entry.id));
- const recent=history.slice(-6).map(entry=>({speech:String(entry.speech || '').slice(0,500),
-  reply:(entry.evidenceIds || []).some(id=>!available.has(id))?'[Earlier knowledge is no longer available.]':String(entry.reply || '').slice(0,1000),
-  evidenceIds:(entry.evidenceIds || []).filter(id=>available.has(id))}));
+ const recent=currentConversationHistory(catalogue,history);
  const input={npc:{name:npc.name,role:npc.role},personality,newestSpeech:String(speech).slice(0,2000),history:recent,knowledge:entries,socialGoals:catalogue.challenges};
  if(entries.length>80||new Set(entries.map(entry=>entry.id)).size!==entries.length||JSON.stringify(input).length>24000)return {source:'fallback',reason:'interpretation-budget'};
  const schema=structuredClone(conversationPlanSchema);

@@ -2,6 +2,6 @@ import type {GameView} from './types';
 
 export function NpcDialogueStatus({dialogue}:{dialogue:GameView['dialogue']}) {
  if(!dialogue)return null;
- const reply=dialogue.source==='ai-reviewed'?'AI reply · grounding checked':dialogue.source==='rules'?'Authored dialogue or social outcome':'Prepared reply · AI unavailable or reply not accepted';
- return <span className="model-empty">Latest NPC reply: {reply}{dialogue.interpretation&&<><br/>{dialogue.interpretation==='ai'?'Understanding: AI interpreted your conversation':'Understanding: fallback matching · AI interpretation unavailable or not accepted'}</>}</span>;
+ const reply=dialogue.unavailable?'Reply not published · please try again':dialogue.source==='ai-reviewed'?'AI reply · grounding and relevance checked':dialogue.source==='rules'?'Authored dialogue or social outcome':'Prepared reply · AI unavailable or reply not accepted';
+ return <span className="model-empty">Latest NPC reply: {reply}{dialogue.interpretation&&<><br/>{dialogue.interpretation==='ai'?'Understanding: AI interpreted your conversation':'Understanding: fallback matching · AI interpretation unavailable or not accepted'}</>}{dialogue.inputTool&&<><br/>{dialogue.inputTool==='respond_social'?'Social conversation · no knowledge lookup':dialogue.inputTool==='read_knowledge'?'Current knowledge requested':dialogue.inputTool==='consider_social_goal'?'Authored social goal requested':dialogue.inputTool==='clarify'?'Clarifying the conversation':'Input assessment unavailable'}</>}{dialogue.repaired&&<><br/>AI repaired the reply before publication</>}</span>;
 }

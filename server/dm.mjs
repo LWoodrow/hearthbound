@@ -19,7 +19,8 @@ import { interpretSceneTurn } from "./turn-interpretation.mjs";
 import { generateStructured } from "./ai-transport.mjs";
 import {npcRelationship,npcPersonality,conversationEvidence,naturalConversationFallback,planSocialAttempt,resolveSocialAttempt} from './npc-social-engine.mjs';
 import {naturalNpcReply} from './npc-natural-dialogue.mjs';
-import {interpretNpcConversation,plannedConversationFallback} from './npc-conversation-planner.mjs';
+import {interpretNpcConversation,plannedConversationFallback,conversationCatalogue,currentConversationHistory} from './npc-conversation-planner.mjs';
+import {assessNpcInput,conversationUnavailable} from './npc-conversation-tools.mjs';
 
 function socialTransaction(db,operation){
   db.exec('SAVEPOINT npc_social_turn');
@@ -994,6 +995,7 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
   if (!found) return false;
   const [npcId,npc]=found;
   const projection=projectNpc(npc,world);
+  projection.scene=projectScene(definition,world);
   const naturalKey=`npcNaturalHistory:${definition.id}:${npcId}:${player.id}`;
   const naturalHistory=getPartyState(db,player.partyId,naturalKey) || [];
   const automatedTestRun=process.argv.some((argument)=>/\.test\.mjs$/i.test(String(argument)));
@@ -1002,7 +1004,11 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
   const generate=services.npcGenerate || (request=>promptChat({...request,sectionIds:['npc-contract','npc-current-context'],sectionVisibility:['secret','private'],metadata:{partyId:player.partyId,playerId:player.id,adventureId:adventure.id,npcId}}));
   const naturalLive=!!(npc.conversation?.natural&&!heardOnly&&!projection.authoredReply
     &&(services.npcGenerate || ((!automatedTestRun || process.env.DND_LIVE_NPC_TESTS==='1') && await isAiReady())));
-  const interpreted=naturalLive?await interpretNpcConversation({npc,personality,projection,world,speech:action,history:naturalHistory,generate}):{source:'fallback',reason:'interpretation-offline-or-test'};
+  const recent=currentConversationHistory(conversationCatalogue(npc,projection,world),naturalHistory);
+  const assessment=naturalLive?await assessNpcInput({npc,personality,scene:projection.scene,speech:action,history:recent,generate}):{source:'fallback',reason:'input-assessment-offline'};
+  const directSocial=assessment.source==='ai'&&['respond_social','clarify'].includes(assessment.tool);
+  const interpreted=directSocial?{source:'ai',reason:'',plan:{goals:[{kind:'chat',evidenceIds:[]}],challengeId:'',approach:''},evidence:[],history:recent}:
+    naturalLive?await interpretNpcConversation({npc,personality,projection,world,speech:action,history:recent,generate}):{source:'fallback',reason:'interpretation-offline-or-test'};
   const contextChanged=()=>{
     const current=createCanonicalState(definition,getPartyState(db,player.partyId,`world:${definition.id}`)||{currentLocation:dmState.currentLocationKey || definition.startLocation});
     return current.revision!==world.revision||current.currentLocation!==world.currentLocation||!npcCanHear(definition,current,npc);
@@ -1012,9 +1018,9 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
     return {source:'rules',rule:'conversation-context-changed',accepted:false};
   };
   if(naturalLive&&contextChanged())return changedReply();
-  const socialPlan=heardOnly?null:planSocialAttempt({npc,npcId,playerId:player.id,world,action,...(interpreted.source==='ai'?{interpretation:interpreted.plan}:{})});
+  const socialPlan=heardOnly||(assessment.source==='ai'&&assessment.tool!=='consider_social_goal')?null:planSocialAttempt({npc,npcId,playerId:player.id,world,action,...(interpreted.source==='ai'?{interpretation:interpreted.plan}:{})});
   if(socialPlan){
-    const socialStatus={npcId,source:'rules',reason:'authored-social-'+socialPlan.kind,interpretation:interpreted.source==='ai'?'ai':'fallback',interpretationReason:interpreted.reason};
+    const socialStatus={npcId,source:'rules',reason:'authored-social-'+socialPlan.kind,interpretation:interpreted.source==='ai'?'ai':'fallback',interpretationReason:interpreted.reason,inputTool:assessment.tool || 'unavailable'};
     setPartyState(db,player.partyId,`npcDialogueStatus:${definition.id}:${player.id}`,socialStatus);
     if(socialPlan.kind==='blocked'){
       setPartyState(db,player.partyId,`npcDialogueStatus:${definition.id}:${player.id}`,{...socialStatus,reason:'social-request-blocked'});
@@ -1056,16 +1062,17 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
     const semantic=interpreted.source==='ai';
     const evidence=semantic?interpreted.evidence:conversationEvidence(npc,projection,world,action,naturalHistory);
     const fallback=semantic?plannedConversationFallback(interpreted.plan,evidence):naturalConversationFallback(npc,action,evidence,topicReply);
-    groundedFallback=fallback;
+    groundedFallback=naturalLive?conversationUnavailable:fallback;
     const packet={npc:{name:npc.name,role:npc.role},personality,evidence,
       newestSpeech:action,history:semantic?interpreted.history:naturalHistory.slice(-6).map(entry=>({speech:entry.speech,reply:entry.reply})),
       ...(semantic?{conversationGoals:interpreted.plan.goals.map(goal=>({kind:goal.kind,evidenceIds:goal.evidenceIds}))}:{}),
+      ...(naturalLive?{allowUncitedSocial:true}:{}),
       instructions:'History is conversation, not current evidence. Do not repeat a previous answer word for word.'};
-    const result=naturalLive?await naturalNpcReply({packet,fallback,generate}):{reply:fallback,source:'authored-fallback',reason:'model-unavailable-or-test'};
+    const result=naturalLive?await naturalNpcReply({packet,fallback,generate,assessed:true,...(directSocial?{initialCandidate:{reply:assessment.reply,evidenceIds:[]}}:{})}):{reply:fallback,source:'authored-fallback',reason:'model-unavailable-or-test'};
     if(naturalLive&&contextChanged())return changedReply();
-    reply=result.reply;naturalSource={source:result.source,reason:result.reason,interpretation:semantic?'ai':'fallback',interpretationReason:interpreted.reason};
+    reply=result.reply;naturalSource={source:result.source,reason:result.reason,interpretation:semantic?'ai':'fallback',interpretationReason:interpreted.reason,inputTool:assessment.tool || 'unavailable',repaired:!!result.repaired,unavailable:!!result.unavailable};
     const topicKind=topicReply?.topicKind || (npcConversationTopic(action)==='follow-up'?naturalHistory.at(-1)?.topicKind:npcConversationTopic(action));
-    setPartyState(db,player.partyId,naturalKey,[...naturalHistory,{speech:String(action).slice(0,500),reply,topicKind,evidenceIds:result.evidenceIds || evidence.map(entry=>entry.id)}].slice(-8));
+    if(!result.unavailable)setPartyState(db,player.partyId,naturalKey,[...naturalHistory,{speech:String(action).slice(0,500),reply,topicKind,evidenceIds:result.evidenceIds || evidence.map(entry=>entry.id)}].slice(-8));
   } else if (topicReply) {
     reply=topicReply.reply;
   } else if (isSimpleNpcSpeech(action)) {
@@ -1089,7 +1096,9 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
     }
   }
   if (!reply) reply=fallbackNpcReply(npc,action,facts);
-  reply=groundedNpcReply(reply,authoredOffer,groundedFallback || fallbackNpcReply(npc,action,facts));
+  const guardedReply=groundedNpcReply(reply,authoredOffer,groundedFallback || fallbackNpcReply(npc,action,facts));
+  if(guardedReply!==reply&&naturalLive){naturalSource={...naturalSource,source:'authored-fallback',reason:'physical-offer-claim',unavailable:true};setPartyState(db,player.partyId,naturalKey,naturalHistory);}
+  reply=guardedReply;
   const nextMemory=[...memory,{worldRevision:world.revision,player:player.name,speech:String(action).slice(0,500),npc:npc.name,reply,...(topicReply?.reply===reply?{topicId:topicReply.topicId,topicKind:topicReply.topicKind}:{})}].slice(-8);
   setPartyState(db,player.partyId,`npcDialogueStatus:${definition.id}:${player.id}`,{npcId,...(naturalSource || {source:'rules',reason:'authored-dialogue'})});
   setPartyState(db,player.partyId,memoryKey,nextMemory);
@@ -1099,7 +1108,7 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
     npcId,
     worldRevision:Number(world.revision || 0),
   });
-  addEvent(db,{partyId:player.partyId,adventureId:adventure.id,visibility:"public",playerId:player.id,kind:"narration",speaker:npc.name,text:reply,payload:{npcId,conversation:true}});
+  addEvent(db,{partyId:player.partyId,adventureId:adventure.id,visibility:"public",playerId:player.id,kind:"narration",speaker:naturalSource?.unavailable?'Dungeon Master':npc.name,text:reply,payload:{npcId,conversation:!naturalSource?.unavailable}});
   return {source:packetId?"ai":"rules",rule:"npc-conversation",narration:reply,promptPacketIds:packetId?[packetId]:[]};
 }
 

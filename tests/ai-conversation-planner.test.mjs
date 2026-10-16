@@ -21,7 +21,7 @@ function fixture(location='city-delvers-memorial'){
  selectAdventure(db,player.partyId,getParty(db,player.partyId).worldId+'-eldervale-roads');setPartyState(db,player.partyId,'world:eldervale-roads',world(location));
  return {db,player,say:(text,npcGenerate)=>resolveAction(db,getPlayer(db,player.id),'speak',text,{npcGenerate}),state:()=>getPartyState(db,player.partyId,'world:eldervale-roads'),last:()=>listVisibleEvents(db,player).at(-1)};
 }
-function transport(interpretation,reply,calls=[]){return async request=>{calls.push(request);return {output:request.kind==='npc-conversation-interpretation'?interpretation:request.kind==='npc-natural-performance'?{reply,evidenceIds:[...new Set(interpretation.goals.flatMap(goal=>goal.evidenceIds))]}:verdict};};}
+function transport(interpretation,reply,calls=[]){return async request=>{calls.push(request);return {output:request.kind==='npc-conversation-input'?{tool:interpretation.challengeId?'consider_social_goal':'read_knowledge',reply:''}:request.kind==='npc-conversation-interpretation'?interpretation:request.kind==='npc-natural-performance'?{reply,evidenceIds:[...new Set(interpretation.goals.flatMap(goal=>goal.evidenceIds))]}:verdict};};}
 
 test('planner catalogue is per-resident/current, hides gated facts and detail content, and exposes no rule outcomes',async()=>{
  const state=world('city-delvers-maps'),projection=projectNpc(maps,state),calls=[];
@@ -66,8 +66,8 @@ test('AI interpretation, not a keyword category, selects facts for paraphrases a
   ];
   for(const [speech,interpretation,reply] of cases){
    const calls=[];await f.say(speech,transport(interpretation,reply,calls));
-   assert.equal(f.last().text,reply);assert.deepEqual(calls.map(call=>call.kind),['npc-conversation-interpretation','npc-natural-performance','npc-natural-review']);
-   const performance=JSON.parse(calls[1].messages[1].content);assert.deepEqual(performance.evidence.map(e=>e.id),[...new Set(interpretation.goals.flatMap(goal=>goal.evidenceIds))]);
+   assert.equal(f.last().text,reply);assert.deepEqual(calls.map(call=>call.kind),['npc-conversation-input','npc-conversation-interpretation','npc-natural-performance','npc-natural-review']);
+   const performance=JSON.parse(calls[2].messages[1].content);assert.deepEqual(performance.evidence.map(e=>e.id),[...new Set(interpretation.goals.flatMap(goal=>goal.evidenceIds))]);
    const status=getPartyState(f.db,f.player.partyId,'npcDialogueStatus:eldervale-roads:'+f.player.id);assert.equal(status.interpretation,'ai');assert.equal(status.source,'ai-reviewed');
    assert.deepEqual(f.state(),before);assert.equal(getPartyState(f.db,f.player.partyId,'pendingCheck:'+f.player.id),null);
   }
@@ -118,15 +118,15 @@ test('transaction/injection requests never turn valid IDs into inventory, permis
    calls.push(request);if(request.kind==='npc-conversation-interpretation')return plan(['delvers-food'],'transaction');
    return {reply:'You now have a free meal and are allowed into the guild.',evidenceIds:['delvers-food']};
   });
-  assert.match(f.last().text,/cannot arrange.*purchase/i);assert.doesNotMatch(f.last().text,/now have|guildmaster/);assert.deepEqual(f.state(),before);
-  assert.equal(calls.length,2);
+  assert.match(f.last().text,/could not be verified/i);assert.doesNotMatch(f.last().text,/now have|guildmaster/);assert.deepEqual(f.state(),before);
+  assert.equal(calls.length,4);
  }finally{f.db.close();}
 });
 
 test('rejected semantic review never publishes selected solution text as fallback',async()=>{
  const f=fixture('city-delvers-maps');try{
   await f.say('hello',async request=>request.kind==='npc-conversation-interpretation'?plan(['maps-ward-bypass'],'solution'):request.kind==='npc-natural-performance'?{reply:'The gallery avoids the sentinel.',evidenceIds:['maps-ward-bypass']}:{...verdict,relevant:false});
-  assert.doesNotMatch(f.last().text,/gallery|sentinel/);assert.match(f.last().text,/understand/);
+  assert.doesNotMatch(f.last().text,/gallery|sentinel/);assert.match(f.last().text,/could not be verified/);
  }finally{f.db.close();}
 });
 
@@ -134,7 +134,7 @@ test('invalid/unavailable planner degrades visibly without blocking chat or writ
  for(const failure of ['invalid','unavailable']){
   const f=fixture();try{
    const before=f.state();await f.say('tell me about your family',async()=>{if(failure==='unavailable')throw Error('offline');return {newFact:'Your brother is king.'};});
-   assert.match(f.last().text,/Maren/);assert.deepEqual(f.state(),before);
+   assert.match(f.last().text,/could not be verified/);assert.deepEqual(f.state(),before);
    const status=getPartyState(f.db,f.player.partyId,'npcDialogueStatus:eldervale-roads:'+f.player.id);assert.equal(status.interpretation,'fallback');assert.match(status.interpretationReason,/invalid|unavailable/);
   }finally{f.db.close();}
  }
@@ -173,4 +173,7 @@ test('actual model-menu status distinguishes AI understanding, generated reply a
  assert.match(render({source:'ai-reviewed',interpretation:'fallback'}),/fallback matching/);
  assert.match(render({source:'authored-fallback',interpretation:'ai'}),/Prepared reply.*AI interpreted/s);
  assert.equal(render(null),'');
+ assert.match(render({source:'ai-reviewed',interpretation:'ai',inputTool:'respond_social'}),/no knowledge lookup/);
+ assert.match(render({source:'ai-reviewed',interpretation:'ai',repaired:true}),/repaired the reply/);
+ assert.match(render({source:'authored-fallback',unavailable:true}),/Reply not published/);
 });
