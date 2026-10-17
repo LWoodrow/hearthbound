@@ -26,9 +26,9 @@ test('viewport containment is scoped to the game and leaves accessible scroll su
   assert.match(css,/@media \(forced-colors:active\)/);
 });
 
-test('speaker cards share a transcript rail and readable prose is measured in its own font',()=>{
+test('speaker cards share a transcript rail and prose fills the message content width',()=>{
   const css=readFileSync(new URL('../src/game-viewport.css',import.meta.url),'utf8');
   assert.match(css,/\.game-view \.narration \{[^}]*width:100%; max-width:none/);
-  assert.match(css,/\.game-view \.narration p \{ max-width:84ch;/);
+  assert.match(css,/\.game-view \.narration p \{ width:100%; max-width:none;/);
   assert.match(css,/\.game-view \.player-event \{[^}]*width:100%; max-width:none; margin:12px 0;/);
 });

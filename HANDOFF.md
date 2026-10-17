@@ -1,5 +1,13 @@
 # Hearthbound handoff
 
+## Full-width message wrapping — browser verified, deployment approved (2026-10-17)
+
+User wants narration to reach the message edge, not a separate readable-measure limit. Branch codex/full-width-message-wrap starts at fetched main207b282 and excludes the NPC thread prototype (preserved on codex/npc-thread-context, ad47391). Remove84ch cap; preserve aligned cards, padding, single-scroll viewport and composer. Browser regression must assert paragraph width equals card content width and actual wrapped line fragments approach the right edge, not merely a minimum width. No save/model changes; deployment needs user approval.
+
+Implemented width100%/max-width:none on narration paragraphs.32 representative Edge geometry cases pass, now checking actual Range line fragments, paragraph/card content-width equality, multiple wrapped lines and no hidden right gutter, plus previous alignment/overflow/composer checks. Build/typecheck/36 portraits and four adventure validators pass. User explicitly approved "Deploy the wrapping correction"; run full regression check, commit/merge/push and refresh usual4173. No conversation prototype, changes to text content, save reset or model setting changes are included. Physical-device acceptance remains pending; browser reload required after deployment.
+
+Release verification: all516 main-based regressions pass. Isolated diff contains only the paragraph-width correction, matching tests and this handoff. Main and origin/main were clean/equal at207b282 immediately before integration.
+
 ## Conversation alignment correction — verified, deployment approved (2026-10-17)
 
 User screenshot shows the widened feed with player cards pushed to the far right and NPC paragraphs constrained to a different, narrow measure. Branch codex/conversation-alignment starts at main ac51d90. Give both message types one left-aligned transcript rail, apply readable line length to prose at its actual font size rather than the smaller container font, and add browser alignment checks with alternating speakers (missing from the earlier geometry fixture). Retain viewport containment, wider composer and reader-follow behaviour. No gameplay/save/model changes. Verify before handoff; this correction is not yet deployed.
