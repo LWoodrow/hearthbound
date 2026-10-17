@@ -150,7 +150,8 @@ test('fresh authored sources follow contaminated history without promoting it or
   setPartyState(f.db,f.player.partyId,key,[old]);
   await f.say('I thought Maren was your younger sister?',async request=>{
    const input=packet(request),raw=JSON.parse(request.messages.at(-1).content);
-   assert.equal(request.messages.at(-2).role,'assistant');assert.equal(request.messages.at(-2).content,old.reply);
+   assert.equal(request.messages.at(-2).role,'assistant');
+   const previous=JSON.parse(request.messages.at(-2).content);assert.equal(previous.previouslySaid,old.reply);assert.equal(previous.authority,'unverified-dialogue-only');
    assert.equal(raw.newestPlayerSpeech,'I thought Maren was your younger sister?');
    assert.doesNotMatch(JSON.stringify(raw.sources.established),/Copper Swan|older brother/);
    assert.match(raw.sources.limits.personalExperience,/unknown, not never/);

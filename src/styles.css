@@ -348,6 +348,10 @@ h1, h2, p { margin-top: 0; }
 .scene-heading { width:calc(100% - 48px); max-width:940px; margin:0 auto; padding:30px 0 12px; }
 .scene-heading h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(34px, 4vw, 48px); margin: 5px 0 0; font-weight: 600; }
 .story-feed { width:calc(100% - 48px); max-width:940px; margin:0 auto; padding:4px 0 25px; flex: 1; max-height:calc(100vh - 271px - var(--party-bar-height)); min-height: 250px; overflow-y: auto; }
+.story-feed-latest { width:calc(100% - 48px); max-width:940px; margin:0 auto; display:flex; justify-content:center; padding:6px 0; }
+.story-feed:focus-visible { outline:1px solid var(--gold); outline-offset:3px; }
+.story-feed-latest button { color:var(--gold-bright); background:var(--panel); border:1px solid var(--gold); padding:8px 16px; cursor:pointer; }
+.story-feed-latest button:focus-visible { outline:2px solid var(--gold-bright); outline-offset:3px; }
 .narration { max-width: 860px; padding: 18px 0; border-bottom: 1px solid #2d2821; }
 .narration > span, .player-event > span { color: var(--gold); text-transform: uppercase; letter-spacing: .14em; font-size: 10px; font-weight: 700; }
 .narration p { font-family: Georgia, "Times New Roman", serif; font-size: clamp(18px, 1.6vw, 21px); line-height: 1.58; margin: 7px 0 0; color: #e6ddcd; }
@@ -686,7 +690,7 @@ h1, h2, p { margin-top: 0; }
   .game-grid { grid-template-columns: 1fr; }
   .story-panel { border-right: 0; }
   .character-panel { border-top: 1px solid var(--line); }
-  .story-feed { max-height: none; min-height: 42vh; }
+  .story-feed { max-height:65dvh; min-height: 42vh; }
   .hub-columns { grid-template-columns: 1fr; }
   .campaign-series-banner { grid-template-columns:1fr; gap:9px; }
   .party-launch { position: static; margin-top: 0; }

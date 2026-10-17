@@ -13,6 +13,27 @@ import {knowledgePlanRequest,excerptPlanRequest,nativeConversationRequest} from 
 import {createPersonalStoryProbe} from './lib/personal-story-probe.mjs';
 import {createPreparedStoryProbe} from './lib/prepared-story-probe.mjs';
 export const scenarios={
+ 'nima-practical':{location:'city-delvers-memorial',turns:[
+  'What time do you close today?',
+  'Where could I get food before looking for lodgings?',
+  'Where does good chicken?',
+  'That sounds ideal, thank you.',
+  'Is there definitely a room free there tonight?',
+  'Actually, tell me something you enjoy repairing.',
+  'And what do we really know about the food and hours, rather than guesses?',
+ ]},
+ 'selka-practical':{location:'city-delvers-last',turns:[
+  'What is on the menu today?',
+  'Could I get a fish supper, and how much would it cost?',
+  'Will you be open after midnight?',
+  'Thanks, that settles it.',
+  'Do you have a room free, or should I ask somewhere else?',
+ ]},
+ 'nima-practical-memory':{location:'city-delvers-memorial',history:[{speech:'Where should I eat?',reply:'The Last Lantern serves chicken stew until six and has rooms available tonight.',evidenceIds:[],authority:'dialogue-only'}],turns:[
+  'Thank you, that sounds ideal.',
+  'So the meal and room are definitely available?',
+  'Can you tell me the price, then?',
+ ]},
  nima:{location:'city-delvers-memorial',turns:[
   'hi nima',
   "I'm doing all right. How are you feeling?",

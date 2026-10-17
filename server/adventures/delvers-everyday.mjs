@@ -1,7 +1,7 @@
 // Reviewed local knowledge shared by the Delvers cast, not invented by the
 // narrator. Stable geography/advice only: no clock, current weather or commerce.
 const shared=[
- {id:'delvers-food',subjects:['everyday:food','hungry','eat','recommend','meal'],text:'Food recommendations: the Last Lantern is nearby in Delvers’ Quarter; Nine Kitchens Court is in the Grand Exchange; Hearthcrumb Bakery is in Lantern Ward. These are public recommendations, not evidence of anyone’s past visits, favourite dish, menu, prices or current ambience.'},
+ {id:'delvers-food',domain:'place',subjects:['everyday:food','hungry','eat','recommend','meal'],text:'Food recommendations: the Last Lantern is nearby in Delvers’ Quarter; Nine Kitchens Court is in the Grand Exchange; Hearthcrumb Bakery is in Lantern Ward. These are public recommendations, not evidence of anyone’s past visits, favourite dish, menu, prices or current ambience.'},
  {id:'delvers-weather',subjects:['everyday:weather','hot','cold','weather'],text:'“These stone streets can feel quite different in sunshine and in shade. I would keep a layer handy rather than trust one sheltered corner. Are you too warm, or wishing you had brought a coat?”'},
 ];
 
@@ -36,7 +36,7 @@ export function addDelversEveryday(npcs,ids) {
  nima.conversation.knowledge.push(
   {id:'nima-family',tier:'everyday',subjects:['everyday:family','family','sister','Maren','parents','upbringing','occupation'],text:'Nima has a younger sister named Maren. Maren mends clothes. Their parents taught them to repair things before throwing them away.'},
   {id:'nima-family-bond',tier:'everyday',subjects:['everyday:family','Maren','sister','relationship'],text:'Nima and Maren are close. Maren teases Nima for polishing brass while thinking. Both sisters enjoy making useful things with their hands.'},
-  {id:'nima-work',tier:'everyday',subjects:['everyday:capabilities','work','arrange','help','promise','slate'],text:'Nima cares for the Returners’ Wall and public slate. Visitors may leave a return promise, sit or talk. She offers public directions and company, not room bookings or meal delivery.'},
+  {id:'nima-work',domain:'service',tier:'everyday',subjects:['everyday:capabilities','work','arrange','help','promise','slate'],text:'Nima cares for the Returners’ Wall and public slate. Visitors may leave a return promise, sit or talk. She offers public directions and company, not room bookings or meal delivery.'},
  );
  const wellbeing=nima.conversation.knowledge.find(entry=>entry.id==='city-delvers-memorial-resident-wellbeing');
  wellbeing.text='Nima is settled and enjoys tending small practical tasks while people find their words; quiet ordinary conversation is welcome.';
