@@ -1,5 +1,9 @@
 # Hearthbound handoff
 
+## User-requested simple-control package deployment (2026-10-17)
+
+User says "deploy", then "okay do that" after an interrupted turn. Read-only audit confirms no partial deployment: main/runtime988082e, current clean candidate909b8a5. Integrate this current diagnostic package into main/GitHub and refresh usual app4173, preserving saves and complete model settings. Explicitly told user that simple-chat remains test-only and this release will not enable its unsafe/unclassified raw-text path or claim to resolve the conversation bug. Separating authored facts from response scripts is still future work, not implemented by this deployment. No unrelated branches, model selection or new feature scope. Re-run release checks and verify pushed/running commit; keep all mixed/failed evidence and diagnostic-only boundaries.
+
 ## Simple direct AI conversation control — completed locally, mixed quality (2026-10-17)
 
 User authorizes simplifying the model conversation rather than adding corrective code. Branch codex/simple-npc-dialogue starts from fetched main988082e. Add a diagnostic-only single text-generation path: small authored character/public-context brief, current eligible native dialogue and newest speech; no task notes, semantic routing, planner, judge, repair or generated memories. Compare clean/seeded human greeting→grand sweep→continue failures and held-out NPC conversation on the currently running model. Keep existing safety/authority boundaries, no real-save gameplay or model/settings writes. Plain text has no validated fiction provenance or consequential tools, so it is a control experiment, not a drop-in production dispatcher. No merge/push/deploy authorized by this request.
