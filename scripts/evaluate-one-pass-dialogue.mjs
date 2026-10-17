@@ -12,6 +12,8 @@ import {anchoredEvaluationRequest} from './probe-dialogue-format.mjs';
 import {knowledgePlanRequest,excerptPlanRequest,nativeConversationRequest} from './lib/dialogue-knowledge-plan.mjs';
 import {createPersonalStoryProbe} from './lib/personal-story-probe.mjs';
 import {createPreparedStoryProbe} from './lib/prepared-story-probe.mjs';
+import {threadAgreementRequest} from './lib/thread-agreement.mjs';
+import {threadFirstRequest} from './lib/thread-first.mjs';
 export const scenarios={
  'nima-fiction':{location:'city-delvers-memorial',turns:[
   'Tell me a story.', 'A tale of romance.', 'Your choice.', 'Grand sweep.',
@@ -140,7 +142,7 @@ export function summarizeDialogueRun(turns){
   semanticQuality:'Requires human reading of replies; call counts and unchanged state do not prove consistency, relevance or naturalness.',
  };
 }
-export async function evaluateDialogue({profile,scenario,limit=99,run=1,generate=generateStructured,transformRequest=request=>request,harnessFactory,emit=value=>console.log(JSON.stringify(value))}){
+export async function evaluateDialogue({profile,scenario,limit=99,run=1,generate=generateStructured,transformRequest=request=>request,requestPipeline,harnessFactory,emit=value=>console.log(JSON.stringify(value))}){
  const db=createDatabase(':memory:');const turns=[];
  try{
  const player=createPlayer(db,{partyId:'party-first-company',name:'Nigel',species:'Human',className:'Fighter'});
@@ -150,7 +152,7 @@ export async function evaluateDialogue({profile,scenario,limit=99,run=1,generate
  if(scenario.history)setPartyState(db,player.partyId,`npcNaturalHistory:eldervale-roads:city-delvers-memorial-resident:${player.id}`,structuredClone(scenario.history));
  for(const text of scenario.turns.slice(0,limit)){
   const before=getPartyState(db,player.partyId,'world:eldervale-roads'),start=Date.now(),prompts=[];let calls=0;
-  await resolveAction(db,getPlayer(db,player.id),'speak',text,{npcDialogueMode:'one-pass',npcGenerate:async request=>{
+  const infer=async request=>{
    request=(harness?.transformRequest || transformRequest)(request);
    calls++;const packet=buildPromptPacket({kind:request.kind,profile,responseTokens:request.generation.numPredict,sections:request.messages.map((message,index)=>({...message,id:'dialogue-'+index,visibility:'private',required:true}))});
    const prompt={kind:request.kind,estimatedInputTokens:packet.estimatedInputTokens,inputBudget:packet.inputBudget,responseTokens:request.generation.numPredict};prompts.push(prompt);
@@ -158,7 +160,8 @@ export async function evaluateDialogue({profile,scenario,limit=99,run=1,generate
    const output=await generate(profile,packet.messages,request.schema,request.generation);
    if(request.audit)prompt.selection=request.audit(output);
    return request.decode?request.decode(output):output;
-  }});
+  };
+  await resolveAction(db,getPlayer(db,player.id),'speak',text,{npcDialogueMode:'one-pass',npcGenerate:request=>requestPipeline?requestPipeline(request,infer):infer(request)});
   const elapsedMs=Date.now()-start;
   const event=listVisibleEvents(db,player).at(-1),status=getPartyState(db,player.partyId,'npcDialogueStatus:eldervale-roads:'+player.id),pending=getPartyState(db,player.partyId,'pendingCheck:'+player.id);
   const accepted=getPartyState(db,player.partyId,`npcNaturalHistory:eldervale-roads:${status?.npcId}:${player.id}`)?.at(-1);
@@ -179,10 +182,10 @@ async function main(){
  if(compareHistory&&!scenario.history)throw Error('History comparison needs a seeded scenario such as nima-memory.');
  const variants=compareHistory?[{name:'clean',scenario:{...scenario,history:undefined}},{name:'seeded',scenario}]:[{name:'default',scenario}];
  const layoutProbe=option('layout-probe','production');
- if(!['production','chat-anchored','knowledge-plan','excerpt-plan','native-chat','personal-stories','prepared-stories'].includes(layoutProbe))throw Error('Unknown layout probe.');
+ if(!['production','thread-agreement','thread-first','chat-anchored','knowledge-plan','excerpt-plan','native-chat','personal-stories','prepared-stories'].includes(layoutProbe))throw Error('Unknown layout probe.');
  if(['personal-stories','prepared-stories'].includes(layoutProbe)&&!selected.startsWith('nima'))throw Error('Personal-story pilot is Nima only.');
  const profile=currentModelProfile();console.log(JSON.stringify({model:profile.displayName,scenario:selected,repeat,variants:variants.map(variant=>variant.name),layoutProbe,mode:'memory-only; no settings changes',semanticReviewRequired:true}));
- const transforms={'chat-anchored':anchoredEvaluationRequest,'knowledge-plan':knowledgePlanRequest,'excerpt-plan':excerptPlanRequest,'native-chat':nativeConversationRequest};
+ const transforms={'thread-agreement':threadAgreementRequest,'chat-anchored':anchoredEvaluationRequest,'knowledge-plan':knowledgePlanRequest,'excerpt-plan':excerptPlanRequest,'native-chat':nativeConversationRequest};
  const harnessFactory=['personal-stories','prepared-stories'].includes(layoutProbe)?({partyId,adventureId,playerId})=>{
   // Explicitly reviewed public geography and an already authored relative;
   // never infer new people/places from generated chat or player assertions.
@@ -194,6 +197,6 @@ async function main(){
   if(layoutProbe==='prepared-stories')return createPreparedStoryProbe({...options,stories:[{personId:'sister',placeId:'city-delvers-last',activity:'talked',impression:'amusing',topic:'mending'}]});
   return createPersonalStoryProbe(options);
  }:undefined;
- for(let run=1;run<=repeat;run++)for(const variant of variants)await evaluateDialogue({profile,scenario:variant.scenario,limit,run:compareHistory?`${run}:${variant.name}`:run,transformRequest:transforms[layoutProbe],harnessFactory});
+ for(let run=1;run<=repeat;run++)for(const variant of variants)await evaluateDialogue({profile,scenario:variant.scenario,limit,run:compareHistory?`${run}:${variant.name}`:run,transformRequest:transforms[layoutProbe],requestPipeline:layoutProbe==='thread-first'?threadFirstRequest:undefined,harnessFactory});
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)await main();
