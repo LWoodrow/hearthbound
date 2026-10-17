@@ -2,6 +2,16 @@
 
 ## Decision
 
+### Experimental transactional memory store (2026-10-17; NOT runtime integration)
+
+`scripts/lib/personal-story-store.mjs` is an explicitly constructed SQLite adapter tested only on temporary databases. Nothing imports it into the game dispatcher/startup and no real-save migration is run. Separate prototype tables store scoped typed ledger snapshots with revisions and publication-id receipts. A trusted caller supplies a previously accepted reply and validated memory intent; this adapter does not semantically assess prose or extract memories from it. It fixes event authority/owner and player-only visibility, so hearing markers do not falsely imply every player heard a personal story.
+
+Within a SQLite savepoint, a publication validates active party/adventure membership, matching policy, expected memory revision and the registered adventure's actual canonical-world snapshot hash; writes the memory/hearing update; inserts the actual game event; and records the retry receipt. Failure at any step rolls everything back, including an event inserted before a receipt failure. Outer transactions remain authoritative. A repeated identical scoped publication ID returns the original event/revision; reusing that ID for different content fails. A stale writer or competing SQLite write lock fails without an automatic retry or new model call. Caller orchestration may reload after conflict, not silently overwrite or regenerate biography.
+
+Preparation persists unheard stories without fake audience markers; reopening a temporary disk database preserves provenance and private hearing flags. Stored snapshots are revalidated by the pure ledger, including scope/policy/provenance. Corrupt data is rejected and left intact, not silently reset. No item, quest, reward, world-state, verified-event or biography mutation API is exposed. Scope IDs are database party/adventure IDs; canonical snapshot lookup resolves through the existing adventure registry, not an invented parallel world key.
+
+Limitations: this is NOT connected to asynchronous inference, final dispatcher guards, conversation-history/disclosure storage, multiplayer publication, restart/reset cleanup or policy migrations. Trusted runtime integration must recheck NPC presence/eligible knowledge, current player/scene, model turn ownership and guards before this narrow transactional boundary. Prototype player-private events do not establish a final public dialogue design. Receipt retention and migration lifecycle need a reviewed production plan. No automatic AI preparation generator, new judge layer, live-model quality claim, deployment or service restart is included.
+
 ### Prepared-story control (2026-10-17; evaluation only)
 
 `--layout-probe=prepared-stories --scenario=nima-stories` is now a separate control: a single explicit typed fixture is prepared before the conversation, and the ordinary model produces only `{reply}` at240 output tokens. The fixture is Maren/Last Lantern/talked/mending/amusing, NOT a new authored fact about the real Nima. This isolates stable-note use from the earlier360-token inline creation/recall protocol; it is not a single-variable speed comparison. No AI preparation call, extra judge, inferred hearing receipt or production settings flag is added. A future automatic preparation generator remains unimplemented.
