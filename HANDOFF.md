@@ -1,6 +1,6 @@
 # Hearthbound handoff
 
-## One-pass dialogue engine and Nima pilot — verified, deployment authorized (2026-10-17)
+## One-pass dialogue engine and Nima pilot — deployed for testing (2026-10-17)
 
 User approves implementing the recorded ordinary-conversation plan. New codex/one-pass-dialogue worktree from current main2385c51; planning commits carried forward without merging main. Build shared one-generation ordinary dialogue, compact scoped life/context card, explicit guarded-read/social proposals and Nima authored-data pilot. Retain code-owned checks/effects, disclosure, deadlines, diagnostics and saved history; keep current coder/model settings unchanged. Legacy chain remains explicit rollback only for pilot, never automatic extra reviewers. Add real-dispatch/regression tests and15-turn memory-only configured-model acceptance plus contrasting residents. No external repo code installed/copied; no model swap, save reset or new places. Deployment approval needed after evidence is reported.
 
@@ -13,6 +13,8 @@ Live memory-only Qwen2.5-Coder-7B-Instruct-Q8_0 evidence: initial packet lacked 
 The user explicitly approved “Deploy the Nima pilot for testing” after disclosure of invented personal details/generic phrasing. This authorizes a limited experimental Nima deployment, not broad cast rollout or a claim every planned quality criterion passed. Final tests/build/adventure checks and integration follow. No real-model settings, saved history/location, maps or portraits were changed. The current model is fast enough to evaluate design; do not propose another swap as the main fix. Next after deployment: human Nima conversation review, then refine packet/character source design without reintroducing judges, and only expand cast when that is satisfactory.
 
 Final verification: 439/439 tests pass, production build/typecheck and all 36 portrait assets pass, all four adventures validate (Roads retains 146 locations), and git diff --check is clean. User has explicitly approved deployment of this limited experimental pilot to main/GitHub. Preserve the usual checkout's unrelated .gitignore modification; refresh only port 4173 with model warmup skipped. Record verified running/remote commit after deployment. Semantic/immersive quality remains a human-playtest gate, not a claimed pass.
+
+Deployment completed: implementation 359cd59 fast-forwarded into the usual main checkout, production rebuilt and pushed to LWoodrow/hearthbound. Launcher refreshed only port 4173 with model warmup skipped. Health verified ok/main/359cd59, matching main and origin/main; only the unrelated user .gitignore remains modified. Saves, saved conversations/location, model settings, artwork and portraits were not reset or modified by deployment. This completion record changes no runtime logic. Next: refresh the browser and playtest Nima at Returners' Wall, including greetings, family follow-ups, apologies and food/topic changes. The direct-conversation label distinguishes the pilot from legacy residents. Judge personal-detail consistency and naturalness honestly before wider rollout; known invented personal details remain unresolved.
 
 ## Ordinary conversation implementation plan — completed, not implemented (2026-10-17)
 
