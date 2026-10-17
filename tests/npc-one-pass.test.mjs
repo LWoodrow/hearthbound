@@ -68,6 +68,54 @@ test('a transport outage is one call, no automatic legacy retry and no accepted 
  }finally{f.db.close();}
 });
 function mapsContext(){const npc=roads.story.npcs['city-delvers-maps-resident'],world=createCanonicalState(roads,{currentLocation:'city-delvers-maps'}),projection=projectNpc(npc,world);projection.scene=projectScene(roads,world);return {npc,world,projection,catalogue:conversationCatalogue(npc,projection,world)};}
+
+test('shared one-pass journal carries choices, accepted offers and fictional follow-ups without canon promotion',async()=>{
+ for(const location of ['city-delvers-memorial','city-delvers-last']){
+  const f=fixture(location);try{
+   const exchanges=[
+    ['Tell me a story.','What sort of tale would you like?'],
+    ['A tale of romance.','Would you prefer a quiet tale or a grand one?'],
+    ['Your choice.','Here is a fable, not a true history: a sailor loved a bell-maker. A storm divided them, but each kept a lamp burning until the sea returned them to the same shore.'],
+    ['Grand sweep.','In the grander telling, their lamps guided a whole fleet home; they met on the quay and married beside the silent bell. That is the end of the fable.'],
+    ['Did this happen to your family?','No family history is established by that tale; it was an imagined romance.'],
+    ['Forget stories. Where can I find food?','The Last Lantern is a known local place to ask.'],
+   ];
+   for(let index=0;index<exchanges.length;index++){
+    const [text,reply]=exchanges[index];let calls=0;
+    await f.say(text,async request=>{
+     calls++;const input=packet(request),journal=input.conversationJournal;
+     assert.match(journal.authority,/dialogue-only/);
+     assert.deepEqual(journal.recentPlayerTurns,exchanges.slice(0,index).map(([speech])=>speech));
+     assert.equal(journal.lastNpcUtterance,index?exchanges[index-1][1]:'');
+     assert.equal(input.newestPlayerSpeech,text);
+     assert.doesNotMatch(JSON.stringify(input.sources.established),/bell-maker|whole fleet/);
+     assert.match(request.messages[0].content,/Use kind=fiction/);
+     assert.match(request.messages[0].content,/do the requested conversational thing NOW/);
+     if(index>0)assert.equal(journal.priorThread.request,index<=4?'Tell a romantic tale':'Explain whether the tale was real');
+     if(index===4){assert.deepEqual(journal.fictionTurnNumbers,[3,4]);assert.equal(journal.lastUtteranceKind,'fiction');}
+     return {...speech(reply),kind:[2,3].includes(index)?'fiction':'speech',thread:{request:index<=3?'Tell a romantic tale':index===4?'Explain whether the tale was real':'Find food',choices:['romance','NPC chooses details','epic scale'].slice(0,Math.min(index,3)),move:index<2?'clarify':index===2?'deliver':index===3?'revise':'respond'}};
+    },{npcDialogueMode:'one-pass'});
+    assert.equal(calls,1);assert.equal(f.last().text,reply);assert.equal(f.status().unavailable,false);
+   }
+   assert.deepEqual(getPartyState(f.db,f.player.partyId,'world:eldervale-roads'),f.world);
+   const npcId=location==='city-delvers-last'?'city-last-host':location+'-resident',history=getPartyState(f.db,f.player.partyId,`npcNaturalHistory:eldervale-roads:${npcId}:${f.player.id}`);
+   assert.equal(history.length,6);assert.ok(history.every(turn=>turn.authority==='dialogue-only'));
+  }finally{f.db.close();}
+ }
+});
+
+test('continuity uses all eight saved turns but never recovers withdrawn knowledge',()=>{
+ const {npc,projection,catalogue}=mapsContext();
+ const history=Array.from({length:9},(_,index)=>({speech:'Request '+index,reply:'Reply '+index,evidenceIds:[]}));
+ history.at(-1).reply='Withdrawn hidden directions';history.at(-1).disclosureIds=['removed-source'];
+ const context=onePassContext({npc,personality:{},projection,catalogue,history,player:{name:'Nigel'}});
+ assert.equal(context.recent.length,8);assert.equal(context.recent[0].playerSaid,'Request 1');
+ const input=JSON.parse(onePassMessages(context,'Continue.').at(-1).content);
+ assert.equal(input.conversationJournal.recentPlayerTurns.length,8);
+ assert.doesNotMatch(JSON.stringify(onePassMessages(context,'Continue.')),/Withdrawn hidden directions/);
+ assert.match(input.conversationJournal.lastNpcUtterance,/no longer available/);
+ assert.equal(history.at(-1).reply,'Withdrawn hidden directions','projection must not rewrite saved history');
+});
 test('first packet contains only public facts and labels for currently eligible guarded reads',()=>{
  const {npc,world,projection,catalogue}=mapsContext(),context=onePassContext({npc,personality:{episodes:[]},projection,catalogue,history:[]});
  assert.doesNotMatch(JSON.stringify(context),/gallery and refuge route avoids the sentinel|conflicting dates on two surveys/);
@@ -185,6 +233,38 @@ test('actual serialized prompt including instructions and newest speech is budge
  const output=await onePassNpcDialogue(args);assert.equal(output.reason,'knowledge-budget');assert.equal(calls,0);
 });
 
+test('oversized old dialogue is trimmed only in the projection without dropping current sources',async()=>{
+ const {npc,projection,catalogue}=mapsContext();
+ const history=Array.from({length:8},()=>({speech:'q'.repeat(500),reply:'r'.repeat(1000),evidenceIds:[]}));
+ const original=JSON.stringify(history);let calls=0;
+ const output=await onePassNpcDialogue({npc,personality:{},projection,catalogue,history,speech:'Continue our conversation.',generate:async request=>{
+  calls++;assert.ok(JSON.stringify(request.messages).length<=24000);
+  const input=packet(request);assert.ok(input.conversationJournal.recentPlayerTurns.length<8);
+  assert.ok(input.facts.length);assert.equal(input.newestPlayerSpeech,'Continue our conversation.');return speech('I am listening.');
+ }});
+ assert.equal(output.source,'ai-dialogue');assert.equal(calls,1);assert.equal(JSON.stringify(history),original);
+});
+
+test('fiction channel cannot carry tool IDs, skills, extra effects or a claimed game consequence',()=>{
+ const context={reads:[],socialGoals:[]},fiction={...speech('Here is a fable about two strangers who found their way home.'),kind:'fiction'};
+ assert.equal(validOnePassOutput(fiction,context),true);
+ for(const extra of [{ids:['k0']},{approach:'Persuasion'},{effects:['grant key']},{reply:'You now have a key.'}])assert.equal(validOnePassOutput({...fiction,...extra},context),false);
+});
+
+test('an accidental duplicate gets only the existing one repair; an explicitly requested repeat remains possible',async()=>{
+ const {npc,projection,catalogue}=mapsContext();let calls=0;
+ const previous='Would you prefer a quiet tale or a grand one?';
+ const output=await onePassNpcDialogue({npc,personality:{},projection,catalogue,history:[{speech:'Tell a story.',reply:previous,evidenceIds:[]}],speech:'You choose.',generate:async request=>{
+  calls++;if(calls===1)return {...speech(previous),thread:{request:'Tell a story',choices:[],move:'clarify'}};
+  assert.match(JSON.parse(request.messages.at(-1).content).formatFeedback,/previous spoken line/);
+  return {...speech('Here is an imagined tale of two strangers who crossed an ocean to find each other.'),kind:'fiction',thread:{request:'Tell a romance',choices:['I choose the details'],move:'deliver'}};
+ }});
+ assert.equal(calls,2);assert.equal(output.repaired,true);assert.equal(output.utteranceKind,'fiction');
+ const context={reads:[],socialGoals:[],recent:[{npcSaid:previous}]};
+ assert.equal(validOnePassOutput({...speech(previous),thread:{request:'Tell a story',choices:[],move:'clarify'}},context),false);
+ assert.equal(validOnePassOutput({...speech(previous),thread:{request:'Repeat the last question',choices:[],move:'repeat'}},context),true);
+});
+
 test('guarded read follow-up is checked against the same total prompt budget',async()=>{
  const {npc,projection,catalogue}=mapsContext();
  const guarded=catalogue.entries.find(entry=>entry.tier==='detail');assert.ok(guarded);guarded.text='X'.repeat(24000);
@@ -197,7 +277,7 @@ test('guarded read follow-up is checked against the same total prompt budget',as
 
 test('speech schema cannot generate invented IDs or an irrelevant skill for ordinary chat',()=>{
  const schema=onePassSchema({reads:[],socialGoals:[]});
- assert.deepEqual(schema.properties.kind.enum,['speech']);assert.deepEqual(schema.properties.approach.enum,['']);
+ assert.deepEqual(schema.properties.kind.enum,['speech','fiction']);assert.deepEqual(schema.properties.approach.enum,['']);
  assert.equal(schema.properties.ids.maxItems,0);assert.equal(schema.properties.reply.minLength,1);assert.equal(schema.additionalProperties,false);
 });
 
@@ -209,6 +289,6 @@ test('mixed capabilities use separate complete branches and a repair removes eve
  assert.deepEqual(read.properties.reply.enum,['']);assert.deepEqual(read.properties.ids.items.enum,['k0']);assert.equal(read.properties.ids.minItems,1);
  assert.deepEqual(first.properties.ids.items.enum,['g0']);assert.deepEqual(first.properties.approach.enum,['Insight']);
  assert.deepEqual(second.properties.ids.items.enum,['g1']);assert.deepEqual(second.properties.approach.enum,['Persuasion','Deception']);
- for(const branch of schema.oneOf){assert.equal(branch.type,'object');assert.equal(branch.additionalProperties,false);assert.deepEqual(branch.required,['kind','reply','ids','approach']);}
- const repair=onePassSchema(context,{onlySpeech:true});assert.equal(repair.oneOf,undefined);assert.deepEqual(repair.properties.kind.enum,['speech']);assert.equal(repair.properties.ids.maxItems,0);
+ for(const branch of schema.oneOf){assert.equal(branch.type,'object');assert.equal(branch.additionalProperties,false);assert.deepEqual(branch.required,branch.properties.kind.enum.includes('speech')?['kind','thread','reply','ids','approach']:['kind','reply','ids','approach']);}
+ const repair=onePassSchema(context,{onlySpeech:true});assert.equal(repair.oneOf,undefined);assert.deepEqual(repair.properties.kind.enum,['speech','fiction']);assert.equal(repair.properties.ids.maxItems,0);
 });
