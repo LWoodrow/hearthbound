@@ -1,0 +1,55 @@
+/* A single bounded game surface; library and setup pages retain document scrolling. */
+.game-shell {
+  height:100vh;
+  height:100dvh;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  --conversation-width:1440px;
+}
+.game-shell > .topbar,.game-shell > .party-strip { flex-shrink:0; position:relative; top:auto; }
+.game-view { flex:1; min-height:0; min-width:0; overflow:auto; }
+.game-view-adventure { display:flex; overflow:hidden; }
+.game-view .game-grid,.solo-party .game-view .game-grid {
+  width:100%; max-width:var(--conversation-width); height:100%; min-height:0; margin:0 auto;
+}
+.game-view .story-panel { min-height:0; height:100%; padding:0 28px; }
+.game-view .story-feed {
+  width:100%; max-width:none; min-height:0; max-height:none;
+  flex:1 1 0; padding:0 16px 24px 0; overflow:auto;
+  overscroll-behavior-y:contain; overflow-wrap:anywhere;
+}
+.game-view .story-feed-latest { width:100%; max-width:none; flex-shrink:0; }
+.game-view .composer {
+  width:100%; max-width:none; margin:0 0 16px; flex:0 0 auto;
+  /* Only expanded controls scroll on a short window/onscreen keyboard. */
+  max-height:48%; overflow:auto; overscroll-behavior-y:contain;
+}
+.game-view .scene-heading { width:100%; max-width:none; padding-top:20px; }
+.game-view .story-feed > .level-up-launch,.game-view .story-feed > .level-up-panel,
+.game-view .aftermath-panel { width:100%; max-width:none; }
+.game-view .narration { max-width:78ch; }
+.game-view .player-event { max-width:min(72%,78ch); }
+.game-view,.game-view .story-feed,.game-view .composer {
+  scrollbar-color:#786546 #191611;
+  scrollbar-width:thin;
+}
+.game-view::-webkit-scrollbar,.game-view ::-webkit-scrollbar { width:10px; height:10px; }
+.game-view::-webkit-scrollbar-track,.game-view ::-webkit-scrollbar-track { background:#191611; }
+.game-view::-webkit-scrollbar-thumb,.game-view ::-webkit-scrollbar-thumb {
+  background:#786546; border:2px solid #191611; border-radius:8px;
+}
+@media (max-width:900px) {
+  .game-view .story-panel { padding:0 12px; }
+  .game-view .story-feed { padding-right:8px; padding-left:0; }
+  .game-view .composer { margin:0 0 max(8px,env(safe-area-inset-bottom)); }
+  .game-view .scene-heading h1 { font-size:30px; }
+}
+@media (pointer:coarse) {
+  .game-view,.game-view .story-feed,.game-view .composer { scrollbar-width:auto; }
+  .game-view .composer button { min-height:44px; }
+}
+@media (forced-colors:active) {
+  .game-view,.game-view .story-feed,.game-view .composer { scrollbar-color:auto; }
+}
