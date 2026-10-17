@@ -1,6 +1,8 @@
 # Hearthbound handoff
 
-## Bounded conversation and visible progress — active (2026-10-17)
+## Bounded conversation and visible progress — deployed (2026-10-17)
+
+DEPLOYED after explicit user approval: implementationc01173e fast-forwarded into usual main, rebuilt/typechecked with36 portraits verified, and pushed to LWoodrow/hearthbound. Only existing4173 refreshed with model warmup skipped; health confirms ok/main/c01173e and local/remote match. Only the unrelated user .gitignore remains modified. No saves, model/settings, portraits or maps were reset/changed. This completion record changes no runtime logic.425 tests and all four adventure validations passed. Next: refresh browser, load the existing model through normal AI controls if8080 remains offline, then test Nima and watch the new stage/elapsed display. A turn may now stop earlier instead of continuing a slow failed review chain; semantic quality and local-model speed remain separate open work.
 
 User reports the live Nima turn took134 seconds then returned an unhelpful verification notice. Read-only status identifies claim-review-not-accepted (not a timeout), with respond_social input and misleading repaired=false on exhausted attempts. User authorizes implementing the proposed simplification, overall time/retry cap, visible stages and clearer diagnostics. Separate codex/bounded-conversation worktree from fetched main165ebfe; preserve saves/settings/model and unrelated main .gitignore. Add one shared end-to-end inference budget, at most one repair, cancellable transport, player-scoped transient progress and bounded private failure diagnostics; do not add another AI assessor or phrase-specific answers. Full regressions/build/adventure checks and memory-only live evidence required. No model switch. Main/GitHub deployment requires user authorization for this update.
 
