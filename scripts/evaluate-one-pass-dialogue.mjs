@@ -8,6 +8,7 @@ import {currentModelProfile} from '../server/model-runtime.mjs';
 import {generateStructured} from '../server/ai-transport.mjs';
 import {buildPromptPacket} from '../server/prompt-packets.mjs';
 import {pathToFileURL} from 'node:url';
+import {anchoredEvaluationRequest} from './probe-dialogue-format.mjs';
 export const scenarios={
  nima:{location:'city-delvers-memorial',turns:[
   'hi nima',
@@ -28,6 +29,7 @@ export const scenarios={
  ]},
  selka:{location:'city-delvers-last',turns:['Hello Selka! Is this a good place for a conversation?',"What makes you smile about your work?","I bet you've heard some terrible boasts.","Could I persuade you to share your own expedition story?"]},
  dorrik:{location:'city-delvers-board',turns:['Hello Dorrik. You look busy.',"You don't sound like a man who enjoys a long boast.","What do you enjoy about the work, then?",'Would you vouch for our crew? I would like to persuade you.']},
+ lethriel:{location:'city-delvers-maps',turns:['Hello Lethriel.','Please give me exact directions to the Surveyors’ Refuge.','Could I convince you to let me read your unfinished working notes?']},
  'nima-everyday':{location:'city-delvers-memorial',turns:[
   'Hello. I am not after a job or directions, just a bit of company.',
   'What do you like doing when you can put work aside?',
@@ -72,7 +74,7 @@ export function summarizeDialogueRun(turns){
   semanticQuality:'Requires human reading of replies; call counts and unchanged state do not prove consistency, relevance or naturalness.',
  };
 }
-export async function evaluateDialogue({profile,scenario,limit=99,run=1,generate=generateStructured,emit=value=>console.log(JSON.stringify(value))}){
+export async function evaluateDialogue({profile,scenario,limit=99,run=1,generate=generateStructured,transformRequest=request=>request,emit=value=>console.log(JSON.stringify(value))}){
  const db=createDatabase(':memory:');const turns=[];
  try{
  const player=createPlayer(db,{partyId:'party-first-company',name:'Nigel',species:'Human',className:'Fighter'});
@@ -82,10 +84,12 @@ export async function evaluateDialogue({profile,scenario,limit=99,run=1,generate
  for(const text of scenario.turns.slice(0,limit)){
   const before=getPartyState(db,player.partyId,'world:eldervale-roads'),start=Date.now(),prompts=[];let calls=0;
   await resolveAction(db,getPlayer(db,player.id),'speak',text,{npcDialogueMode:'one-pass',npcGenerate:async request=>{
+   request=transformRequest(request);
    calls++;const packet=buildPromptPacket({kind:request.kind,profile,responseTokens:request.generation.numPredict,sections:request.messages.map((message,index)=>({...message,id:'dialogue-'+index,visibility:'private',required:true}))});
    prompts.push({kind:request.kind,estimatedInputTokens:packet.estimatedInputTokens,inputBudget:packet.inputBudget});
    if(packet.overBudget)throw Error('Context budget exceeded.');
-   return await generate(profile,packet.messages,request.schema,request.generation);
+   const output=await generate(profile,packet.messages,request.schema,request.generation);
+   return request.decode?request.decode(output):output;
   }});
   const elapsedMs=Date.now()-start;
   const event=listVisibleEvents(db,player).at(-1),status=getPartyState(db,player.partyId,'npcDialogueStatus:eldervale-roads:'+player.id),pending=getPartyState(db,player.partyId,'pendingCheck:'+player.id);
@@ -104,7 +108,9 @@ async function main(){
  const compareHistory=process.argv.includes('--compare-history');
  if(compareHistory&&!scenario.history)throw Error('History comparison needs a seeded scenario such as nima-memory.');
  const variants=compareHistory?[{name:'clean',scenario:{...scenario,history:undefined}},{name:'seeded',scenario}]:[{name:'default',scenario}];
- const profile=currentModelProfile();console.log(JSON.stringify({model:profile.displayName,scenario:selected,repeat,variants:variants.map(variant=>variant.name),mode:'memory-only; no settings changes',semanticReviewRequired:true}));
- for(let run=1;run<=repeat;run++)for(const variant of variants)await evaluateDialogue({profile,scenario:variant.scenario,limit,run:compareHistory?`${run}:${variant.name}`:run});
+ const layoutProbe=option('layout-probe','production');
+ if(!['production','chat-anchored'].includes(layoutProbe))throw Error('Unknown layout probe.');
+ const profile=currentModelProfile();console.log(JSON.stringify({model:profile.displayName,scenario:selected,repeat,variants:variants.map(variant=>variant.name),layoutProbe,mode:'memory-only; no settings changes',semanticReviewRequired:true}));
+ for(let run=1;run<=repeat;run++)for(const variant of variants)await evaluateDialogue({profile,scenario:variant.scenario,limit,run:compareHistory?`${run}:${variant.name}`:run,transformRequest:layoutProbe==='chat-anchored'?anchoredEvaluationRequest:undefined});
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)await main();

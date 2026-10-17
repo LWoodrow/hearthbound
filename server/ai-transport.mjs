@@ -12,19 +12,29 @@ export async function aiRequest(profile, path, { body, timeoutMs = 2500, signal,
   return response.json();
 }
 
-export async function generateStructured(profile, messages, schema, generation = {}, fetchImpl = fetch) {
+async function generateCompletion(profile, messages, schema, generation = {}, fetchImpl = fetch) {
   const maxTokens = generation.numPredict ?? 520;
   const body = profile.provider === "ollama" ? {
-    model:profile.model, messages, stream:false, think:profile.think, format:schema,
+    model:profile.model, messages, stream:false, think:profile.think, ...(schema?{format:schema}:{}),
     options:{ temperature:generation.temperature ?? .62, num_ctx:profile.contextTokens, num_predict:maxTokens },
   } : {
     model:profile.model, messages, stream:false, temperature:generation.temperature ?? .62, max_tokens:maxTokens,
-    response_format:{ type:"json_object", schema }, chat_template_kwargs:{ enable_thinking:profile.think === true },
+    ...(schema?{response_format:{ type:"json_object", schema }}:{}), chat_template_kwargs:{ enable_thinking:profile.think === true },
   };
   const result = await aiRequest(profile, profile.provider === "ollama" ? "/api/chat" : "/v1/chat/completions", { body, timeoutMs:generation.timeoutMs ?? 150000, signal:generation.signal, fetchImpl });
   const content = profile.provider === "ollama" ? result.message?.content : result.choices?.[0]?.message?.content;
-  if (typeof content !== "string" || !content.trim()) throw new Error("The AI server did not return a structured answer.");
-  return parseModelJson(content);
+  if (typeof content !== "string" || !content.trim()) throw new Error(schema?"The AI server did not return a structured answer.":"The AI server did not return an answer.");
+  return content;
+}
+
+export async function generateStructured(profile, messages, schema, generation = {}, fetchImpl = fetch) {
+  return parseModelJson(await generateCompletion(profile,messages,schema,generation,fetchImpl));
+}
+
+// Explicit diagnostic/text capability only. Existing structured callers never
+// fall back to this after a schema/transport failure.
+export async function generateText(profile,messages,generation = {},fetchImpl = fetch) {
+  return generateCompletion(profile,messages,undefined,generation,fetchImpl);
 }
 
 export async function discoverAi(profile, fetchImpl = fetch) {

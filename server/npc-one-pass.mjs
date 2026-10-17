@@ -22,9 +22,16 @@ export function onePassContext({npc,personality,projection,catalogue,history,pla
   verifiedMemories:(personality.episodes || []).slice(-6).map(({summary})=>summary),
  };
 }
-export function onePassSchema(context){
- const ids=[...context.reads,...context.socialGoals].map(entry=>entry.id);
- return {type:'object',properties:{kind:{type:'string',enum:['speech',...(context.reads.length?['read']:[]),...(context.socialGoals.length?['social']:[])]},reply:{type:'string',maxLength:1000},ids:{type:'array',maxItems:2,items:{type:'string',...(ids.length?{enum:ids}:{})}},approach:{type:'string',enum:approaches}},required:['kind','reply','ids','approach'],additionalProperties:false};
+export function onePassSchema(context,{onlySpeech=false}={}){
+ const branch=(kind,reply,ids,methods)=>({type:'object',properties:{kind:{type:'string',enum:[kind]},reply,ids,approach:{type:'string',enum:methods}},required:['kind','reply','ids','approach'],additionalProperties:false});
+ const speech=branch('speech',{type:'string',minLength:1,maxLength:1000},{type:'array',maxItems:0,items:{type:'string'}},['']);
+ if(onlySpeech)return speech;
+ const variants=[speech];
+ if(context.reads.length)variants.push(branch('read',{type:'string',enum:['']},{type:'array',minItems:1,maxItems:2,items:{type:'string',enum:context.reads.map(entry=>entry.id)}},['']));
+ for(const goal of context.socialGoals)variants.push(branch('social',{type:'string',enum:['']},{type:'array',minItems:1,maxItems:1,items:{type:'string',enum:[goal.id]}},goal.approaches));
+ // Encode valid capabilities, rather than asking the model to reconcile a
+ // Cartesian product of speech/read/social IDs and all possible skills.
+ return variants.length===1?speech:{oneOf:variants};
 }
 export function validOnePassOutput(output,context,{onlySpeech=false,evidence=[]}={}){
  if(!exact(output,['kind','reply','ids','approach'])||typeof output.reply!=='string'||!Array.isArray(output.ids)||output.ids.length>2||new Set(output.ids).size!==output.ids.length||!approaches.includes(output.approach))return false;
@@ -66,13 +73,11 @@ export async function onePassNpcDialogue({npc,personality,projection,catalogue,h
  if(catalogue.entries.length>80||JSON.stringify(onePassMessages(context,speech)).length>24000)return {source:'authored-fallback',unavailable:true,reason:'knowledge-budget',reply:conversationFailureMessage('knowledge-budget'),protocol:'one-pass'};
  const allEvidence=catalogue.entries.filter(entry=>['everyday','advice'].includes(entry.tier));
  let evidence=allEvidence,onlySpeech=false,feedback='',repaired=false,lookupCount=0;
- const schema=onePassSchema(context);
  try{
   // One ordinary generation, at most one format/authority repair and one
   // deliberate scoped read. There is NO input classifier or outgoing judge.
   for(let round=0;round<3;round++){
-   const requestSchema=structuredClone(schema);
-   if(onlySpeech)requestSchema.properties.kind.enum=['speech'];
+   const requestSchema=onePassSchema(context,{onlySpeech});
    const messages=onePassMessages(context,speech,{requestedKnowledge:lookupCount?evidence.filter(entry=>!allEvidence.includes(entry)).map(({text})=>text):undefined,feedback});
    if(JSON.stringify(messages).length>24000)return {source:'authored-fallback',unavailable:true,reason:'knowledge-budget',reply:conversationFailureMessage('knowledge-budget'),protocol:'one-pass',repaired,lookupCount};
    const generated=await generate({kind:feedback?'npc-dialogue-repair':'npc-dialogue',schema:requestSchema,generation:{temperature:.55,numPredict:240,timeoutMs:45000},messages});

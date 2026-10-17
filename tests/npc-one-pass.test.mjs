@@ -71,7 +71,7 @@ function mapsContext(){const npc=roads.story.npcs['city-delvers-maps-resident'],
 test('first packet contains only public facts and labels for currently eligible guarded reads',()=>{
  const {npc,world,projection,catalogue}=mapsContext(),context=onePassContext({npc,personality:{episodes:[]},projection,catalogue,history:[]});
  assert.doesNotMatch(JSON.stringify(context),/gallery and refuge route avoids the sentinel|conflicting dates on two surveys/);
- assert.ok(context.reads.length);assert.equal(onePassSchema(context).properties.kind.enum.includes('social'),true);
+ assert.ok(context.reads.length);assert.equal(onePassSchema(context).oneOf.some(branch=>branch.properties.kind.enum.includes('social')),true);
  assert.equal(validOnePassOutput({kind:'read',reply:'',ids:['missing'],approach:''},context),false);
  assert.equal(world.flags.cityLethrielAnnotationsShared,false);
  assert.equal(validOnePassOutput(speech('Good morning. Nice to see you.'),context),true,'a greeting must not need a clock fact receipt');
@@ -192,4 +192,22 @@ test('guarded read follow-up is checked against the same total prompt budget',as
   return {kind:'read',reply:'',ids:[read.id],approach:''};
  }});
  assert.equal(calls,1);assert.equal(output.reason,'knowledge-budget');assert.equal(output.lookupCount,1);
+});
+
+test('speech schema cannot generate invented IDs or an irrelevant skill for ordinary chat',()=>{
+ const schema=onePassSchema({reads:[],socialGoals:[]});
+ assert.deepEqual(schema.properties.kind.enum,['speech']);assert.deepEqual(schema.properties.approach.enum,['']);
+ assert.equal(schema.properties.ids.maxItems,0);assert.equal(schema.properties.reply.minLength,1);assert.equal(schema.additionalProperties,false);
+});
+
+test('mixed capabilities use separate complete branches and a repair removes every tool branch',()=>{
+ const context={reads:[{id:'k0'}],socialGoals:[{id:'g0',approaches:['Insight']},{id:'g1',approaches:['Persuasion','Deception']}]};
+ const schema=onePassSchema(context);assert.equal(schema.properties,undefined,'do not mix root properties with oneOf in llama.cpp');assert.equal(schema.oneOf.length,4);
+ const [speech,read,first,second]=schema.oneOf;
+ assert.deepEqual(speech.properties.approach.enum,['']);assert.equal(speech.properties.ids.maxItems,0);
+ assert.deepEqual(read.properties.reply.enum,['']);assert.deepEqual(read.properties.ids.items.enum,['k0']);assert.equal(read.properties.ids.minItems,1);
+ assert.deepEqual(first.properties.ids.items.enum,['g0']);assert.deepEqual(first.properties.approach.enum,['Insight']);
+ assert.deepEqual(second.properties.ids.items.enum,['g1']);assert.deepEqual(second.properties.approach.enum,['Persuasion','Deception']);
+ for(const branch of schema.oneOf){assert.equal(branch.type,'object');assert.equal(branch.additionalProperties,false);assert.deepEqual(branch.required,['kind','reply','ids','approach']);}
+ const repair=onePassSchema(context,{onlySpeech:true});assert.equal(repair.oneOf,undefined);assert.deepEqual(repair.properties.kind.enum,['speech']);assert.equal(repair.properties.ids.maxItems,0);
 });
