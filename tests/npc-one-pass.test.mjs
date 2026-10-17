@@ -6,8 +6,10 @@ import roads from '../server/adventures/eldervale-roads.mjs';
 import {resolveAction} from '../server/dm.mjs';
 import {conversationCatalogue} from '../server/npc-conversation-planner.mjs';
 import {projectNpc,projectScene} from '../server/scene-projection.mjs';
-import {onePassContext,onePassSchema,validOnePassOutput} from '../server/npc-one-pass.mjs';
+import {onePassContext,onePassMessages,onePassNpcDialogue,onePassSchema,validOnePassOutput} from '../server/npc-one-pass.mjs';
+import {characterContext} from '../server/npc-character-context.mjs';
 const speech=reply=>({kind:'speech',reply,ids:[],approach:''});
+const packet=request=>{const value=JSON.parse(request.messages.at(-1).content);return {...value,...value.sources.established};};
 function fixture(location='city-delvers-memorial'){
  const db=createDatabase(':memory:'),player=createPlayer(db,{partyId:'party-first-company',name:'Nigel',species:'Human',className:'Fighter'});
  selectAdventure(db,player.partyId,getParty(db,player.partyId).worldId+'-eldervale-roads');const world=createCanonicalState(roads,{currentLocation:location});setPartyState(db,player.partyId,'world:eldervale-roads',world);
@@ -17,7 +19,7 @@ test('Nima pilot uses exactly one generation for greeting, family, food and a su
  const f=fixture();try{
   for(const text of ['hi nima','Tell me about your family.','Where should I eat?','Actually, what do you enjoy making?']){
    let calls=0;await f.say(text,async request=>{
-    calls++;assert.equal(request.kind,'npc-dialogue');const input=JSON.parse(request.messages[1].content);
+    calls++;assert.equal(request.kind,'npc-dialogue');const input=packet(request);
     assert.equal(input.newestPlayerSpeech,text);assert.ok(input.character.life.motivations.length);
     assert.match(JSON.stringify(input.facts),/Maren/);
     return speech('I enjoy making useful things with my hands.');
@@ -33,7 +35,7 @@ test('reported legacy food/family history remains context, not a new refusal rul
   const key=`npcNaturalHistory:eldervale-roads:city-delvers-memorial-resident:${f.player.id}`;
   setPartyState(f.db,f.player.partyId,key,[{speech:'Are you hungry?',reply:'Nobody is allowed to discuss family here.',evidenceIds:[]}]);
   await f.say("hi nima, we're planning to go down but wanted to eat first",async request=>{
-   const input=JSON.parse(request.messages[1].content);assert.ok(request.messages.some(message=>message.role==='assistant'&&/Nobody/.test(message.content)));
+   const input=packet(request);assert.ok(request.messages.some(message=>message.role==='assistant'&&/Nobody/.test(message.content)));
    assert.doesNotMatch(JSON.stringify(input.facts),/Nobody is allowed/);assert.match(JSON.stringify(input.character.life.boundaries),/Happy to talk about Maren/);
    return speech('The Last Lantern is nearby, or Hearthcrumb Bakery in Lantern Ward.');
   });assert.equal(f.status().calls,1);assert.match(f.last().text,/Last Lantern/);
@@ -78,7 +80,7 @@ test('first packet contains only public facts and labels for currently eligible 
 test('explicit read requests fetch only current eligible records then generate speech once',async()=>{
  const f=fixture('city-delvers-maps');try{
   let calls=0;await f.say('Please give me exact directions to the refuge.',async request=>{
-   calls++;const input=JSON.parse(request.messages[1].content);
+   calls++;const input=packet(request);
    if(calls===1){const read=input.reads.find(entry=>entry.subjects.includes('directions'));assert.ok(read);return {kind:'read',reply:'',ids:[read.id],approach:''};}
    assert.match(JSON.stringify(input.requestedKnowledge),/Echo Gallery/);assert.doesNotMatch(JSON.stringify(input.requestedKnowledge),/conflicting dates/);return speech('Echo Gallery leads to Surveyors’ Refuge.');
   },{npcDialogueMode:'one-pass'});
@@ -102,14 +104,14 @@ test('withdrawn knowledge is redacted from one-pass memory and another player ha
   await f.say('Remember my hobby?',async()=>speech('Tell me more about your hobby.'));
   const other=createPlayer(f.db,{partyId:f.player.partyId,name:'Other',species:'Human',className:'Fighter'});
   await resolveAction(f.db,getPlayer(f.db,other.id),'speak','hello nima',{npcGenerate:async request=>{
-   const input=JSON.parse(request.messages[1].content);assert.equal(input.player.name,'Other');assert.ok(!request.messages.some(message=>message.content.includes('Remember my hobby?')));return speech('Hello.');
+   const input=packet(request);assert.equal(input.player.name,'Other');assert.ok(!request.messages.some(message=>message.content.includes('Remember my hobby?')));return speech('Hello.');
   }});
  }finally{f.db.close();}
 });
 test('a social proposal queues the real authored check, not invented success prose',async()=>{
  const f=fixture('city-delvers-maps');try{
   await f.say('Could I convince you to let me read your unfinished pages?',async request=>{
-   const input=JSON.parse(request.messages[1].content),goal=input.socialGoals.find(entry=>entry.request.includes('working notes'));
+   const input=packet(request),goal=input.socialGoals.find(entry=>entry.request.includes('working notes'));
    assert.ok(goal);return {kind:'social',reply:'',ids:[goal.id],approach:'Persuasion'};
   },{npcDialogueMode:'one-pass'});
   const pending=getPartyState(f.db,f.player.partyId,'pendingCheck:'+f.player.id);
@@ -118,7 +120,7 @@ test('a social proposal queues the real authored check, not invented success pro
 });
 test('same engine handles contrasting existing residents without Nima-specific runtime branches',async()=>{
  for(const [location,name] of [['city-delvers-last','Selka Emberglass'],['city-delvers-board','Dorrik Slate']]){
-  const f=fixture(location);try{let calls=0;await f.say('hello',async request=>{calls++;assert.equal(request.kind,'npc-dialogue');const input=JSON.parse(request.messages[1].content);assert.equal(input.character.name,name);return speech('Hello. What brings you here?');},{npcDialogueMode:'one-pass'});assert.equal(calls,1);assert.equal(f.last().speaker,name);}finally{f.db.close();}
+  const f=fixture(location);try{let calls=0;await f.say('hello',async request=>{calls++;assert.equal(request.kind,'npc-dialogue');const input=packet(request);assert.equal(input.character.name,name);return speech('Hello. What brings you here?');},{npcDialogueMode:'one-pass'});assert.equal(calls,1);assert.equal(f.last().speaker,name);}finally{f.db.close();}
  }
 });
 test('leaving and returning retains the same NPC conversation without borrowing another resident’s history',async()=>{
@@ -139,4 +141,55 @@ test('one-pass timeout withholds the late reply and never writes it to history',
   assert.equal(f.status().failureKind,'conversation-time-limit');assert.equal(f.status().calls,1);assert.equal(f.last().speaker,'Dungeon Master');
   assert.equal(getPartyState(f.db,f.player.partyId,`npcNaturalHistory:eldervale-roads:city-delvers-memorial-resident:${f.player.id}`),null);
  }finally{f.db.close();}
+});
+
+test('fresh authored sources follow contaminated history without promoting it or exposing game scores',async()=>{
+ const f=fixture();try{
+  const key=`npcNaturalHistory:eldervale-roads:city-delvers-memorial-resident:${f.player.id}`;
+  const old={speech:'Tell me about your family.',reply:'Maren is my older brother and we visit the invented Copper Swan every night.',evidenceIds:[]};
+  setPartyState(f.db,f.player.partyId,key,[old]);
+  await f.say('I thought Maren was your younger sister?',async request=>{
+   const input=packet(request),raw=JSON.parse(request.messages.at(-1).content);
+   assert.equal(request.messages.at(-2).role,'assistant');assert.equal(request.messages.at(-2).content,old.reply);
+   assert.equal(raw.newestPlayerSpeech,'I thought Maren was your younger sister?');
+   assert.doesNotMatch(JSON.stringify(raw.sources.established),/Copper Swan|older brother/);
+   assert.match(raw.sources.limits.personalExperience,/unknown, not never/);
+   assert.match(JSON.stringify(input.character.life.family),/younger sister/);
+   assert.equal(input.character.personality.relationship,undefined);assert.equal(input.character.personality.episodes,undefined);
+   const relation=input.character.life.relationships.find(entry=>entry.person==='Maren');
+   assert.deepEqual(relation.interaction,{actor:'Maren',action:'teases',recipient:'Nima',reason:'Nima polishes brass while thinking'});
+   return speech('Yes, Maren is my younger sister.');
+  });
+  assert.equal(f.status().calls,1);assert.deepEqual(getPartyState(f.db,f.player.partyId,key)[0],old,'do not erase the real old history');
+  assert.deepEqual(getPartyState(f.db,f.player.partyId,'world:eldervale-roads'),f.world);
+ }finally{f.db.close();}
+});
+
+test('character projection is reusable, omits mechanical metadata and adds no invented life',()=>{
+ const character=characterContext({name:'Una',role:'ferrier',voice:'blunt',conversation:{}},{traits:['wry'],mood:'tired',relationship:{trust:5},episodes:[{summary:'verified elsewhere',private:'not speech'}],attempts:{secret:1}});
+ assert.equal(character.name,'Una');assert.deepEqual(character.life,{});assert.deepEqual(character.personality.traits,['wry']);
+ assert.doesNotMatch(JSON.stringify(character),/trust|private|attempts|verified elsewhere/);
+});
+
+test('social proposal must use an approach offered by that particular goal',()=>{
+ const context={reads:[],socialGoals:[{id:'g0',approaches:['Insight']}]};
+ assert.equal(validOnePassOutput({kind:'social',reply:'',ids:['g0'],approach:'Persuasion'},context),false);
+ assert.equal(validOnePassOutput({kind:'social',reply:'',ids:['g0'],approach:'Insight'},context),true);
+});
+
+test('actual serialized prompt including instructions and newest speech is budgeted before inference',async()=>{
+ const {npc,projection,catalogue}=mapsContext();let calls=0;
+ const args={npc,personality:{episodes:[]},projection,catalogue,history:[],speech:'a'.repeat(24000),generate:async()=>{calls++;return speech('Hello.');}};
+ assert.ok(JSON.stringify(onePassMessages(onePassContext(args),args.speech)).length>24000);
+ const output=await onePassNpcDialogue(args);assert.equal(output.reason,'knowledge-budget');assert.equal(calls,0);
+});
+
+test('guarded read follow-up is checked against the same total prompt budget',async()=>{
+ const {npc,projection,catalogue}=mapsContext();
+ const guarded=catalogue.entries.find(entry=>entry.tier==='detail');assert.ok(guarded);guarded.text='X'.repeat(24000);
+ let calls=0;const output=await onePassNpcDialogue({npc,personality:{episodes:[]},projection,catalogue,history:[],speech:'Please give me the exact directions.',generate:async request=>{
+  calls++;const input=packet(request),read=input.reads.find(entry=>entry.subjects.some(subject=>guarded.subjects.includes(subject)));
+  return {kind:'read',reply:'',ids:[read.id],approach:''};
+ }});
+ assert.equal(calls,1);assert.equal(output.reason,'knowledge-budget');assert.equal(output.lookupCount,1);
 });

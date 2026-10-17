@@ -21,6 +21,17 @@ export function addDelversEveryday(npcs,ids) {
   ambitions:['Make the Wall welcoming for ordinary visits as well as return promises.','Keep time for making useful things with Maren.'],
   boundaries:['Happy to talk about Maren and her own life; unwilling to gossip about another person’s grief.'],
   family:{sister:{name:'Maren',relationship:'younger sister',occupation:'mends clothes',bond:'Close; she teases Nima about polishing brass while thinking.'},upbringing:'Their parents taught them to repair things before throwing them away.'},
+  relationships:[{person:'Maren',relationship:'My younger sister',occupation:'Mends clothes',connection:'We are close and both enjoy making useful things.',interaction:{actor:'Maren',action:'teases',recipient:'Nima',reason:'Nima polishes brass while thinking'}}],
+  opinions:[
+   {subject:'mending',view:'A sound repair can be beautiful without hiding every old scratch.'},
+   {subject:'bravery',view:'Being willing to ask for help is more impressive than an expedition boast.'},
+   {subject:'company',view:'An ordinary conversation is worth having even when nobody needs advice.'},
+  ],
+  flaws:['Keeps fiddling with a small repair rather than admitting she is worried.','Can be stubborn about saving a worn object that someone else would discard.'],
+  firsthandExperiences:[
+   {people:['Nima','Maren'],event:'Maren once made Nima empty a box of saved buttons before agreeing that each one really needed keeping.',meaning:'An affectionate disagreement about what is useful, not a family quarrel.'},
+   {people:['Nima'],event:'Nima kept the visible scratches when repairing a little wooden box rather than sanding away every sign of its use.',meaning:'She likes useful objects that still show their history.'},
+  ],
  };
  nima.conversation.knowledge.push(
   {id:'nima-family',tier:'everyday',subjects:['everyday:family','family','sister','Maren','parents','upbringing','occupation'],text:'Nima has a younger sister named Maren. Maren mends clothes. Their parents taught them to repair things before throwing them away.'},
