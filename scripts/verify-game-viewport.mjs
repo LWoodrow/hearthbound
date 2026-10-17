@@ -27,7 +27,12 @@ try {
         surface.scrollTop=surface.scrollHeight;
         const rect=composer?.getBoundingClientRect();
         const npc=document.querySelector('.narration:last-child'),player=document.querySelector('.player-event');
-        const alignment=npc&&player?{npc:npc.getBoundingClientRect().left,player:player.getBoundingClientRect().left,npcText:npc.querySelector('p').getBoundingClientRect().left,playerText:player.querySelector('p').getBoundingClientRect().left,proseWidth:npc.querySelector('p').getBoundingClientRect().width}:null;
+        let alignment=null;
+        if(npc&&player){
+          const p=npc.querySelector('p'),bounds=p.getBoundingClientRect(),style=getComputedStyle(npc),range=document.createRange();range.selectNodeContents(p);
+          const lines=[...range.getClientRects()];
+          alignment={npc:npc.getBoundingClientRect().left,player:player.getBoundingClientRect().left,npcText:bounds.left,playerText:player.querySelector('p').getBoundingClientRect().left,proseWidth:bounds.width,contentWidth:npc.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight),wrappedLines:lines.length,rightGap:bounds.right-Math.max(...lines.map(line=>line.right))};
+        }
         return {alignment,outerHeight:document.documentElement.scrollHeight,outerWidth:document.documentElement.scrollWidth,
           height:innerHeight,width:innerWidth,scroll:surface.scrollTop,composer:rect&&{top:rect.top,bottom:rect.bottom,width:rect.width},feed:surface.clientHeight};
       });
@@ -38,7 +43,9 @@ try {
       if(tab==='adventure'){
         assert.ok(Math.abs(geometry.alignment.npc-geometry.alignment.player)<2,`${label}: speaker cards must share a left rail`);
         assert.ok(Math.abs(geometry.alignment.npcText-geometry.alignment.playerText)<2,`${label}: paragraph starts must align`);
-        if(width>=1366)assert.ok(geometry.alignment.proseWidth>760,`${label}: prose should not use small container-font ch units`);
+        assert.ok(Math.abs(geometry.alignment.proseWidth-geometry.alignment.contentWidth)<2,`${label}: paragraph must fill the message content width`);
+        assert.ok(geometry.alignment.wrappedLines>1,`${label}: long prose must wrap`);
+        assert.ok(geometry.alignment.rightGap<80,`${label}: wrapped text must approach the right edge without a hidden text-width cap`);
         assert.ok(geometry.feed>=70,`${label}: feed must retain useful height`);
         assert.ok(geometry.composer.top>=0&&geometry.composer.bottom<=height+1,`${label}: composer must stay visible`);
         if(width>=1366)assert.ok(geometry.composer.width>width*.65,`${label}: use more desktop width`);
