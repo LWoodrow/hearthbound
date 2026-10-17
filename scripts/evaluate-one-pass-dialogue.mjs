@@ -17,7 +17,24 @@ import {createPreparedStoryProbe} from './lib/prepared-story-probe.mjs';
 import {threadAgreementRequest} from './lib/thread-agreement.mjs';
 import {threadFirstRequest,taskIsolatedRequest} from './lib/thread-first.mjs';
 import {latestFirstRequest} from './lib/latest-first.mjs';
+import {createStoryContractProbe} from './lib/story-contract.mjs';
 export const scenarios={
+ 'nima-story-contract':{location:'city-delvers-memorial',turns:[
+  'Tell me a tale of romance. You choose the characters.',
+  'Give it a grand sweep.',
+  'Let the brass bell be at the heart of it.',
+  'Tell away.',
+  'Change the ending so they find each other again.',
+  'Was that something you actually did?',
+  'Evening! Where can I get bread nearby?',
+ ]},
+ 'selka-story-contract':{location:'city-delvers-last',turns:[
+  'Spin us a made-up sea adventure about a stolen compass. Make it light-hearted.',
+  'On a much bigger canvas, please.',
+  'Give the conclusion a clever joke instead.',
+  'So were you aboard that ship yourself?',
+  'Put that yarn aside; what must I read before going down?',
+ ]},
  'nima-brass-seeded':{location:'city-delvers-memorial',history:[
   {speech:'Grand sweep.',reply:"I could tell you of the time Maren and I found a button that fit nothing and we argued over it for an hour, but I fear you'd rather hear of heroes. Do you care for such small, useful things, or do you want the grand sweep of it all?",evidenceIds:[]},
   {speech:'hi nima',reply:"Nigel, if you're looking for a grand tale, I've got one about how Maren and I spent an entire afternoon trying to fit a single button into a shirt that was already too tight, but I fear that's too small a matter for you. Do you care for such trivial mending, or shall I weave you a story of the brass itself?",evidenceIds:[]},
@@ -172,12 +189,13 @@ export async function evaluateDialogue({profile,scenario,limit=99,run=1,generate
    if(request.audit)prompt.selection=request.audit(output);
    return request.decode?request.decode(output):output;
   };
-  await resolveAction(db,getPlayer(db,player.id),'speak',text,{npcDialogueMode:'one-pass',npcGenerate:request=>requestPipeline?requestPipeline(request,infer):infer(request)});
+  const pipeline=harness?.requestPipeline || requestPipeline;
+  await resolveAction(db,getPlayer(db,player.id),'speak',text,{npcDialogueMode:'one-pass',npcGenerate:request=>pipeline?pipeline(request,infer):infer(request)});
   const elapsedMs=Date.now()-start;
   const event=listVisibleEvents(db,player).at(-1),status=getPartyState(db,player.partyId,'npcDialogueStatus:eldervale-roads:'+player.id),pending=getPartyState(db,player.partyId,'pendingCheck:'+player.id);
   const accepted=getPartyState(db,player.partyId,`npcNaturalHistory:eldervale-roads:${status?.npcId}:${player.id}`)?.at(-1);
   const turn={run,text,speaker:event.speaker,reply:event.text,calls,elapsedMs,status,prompts,conversationThread:accepted?.speech===text?accepted.thread || null:null,utteranceKind:accepted?.speech===text?accepted.utteranceKind || null:null,canonicalUnchanged:JSON.stringify(before)===JSON.stringify(getPartyState(db,player.partyId,'world:eldervale-roads')),pendingCheck:pending?{skill:pending.skill,dc:pending.dc}:null};
-  if(harness?.afterTurn)turn.personalMemory=harness.afterTurn(turn);
+  if(harness?.afterTurn){const acceptedState=harness.afterTurn(turn);if(harness.requestPipeline)turn.storyContract=acceptedState;else turn.personalMemory=acceptedState;}
   turns.push(turn);emit(turn);
  }
  const summary=summarizeDialogueRun(turns);emit({run,...summary});return {turns,summary};
@@ -193,11 +211,11 @@ async function main(){
  if(compareHistory&&!scenario.history)throw Error('History comparison needs a seeded scenario such as nima-memory.');
  const variants=compareHistory?[{name:'clean',scenario:{...scenario,history:undefined}},{name:'seeded',scenario}]:[{name:'default',scenario}];
  const layoutProbe=option('layout-probe','production');
- if(!['production','latest-first','task-isolated','thread-agreement','thread-first','chat-anchored','knowledge-plan','excerpt-plan','native-chat','personal-stories','prepared-stories'].includes(layoutProbe))throw Error('Unknown layout probe.');
+ if(!['production','story-contract','latest-first','task-isolated','thread-agreement','thread-first','chat-anchored','knowledge-plan','excerpt-plan','native-chat','personal-stories','prepared-stories'].includes(layoutProbe))throw Error('Unknown layout probe.');
  if(['personal-stories','prepared-stories'].includes(layoutProbe)&&!selected.startsWith('nima'))throw Error('Personal-story pilot is Nima only.');
  const profile=currentModelProfile();console.log(JSON.stringify({model:profile.displayName,scenario:selected,repeat,variants:variants.map(variant=>variant.name),layoutProbe,mode:'memory-only; no settings changes',semanticReviewRequired:true}));
  const transforms={'thread-agreement':threadAgreementRequest,'chat-anchored':anchoredEvaluationRequest,'knowledge-plan':knowledgePlanRequest,'excerpt-plan':excerptPlanRequest,'native-chat':nativeConversationRequest};
- const harnessFactory=['personal-stories','prepared-stories'].includes(layoutProbe)?({partyId,adventureId,playerId})=>{
+ const harnessFactory=layoutProbe==='story-contract'?()=>createStoryContractProbe():['personal-stories','prepared-stories'].includes(layoutProbe)?({partyId,adventureId,playerId})=>{
   // Explicitly reviewed public geography and an already authored relative;
   // never infer new people/places from generated chat or player assertions.
   const npcId='city-delvers-memorial-resident',npc=roads.story.npcs[npcId];
