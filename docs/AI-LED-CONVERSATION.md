@@ -2,6 +2,14 @@
 
 ## Decision
 
+### Story-contract live evidence (2026-10-17; semantic gate FAILED)
+
+With explicit approval, started the already configured Huihui using the existing app's start endpoint. No model selection, settings update or save interaction. Ready afterward, identical full settings fingerprint. Three unchanged-code memory-only runs: seeded brass3 turns/6 calls median3.208s/max4.218s; new Nima7/14 median3.646s/max4.249s; held-out Selka5/10 median4.099s/max4.575s. All15 turns completed without withholding, repair, canonical change or check. Reports under ignored data/logs/story-contract-{brass,nima,selka}-live.json preserve the complete replies and accepted specs.
+
+Separating fields improves subject/scale retention and requested ending revision: brass/cosmic remains stable, reunion changes the outcome, stolen compass/epic survives and Selka adds a joke. It does not establish semantic safety. Creative replies still name the NPC/player as protagonists; real participant identities are supplied to that writer, so removing unnecessary identities is a concrete isolation candidate, not proof of a sole cause. Nima answers a reality question by saying yes and recounting an unrelated authored repair. Selka invents a descent/return by the player. Some food and ledger details are embellished. Labelled fictional payloads are fed back into revision, causing duplicated display labels. No rollout is warranted.
+
+Proposed next isolated experiment: identity-free fictional generation; raw fictional payload separate from the rendered provenance prefix; reference resolution against the preceding utterance before selecting biography records. This must improve actual replies on exact and new fixtures, not only note shapes. Do not add a serial judge/retry chain or switch models to conceal these failures. No implementation change made during this live-verification turn;542 code regressions/build/four adventure validations from15ffe27 remain current.
+
 ### Story task and utterance ownership (2026-10-17; evaluation-only, live verification pending)
 
 --layout-probe=story-contract is a separate two-call harness, not another step added to latest-first. The first call emits move/topic, a bounded story object (subject, genre, tone, scale, ending) and eligible fact IDs. The second performs that task. This makes the desired subject distinct from narrative style and scale instead of encoding everything in a vague goal such as "grand sweep". The model still selects all values; the schema alone cannot guarantee that it understands or preserves them. No transcript keywords select replies.
