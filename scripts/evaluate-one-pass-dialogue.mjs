@@ -5,7 +5,7 @@ import {createCanonicalState} from '../server/interaction-engine.mjs';
 import roads from '../server/adventures/eldervale-roads.mjs';
 import {resolveAction} from '../server/dm.mjs';
 import {currentModelProfile} from '../server/model-runtime.mjs';
-import {generateStructured} from '../server/ai-transport.mjs';
+import {generateStructured,generateText} from '../server/ai-transport.mjs';
 import {buildPromptPacket} from '../server/prompt-packets.mjs';
 import {pathToFileURL} from 'node:url';
 import {mkdirSync,writeFileSync} from 'node:fs';
@@ -18,7 +18,23 @@ import {threadAgreementRequest} from './lib/thread-agreement.mjs';
 import {threadFirstRequest,taskIsolatedRequest} from './lib/thread-first.mjs';
 import {latestFirstRequest} from './lib/latest-first.mjs';
 import {createStoryContractProbe} from './lib/story-contract.mjs';
+import {simpleNpcChat} from './lib/simple-npc-chat.mjs';
 export const scenarios={
+ 'nima-loop':{location:'city-delvers-memorial',history:[{speech:'long story',reply:"Nigel, you want the grand sweep? I'll tell you how the light catches the rim of the brass nearest your knee, though I suspect you're far more interested in what it reveals than the metal itself.",evidenceIds:[]}],turns:[
+  'hi nima','the grand sweep please','long story','i agree, please continue',
+ ]},
+ 'nima-simple':{location:'city-delvers-memorial',turns:[
+  'Hi Nima. How are you today?',
+  'A bit hungry, actually. Where would you suggest eating?',
+  'Have you ever been there with your sister?',
+  'What does your sister do for work?',
+  'Does she tease you about anything?',
+  'Tell me a fictional tale of romance. You choose the characters.',
+  'Give it an epic sweep rather than a small domestic scene.',
+  'Please continue to the ending.',
+  'Did that really happen to you?',
+  'Leave the story there. Where is the nearest place for food?',
+ ]},
  'nima-story-contract':{location:'city-delvers-memorial',turns:[
   'Tell me a tale of romance. You choose the characters.',
   'Give it a grand sweep.',
@@ -170,7 +186,7 @@ export function summarizeDialogueRun(turns){
   semanticQuality:'Requires human reading of replies; call counts and unchanged state do not prove consistency, relevance or naturalness.',
  };
 }
-export async function evaluateDialogue({profile,scenario,limit=99,run=1,generate=generateStructured,transformRequest=request=>request,requestPipeline,harnessFactory,emit=value=>console.log(JSON.stringify(value))}){
+export async function evaluateDialogue({profile,scenario,limit=99,run=1,generate=generateStructured,generatePlain=generateText,transformRequest=request=>request,requestPipeline,harnessFactory,emit=value=>console.log(JSON.stringify(value))}){
  const db=createDatabase(':memory:');const turns=[];
  try{
  const player=createPlayer(db,{partyId:'party-first-company',name:'Nigel',species:'Human',className:'Fighter'});
@@ -183,9 +199,9 @@ export async function evaluateDialogue({profile,scenario,limit=99,run=1,generate
   const infer=async request=>{
    request=(harness?.transformRequest || transformRequest)(request);
    calls++;const packet=buildPromptPacket({kind:request.kind,profile,responseTokens:request.generation.numPredict,sections:request.messages.map((message,index)=>({...message,id:'dialogue-'+index,visibility:'private',required:true}))});
-   const prompt={kind:request.kind,estimatedInputTokens:packet.estimatedInputTokens,inputBudget:packet.inputBudget,responseTokens:request.generation.numPredict};prompts.push(prompt);
+   const prompt={kind:request.kind,...(request.encoding?{encoding:request.encoding}:{}),estimatedInputTokens:packet.estimatedInputTokens,inputBudget:packet.inputBudget,responseTokens:request.generation.numPredict};prompts.push(prompt);
    if(packet.overBudget)throw Error('Context budget exceeded.');
-   const output=await generate(profile,packet.messages,request.schema,request.generation);
+   const output=request.encoding==='text'?await generatePlain(profile,packet.messages,request.generation):await generate(profile,packet.messages,request.schema,request.generation);
    if(request.audit)prompt.selection=request.audit(output);
    return request.decode?request.decode(output):output;
   };
@@ -211,7 +227,7 @@ async function main(){
  if(compareHistory&&!scenario.history)throw Error('History comparison needs a seeded scenario such as nima-memory.');
  const variants=compareHistory?[{name:'clean',scenario:{...scenario,history:undefined}},{name:'seeded',scenario}]:[{name:'default',scenario}];
  const layoutProbe=option('layout-probe','production');
- if(!['production','story-contract','latest-first','task-isolated','thread-agreement','thread-first','chat-anchored','knowledge-plan','excerpt-plan','native-chat','personal-stories','prepared-stories'].includes(layoutProbe))throw Error('Unknown layout probe.');
+ if(!['production','simple-chat','story-contract','latest-first','task-isolated','thread-agreement','thread-first','chat-anchored','knowledge-plan','excerpt-plan','native-chat','personal-stories','prepared-stories'].includes(layoutProbe))throw Error('Unknown layout probe.');
  if(['personal-stories','prepared-stories'].includes(layoutProbe)&&!selected.startsWith('nima'))throw Error('Personal-story pilot is Nima only.');
  const profile=currentModelProfile();console.log(JSON.stringify({model:profile.displayName,scenario:selected,repeat,variants:variants.map(variant=>variant.name),layoutProbe,mode:'memory-only; no settings changes',semanticReviewRequired:true}));
  const transforms={'thread-agreement':threadAgreementRequest,'chat-anchored':anchoredEvaluationRequest,'knowledge-plan':knowledgePlanRequest,'excerpt-plan':excerptPlanRequest,'native-chat':nativeConversationRequest};
@@ -227,7 +243,7 @@ async function main(){
   return createPersonalStoryProbe(options);
  }:undefined;
  const reports=[];
- for(let run=1;run<=repeat;run++)for(const variant of variants)reports.push(await evaluateDialogue({profile,scenario:variant.scenario,limit,run:compareHistory?`${run}:${variant.name}`:run,transformRequest:transforms[layoutProbe],requestPipeline:layoutProbe==='latest-first'?latestFirstRequest:layoutProbe==='thread-first'?threadFirstRequest:layoutProbe==='task-isolated'?taskIsolatedRequest:undefined,harnessFactory}));
+ for(let run=1;run<=repeat;run++)for(const variant of variants)reports.push(await evaluateDialogue({profile,scenario:variant.scenario,limit,run:compareHistory?`${run}:${variant.name}`:run,transformRequest:transforms[layoutProbe],requestPipeline:layoutProbe==='simple-chat'?simpleNpcChat:layoutProbe==='latest-first'?latestFirstRequest:layoutProbe==='thread-first'?threadFirstRequest:layoutProbe==='task-isolated'?taskIsolatedRequest:undefined,harnessFactory}));
  const report=option('report','');
  if(report){const destination=resolve(report);if(!destination.endsWith('.json'))throw Error('Report must be a .json file.');mkdirSync(dirname(destination),{recursive:true});writeFileSync(destination,JSON.stringify({model:profile.displayName,scenario:selected,layoutProbe,mode:'memory-only',semanticReviewRequired:true,reports},null,2),{flag:'wx'});console.log(JSON.stringify({report:destination}));}
 }
