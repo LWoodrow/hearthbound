@@ -2,6 +2,14 @@
 
 ## Decision
 
+### Approved coder comparison completed (2026-10-17; no rollout)
+
+User approved temporary loading of Qwen2.5-Coder-7B-Instruct-Q8_0 and restoration of Huihui-Qwen3.5-9B-abliterated.Q5_K_M. `scripts/compare-conversation-models.mjs --live --baseline=<unchanged-main evaluator>` performs host-local managed-model selection, memory-only replays, a finally restoration and full settings-fingerprint/ready check. It downloads nothing, does not restart the app or open real saves for gameplay. Generated complete reports live under ignored data/logs in the script checkout, not Git. Model selection is the ONLY authorized temporary production configuration change. Do not run this script without explicit approval to interrupt/change the loaded model.
+
+Coder results (one run each, different response lengths; not a statistical benchmark): unchanged-main six-turn Nima median1.488s/max3.526s/6 calls; typed one-pass median4.159s/max4.914s/6 calls; two-stage Nima median1.880s/max4.168s/12 calls; two-stage Selka median3.837s/max4.319s/8 calls.22 total turns, no withheld outputs, canonical changes or checks. Full report: data/logs/coder-comparison-1792243620457.json. Original Huihui was restored ready and the whole settings file matched the pre-test SHA256. Existing main a8c0c2a, layout and saves unchanged.
+
+Neither model passed conversation acceptance. Coder main conflated identities and lost romance/epic preferences. Typed notes frequently retained the initial goal while the reply changed, with truncation on some tales. The two-stage path still falsely refused romance, mislabeled a food request as fiction and made unsupported service claims. Selka later asserted her fictional expedition was real. Thus model substitution is not sufficient; this is not proof that one specific prompt, model family or architecture alone is responsible. Do not deploy these prototypes or introduce a mandatory judge/retry chain based on structural test success. Preserve the reproducible report as a baseline for narrower context/creative-payload isolation and actual task-fulfilment work.
+
 ### Thread/prose agreement follow-up (2026-10-17; evaluation ONLY)
 
 Branch codex/thread-prose-agreement starts at deployed main a8c0c2a, retains the accepted full-width layout, and carries the earlier thread prototype locally. No conversation experiment is merged or deployed. Two explicit probes now permit reproducible comparison without actual saves:
