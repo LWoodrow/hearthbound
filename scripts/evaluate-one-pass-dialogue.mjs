@@ -16,6 +16,7 @@ import {createPersonalStoryProbe} from './lib/personal-story-probe.mjs';
 import {createPreparedStoryProbe} from './lib/prepared-story-probe.mjs';
 import {threadAgreementRequest} from './lib/thread-agreement.mjs';
 import {threadFirstRequest,taskIsolatedRequest} from './lib/thread-first.mjs';
+import {latestFirstRequest} from './lib/latest-first.mjs';
 export const scenarios={
  'nima-brass-seeded':{location:'city-delvers-memorial',history:[
   {speech:'Grand sweep.',reply:"I could tell you of the time Maren and I found a button that fit nothing and we argued over it for an hour, but I fear you'd rather hear of heroes. Do you care for such small, useful things, or do you want the grand sweep of it all?",evidenceIds:[]},
@@ -192,7 +193,7 @@ async function main(){
  if(compareHistory&&!scenario.history)throw Error('History comparison needs a seeded scenario such as nima-memory.');
  const variants=compareHistory?[{name:'clean',scenario:{...scenario,history:undefined}},{name:'seeded',scenario}]:[{name:'default',scenario}];
  const layoutProbe=option('layout-probe','production');
- if(!['production','task-isolated','thread-agreement','thread-first','chat-anchored','knowledge-plan','excerpt-plan','native-chat','personal-stories','prepared-stories'].includes(layoutProbe))throw Error('Unknown layout probe.');
+ if(!['production','latest-first','task-isolated','thread-agreement','thread-first','chat-anchored','knowledge-plan','excerpt-plan','native-chat','personal-stories','prepared-stories'].includes(layoutProbe))throw Error('Unknown layout probe.');
  if(['personal-stories','prepared-stories'].includes(layoutProbe)&&!selected.startsWith('nima'))throw Error('Personal-story pilot is Nima only.');
  const profile=currentModelProfile();console.log(JSON.stringify({model:profile.displayName,scenario:selected,repeat,variants:variants.map(variant=>variant.name),layoutProbe,mode:'memory-only; no settings changes',semanticReviewRequired:true}));
  const transforms={'thread-agreement':threadAgreementRequest,'chat-anchored':anchoredEvaluationRequest,'knowledge-plan':knowledgePlanRequest,'excerpt-plan':excerptPlanRequest,'native-chat':nativeConversationRequest};
@@ -208,7 +209,7 @@ async function main(){
   return createPersonalStoryProbe(options);
  }:undefined;
  const reports=[];
- for(let run=1;run<=repeat;run++)for(const variant of variants)reports.push(await evaluateDialogue({profile,scenario:variant.scenario,limit,run:compareHistory?`${run}:${variant.name}`:run,transformRequest:transforms[layoutProbe],requestPipeline:layoutProbe==='thread-first'?threadFirstRequest:layoutProbe==='task-isolated'?taskIsolatedRequest:undefined,harnessFactory}));
+ for(let run=1;run<=repeat;run++)for(const variant of variants)reports.push(await evaluateDialogue({profile,scenario:variant.scenario,limit,run:compareHistory?`${run}:${variant.name}`:run,transformRequest:transforms[layoutProbe],requestPipeline:layoutProbe==='latest-first'?latestFirstRequest:layoutProbe==='thread-first'?threadFirstRequest:layoutProbe==='task-isolated'?taskIsolatedRequest:undefined,harnessFactory}));
  const report=option('report','');
  if(report){const destination=resolve(report);if(!destination.endsWith('.json'))throw Error('Report must be a .json file.');mkdirSync(dirname(destination),{recursive:true});writeFileSync(destination,JSON.stringify({model:profile.displayName,scenario:selected,layoutProbe,mode:'memory-only',semanticReviewRequired:true,reports},null,2),{flag:'wx'});console.log(JSON.stringify({report:destination}));}
 }

@@ -2,6 +2,16 @@
 
 ## Decision
 
+### Latest-turn routing before context (2026-10-17; diagnostic only, semantic gate FAILED)
+
+New scripts/lib/latest-turn-router.mjs and probe-latest-turn-routing.mjs isolate latest utterance classification from all old dialogue and canon. Categories: greeting, new-fiction, ordinary, continuation, repeat, end. One strict enum output; generic few-shot examples are fixed, not selected by keywords. --held-out exercises additional paraphrases; validity and expected-route agreement are reported separately. --decompose explores lossless conversational acts and rejects omissions, including punctuation. The deployed dispatcher imports neither diagnostic.
+
+The explicit --layout-probe=latest-first adds that router before the task-isolated planner/writer. Route constrains allowed modes and runtime validation rejects contradiction. Fresh greeting/question/story requests do not expose prior requests or old offers to the planner. Continuations retain that context. Selected eligible facts and revision-only prose isolation are unchanged. This costs three inference calls, <=6s routing plus <=20s downstream, and has no judge/retry loop; repeat can omit the writer. It does not implement consequential tools or prove that an ordinary question is self-contained. Current categories remain a hypothesis, not a reliable semantic contract.
+
+Same loaded Huihui results: baseline14/18 median284ms; calibrated16/18 median213ms. Fresh8-case test7/8 median205ms, missing greeting+food. Calibrated also misses greeting+sleep and stop-story+new-question. Decomposition12/18 (16 valid) median1.416s; nonsensical splits and omitted content make it unsuitable. A2000-character nested schema bound failed llama.cpp grammar initialization;240 worked. No validity checks were weakened to make the score look better.
+
+Five-turn actual brass replay on a memory-only save now greets normally and handles the practical food switch. It still literalises grand scale as sweeping a room, fails clear fictional framing and attributes its own tale to the player.15 calls, median3.714s/max4.651s, no canonical changes/checks/withheld replies. Therefore not released.535 regressions, build and all adventure validators pass, but those are structural checks. Full local generated reports retain both successful and failed outputs; a later repeat held-out report contains only transport failures because8080 became unavailable, not new semantic evidence. No model settings or app deployment were changed. Next work must represent subject, genre/scale and speaker ownership distinctly and prove them with new live paraphrases before production consideration.
+
 ### Task-specific context isolation (2026-10-17; local experiment, semantic gate FAILED)
 
 The user supplied a second human failure: old button anecdote → greeting → brass choice → invitation to tell still never produces the requested tale. `--layout-probe=task-isolated` now separates interpreting PLAYER requests from factual and fictional writing material. The two-call baseline is unchanged unless this explicit variant is selected. No production import/selection, new model, extra judge or keyword response patch is enabled.
