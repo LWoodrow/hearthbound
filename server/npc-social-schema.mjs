@@ -1,3 +1,4 @@
+import {practicalDomains} from './npc-knowledge-coverage.mjs';
 const tiers=['everyday','advice','detail','solution'];
 const skills=['Persuasion','Deception','Intimidation','Insight','Performance'];
 export function validateNpcSocial(npc,id,definition) {
@@ -14,6 +15,7 @@ export function validateNpcSocial(npc,id,definition) {
  for(const entry of (Array.isArray(npc.conversation?.knowledge)?npc.conversation.knowledge:[])){
   if(!entry?.id||seen.has(entry.id)||typeof entry.text!=='string'||!entry.text.trim()||!tiers.includes(entry.tier)||!strings(entry.subjects))errors.push(`${prefix}.knowledge needs unique IDs, text, a disclosure tier and subjects.`);
   seen.add(entry?.id);requirements(entry?.requires,`${prefix}.knowledge.requires`);
+  if(entry?.domain!==undefined&&!practicalDomains.includes(entry.domain))errors.push(`${prefix}.knowledge.domain must be a supported practical knowledge domain.`);
  }
  const ids=new Set();
  if(npc.socialChallenges!==undefined&&!Array.isArray(npc.socialChallenges))errors.push(`${prefix}.socialChallenges must be an array.`);

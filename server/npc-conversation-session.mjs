@@ -1,4 +1,7 @@
 const running=new Map();
+// Preserve recognised stage failures without trusting arbitrary provider codes
+// or exposing raw messages as public diagnostics.
+const stageFailureCodes=new Set(['invalid-output','assessment-output-invalid','conversation-time-limit','conversation-call-limit','stage-timeout','transport-unavailable']);
 const stageNames={
  'npc-dialogue':'writing',
  'npc-dialogue-repair':'repairing',
@@ -56,7 +59,7 @@ export function createConversationSession({partyId,playerId,budgetMs=90000,maxCa
     const result=await Promise.race([Promise.resolve().then(()=>transport({...request,generation:{...request.generation,timeoutMs,signal:controller.signal}})),timedOut]);
     if(now()-startedAt>=budgetMs){failure='conversation-time-limit';throw error(failure);}
     stage.status='completed';return result;
-   }catch(cause){stage.status='failed';stage.failure=failure || (/timeout|timed out/i.test(cause.message || '')?'stage-timeout':cause instanceof SyntaxError?'invalid-output':'transport-unavailable');failure=stage.failure;throw cause;}
+   }catch(cause){stage.status='failed';stage.failure=failure || (stageFailureCodes.has(cause?.code)?cause.code:/timeout|timed out/i.test(cause?.message || '')?'stage-timeout':cause instanceof SyntaxError?'invalid-output':'transport-unavailable');failure=stage.failure;throw cause;}
    finally{clearTimeout(timer);stage.elapsedMs=Math.max(0,now()-startedAt-stage.startedMs);}
   },
   close(){closed=true;if(running.get(progressKey)?.id===id)running.delete(progressKey);return snapshot();},

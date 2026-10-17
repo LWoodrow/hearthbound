@@ -18,7 +18,7 @@ export function conversationCatalogue(npc,projection,world) {
  const entries=[{id:'npc-identity',tier:'everyday',subjects:['identity'],text:npc.name+' is '+npc.role+'.'},...knowledge,...(projection.topics || []).map(topic=>({id:topic.id,text:topic.text,tier:'everyday',subjects:[topic.kind]})),
   ...(projection.scene?[{id:'scene-current',tier:'everyday',subjects:['current scene','room','surroundings'],text:projection.scene.name+'. '+projection.scene.description+' Visible here: '+projection.scene.visibleFeatures.map(feature=>feature.label).join(', ')+'.'}]:[])]
   .filter(entry=>! /\b(?:playable|implemented|inventory|campaign levels?|combat bonus|mechanical rest|backend)\b/i.test(entry.text))
-  .map(({id,text,tier,subjects})=>({id,text,tier,subjects:subjects || []}));
+  .map(({id,text,tier,subjects,domain})=>({id,text,tier,subjects:subjects || [],...(domain?{domain}:{})}));
  const challenges=(npc.socialChallenges || []).map(({id,targets})=>({id,goals:targets}));
  return {entries,challenges};
 }

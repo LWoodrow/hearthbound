@@ -32,6 +32,25 @@ test('a hung transport is aborted, bounded even if it ignores abort, and never r
  await assert.rejects(session.generate(request,async()=>{assert.fail('must not retry');}));
  assert.equal(session.close().calls,1);
 });
+
+test('recognised stage errors retain their category instead of falsely reporting an offline model',async()=>{
+ for(const code of ['invalid-output','assessment-output-invalid','stage-timeout','conversation-call-limit']){
+  const session=createConversationSession({publish:false});
+  await assert.rejects(session.generate(request,async()=>{throw Object.assign(new Error('private provider detail'),{code});}));
+  assert.equal(session.snapshot().failure,code);assert.equal(session.canRun(),false);
+  await assert.rejects(session.generate(request,async()=>assert.fail('failed stage must not be retried')),error=>error.code===code);
+  const result=session.close();assert.equal(result.calls,1);assert.equal(result.stages[0].failure,code);assert.doesNotMatch(JSON.stringify(result),/private provider detail/);
+ }
+});
+
+test('unknown provider codes and null rejection reasons stay bounded and do not leak into diagnostics',async()=>{
+ for(const rejection of [Object.assign(new Error('private token'),{code:'private-secret-code'}),null]){
+  const session=createConversationSession({publish:false});let caught=false;
+  try{await session.generate(request,async()=>{throw rejection;});}catch{caught=true;}
+  assert.equal(caught,true);const result=session.close();assert.equal(result.failure,'transport-unavailable');assert.equal(result.stages[0].status,'failed');
+  assert.doesNotMatch(JSON.stringify(result),/private token|private-secret-code/);
+ }
+});
 test('five-call budget reserves both writing and checking before allowing a repair',async()=>{
  const session=createConversationSession({publish:false});
  for(let i=0;i<4;i++)await session.generate(request,async()=>({}));
@@ -59,6 +78,18 @@ function fixture(){
  const state=createCanonicalState(roads,{currentLocation:'city-delvers-memorial'});setPartyState(db,player.partyId,'world:eldervale-roads',state);
  return {db,player,state,key:`npcDialogueStatus:eldervale-roads:${player.id}`,diagnostics:`npcDialogueDiagnostics:eldervale-roads:${player.id}`};
 }
+test('actual one-pass dispatch reports unreadable output, not a disconnected model, and writes no NPC memory',async()=>{
+ const f=fixture();let calls=0;try{
+  await resolveAction(f.db,getPlayer(f.db,f.player.id),'speak','hello nima',{npcGenerate:async()=>{
+   calls++;throw Object.assign(new Error('private parsing detail'),{code:'invalid-output'});
+  }});
+  const event=listVisibleEvents(f.db,f.player).at(-1),status=getPartyState(f.db,f.player.partyId,f.key),diagnostics=getPartyState(f.db,f.player.partyId,f.diagnostics);
+  assert.equal(calls,1);assert.equal(event.speaker,'Dungeon Master');assert.match(event.text,/unreadable answer/);assert.doesNotMatch(event.text,/connection is unavailable|private parsing detail/);
+  assert.equal(status.failureKind,'invalid-output');assert.equal(diagnostics.stages[0].failure,'invalid-output');
+  assert.equal(getPartyState(f.db,f.player.partyId,`npcNaturalHistory:eldervale-roads:city-delvers-memorial-resident:${f.player.id}`),null);
+  assert.deepEqual(getPartyState(f.db,f.player.partyId,'world:eldervale-roads'),f.state);
+ }finally{f.db.close();}
+});
 test('reported eat-before-descent turn stops at the shared deadline and saves failure diagnostics, not NPC history',async()=>{
  const f=fixture();let clock=0,calls=0;
  try{
