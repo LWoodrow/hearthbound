@@ -1,8 +1,10 @@
 # Hearthbound handoff
 
-## Main/GitHub deployment authorized (2026-10-17)
+## Main release — integrated and verified for user-approved deployment (2026-10-17)
 
 User explicitly requests “yes merge upload to github so we're all done” after runtime inspection proved main dd53550 still served the old smooth-scroll bundle without Jump to latest. Integrate the verified development chain, preserving main's separate .aider* ignore commit; rebuild/test on main, push origin/main and refresh the usual4173 app. Preserve real saves and AI settings; the already managed local model may reload normally during app restart (autoStart currently true). Acceptance is running main matching GitHub HEAD and served assets containing the new Jump control, plus health/model reconnection.513 tests/build/four adventure validations passed on the candidate; repeat on integrated main before delivery. Experimental probes/personal-story persistence remain disconnected from live dispatch. Nima's invented war/decade are not authored facts, and the new source safeguards still require human semantic playtesting; deployment is not a claim of perfect NPC grounding. Retain all saved conversation, including old unsupported utterances as unverified context.
+
+Integration checkpoint: main merge2022ed3 preserves dd53550 and all candidate commits. Repeated verification on the actual main checkout passes513/513 tests, production build/typecheck,36 portrait checks and all four adventure validators; working tree/diff clean. Main dist now contains index-DhC9agLb.js with the new reader-controlled feed. No new prototype mode is enabled. Release delivery is the authorized GitHub push and normal app refresh, with served-asset/runtime and saved-data checks reported to the user. The browser must reload to execute the new JavaScript; server refresh alone cannot replace a bundle already open in a tab. Previous sections are historical development checkpoints, not instructions to withhold this authorized integrated release.
 
 ## Reader-controlled scrolling and practical-knowledge boundaries — implemented, live semantic evaluation pending (2026-10-17)
 
