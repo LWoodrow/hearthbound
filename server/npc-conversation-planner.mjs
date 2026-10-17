@@ -1,4 +1,5 @@
 import {requirementsMet} from './world-state.mjs';
+import {dialogueThread} from './npc-dialogue-thread.mjs';
 
 const kinds=['chat','advice','detail','solution','transaction','social-check','clarification'];
 const approaches=['Persuasion','Deception','Intimidation','Insight','Performance'];
@@ -48,11 +49,11 @@ export function plannedConversationFallback(plan,evidence) {
  return parts.join(' ') || '“Help me understand what you mean. What would you like to know?”';
 }
 
-export function currentConversationHistory(catalogue,history=[]) {
+export function currentConversationHistory(catalogue,history=[],{limit=6}={}) {
  const available=new Set(catalogue.entries.map(entry=>entry.id));
- return history.slice(-6).map(entry=>({speech:String(entry.speech || '').slice(0,500),
+ return history.slice(-Math.max(1,Math.min(8,Number.isInteger(limit)?limit:6))).map(entry=>({speech:String(entry.speech || '').slice(0,500),
   reply:[...(entry.evidenceIds || []),...(entry.disclosureIds || [])].some(id=>!available.has(id))?'[Earlier knowledge is no longer available.]':String(entry.reply || '').slice(0,1000),
-  evidenceIds:(entry.evidenceIds || []).filter(id=>available.has(id)),authority:'Context only; prior claims without current evidence are not facts.'}));
+  evidenceIds:(entry.evidenceIds || []).filter(id=>available.has(id)),...(entry.utteranceKind==='fiction'?{utteranceKind:'fiction'}:{}),thread:[...(entry.evidenceIds || []),...(entry.disclosureIds || [])].some(id=>!available.has(id))?null:dialogueThread(entry.thread),authority:'Context only; prior claims without current evidence are not facts.'}));
 }
 export async function interpretNpcConversation({npc,personality,projection,world,speech,focus,history=[],generate}) {
  const catalogue=conversationCatalogue(npc,projection,world);

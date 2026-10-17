@@ -13,6 +13,16 @@ import {knowledgePlanRequest,excerptPlanRequest,nativeConversationRequest} from 
 import {createPersonalStoryProbe} from './lib/personal-story-probe.mjs';
 import {createPreparedStoryProbe} from './lib/prepared-story-probe.mjs';
 export const scenarios={
+ 'nima-fiction':{location:'city-delvers-memorial',turns:[
+  'Tell me a story.', 'A tale of romance.', 'Your choice.', 'Grand sweep.',
+  'Did that really happen to you and Maren?',
+  'Leave the story there. Where nearby could I find food?',
+ ]},
+ 'selka-fiction':{location:'city-delvers-last',turns:[
+  'Tell us an imaginary tale with a clever trick and a happy ending. You choose the details.',
+  'Make the ending funnier.', 'Was that a real expedition you went on?',
+  'Enough stories, what do I need to read before descending?',
+ ]},
  'nima-practical':{location:'city-delvers-memorial',turns:[
   'What time do you close today?',
   'Where could I get food before looking for lodgings?',
@@ -151,7 +161,8 @@ export async function evaluateDialogue({profile,scenario,limit=99,run=1,generate
   }});
   const elapsedMs=Date.now()-start;
   const event=listVisibleEvents(db,player).at(-1),status=getPartyState(db,player.partyId,'npcDialogueStatus:eldervale-roads:'+player.id),pending=getPartyState(db,player.partyId,'pendingCheck:'+player.id);
-  const turn={run,text,speaker:event.speaker,reply:event.text,calls,elapsedMs,status,prompts,canonicalUnchanged:JSON.stringify(before)===JSON.stringify(getPartyState(db,player.partyId,'world:eldervale-roads')),pendingCheck:pending?{skill:pending.skill,dc:pending.dc}:null};
+  const accepted=getPartyState(db,player.partyId,`npcNaturalHistory:eldervale-roads:${status?.npcId}:${player.id}`)?.at(-1);
+  const turn={run,text,speaker:event.speaker,reply:event.text,calls,elapsedMs,status,prompts,conversationThread:accepted?.speech===text?accepted.thread || null:null,utteranceKind:accepted?.speech===text?accepted.utteranceKind || null:null,canonicalUnchanged:JSON.stringify(before)===JSON.stringify(getPartyState(db,player.partyId,'world:eldervale-roads')),pendingCheck:pending?{skill:pending.skill,dc:pending.dc}:null};
   if(harness?.afterTurn)turn.personalMemory=harness.afterTurn(turn);
   turns.push(turn);emit(turn);
  }
