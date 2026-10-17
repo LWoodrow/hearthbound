@@ -12,15 +12,17 @@ if(!process.argv.includes('--live'))throw Error('Use --live to request model inf
 const profile=currentModelProfile(),db=createDatabase(':memory:'),limit=Number(process.argv.find(arg=>arg.startsWith('--limit='))?.split('=')[1] || 4);
 const legacy=process.argv.includes('--legacy-history');
 const subjectChange=process.argv.includes('--subject-change');
-const transcript=legacy?["you taken your family or friends to any of them?"]:subjectChange?["sorry didn't mean to upset you. just trying to make conversation","hi nima, im kinda hungry, where in the city should i look for something good?"]:["hi nima, could you tell me something about the room we're in?","sorry didn't mean to upset you. just trying to make conversation","hi nima, im kinda hungry, where in the city should i look for something good?","you taken your family or friends to any of them?"];
-console.log(JSON.stringify({model:profile.displayName,scenario:legacy?'recover-unverified-old-history':subjectChange?'apology-to-food-subject-change':'unseeded-full-user-exchange'}));
+const eatFirst=process.argv.includes('--eat-before-descent');
+const transcript=eatFirst?["just intrigued nima, we're planning to journey down but wanted to eat first"]:legacy?["you taken your family or friends to any of them?"]:subjectChange?["sorry didn't mean to upset you. just trying to make conversation","hi nima, im kinda hungry, where in the city should i look for something good?"]:["hi nima, could you tell me something about the room we're in?","sorry didn't mean to upset you. just trying to make conversation","hi nima, im kinda hungry, where in the city should i look for something good?","you taken your family or friends to any of them?"];
+console.log(JSON.stringify({model:profile.displayName,scenario:eatFirst?'reported-eat-before-descent':legacy?'recover-unverified-old-history':subjectChange?'apology-to-food-subject-change':'unseeded-full-user-exchange'}));
 try{
  const player=createPlayer(db,{partyId:'party-first-company',name:'Nigel',species:'Human',className:'Fighter'});
  selectAdventure(db,player.partyId,getParty(db,player.partyId).worldId+'-eldervale-roads');
  const world=createCanonicalState(roads,{currentLocation:'city-delvers-memorial'});setPartyState(db,player.partyId,'world:eldervale-roads',world);
- if(legacy)setPartyState(db,player.partyId,`npcNaturalHistory:eldervale-roads:city-delvers-memorial-resident:${player.id}`,[
+ if(legacy||eatFirst)setPartyState(db,player.partyId,`npcNaturalHistory:eldervale-roads:city-delvers-memorial-resident:${player.id}`,[
   {speech:'Sorry, only trying to make conversation.',reply:'Try the Last Lantern, Nine Kitchens Court or Hearthcrumb Bakery.',evidenceIds:['delvers-food']},
   {speech:'I am hungry, where should I look?',reply:'No upset at all. The Last Lantern is quiet and the stew holds. Or Nine Kitchens Court in the Grand Exchange, or Hearthcrumb Bakery in Lantern Ward.',evidenceIds:[]},
+  ...(eatFirst?[{speech:'you taken your family or friends to any of them?',reply:"Family and friends, yes—I've watched folk gather here over the years, some before they go down, some after. It's a place for that, when they want it. Why do you ask?",evidenceIds:[]}]:[]),
  ]);
  for(const speech of transcript.slice(0,limit)){
   const started=Date.now();console.log(JSON.stringify({speech,status:'started'}));

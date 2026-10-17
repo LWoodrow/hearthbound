@@ -31,4 +31,4 @@ export async function assessNpcInput({npc,personality,scene,speech,history,gener
  }catch{return {source:'fallback',reason:'input-assessment-unavailable'};}
 }
 
-export const conversationUnavailable='A reply could not be verified. Please try again; nothing in the scene has changed.';
+export const conversationUnavailable='The AI reply did not pass its checks, so it was not shown. Nothing in the scene has changed.';

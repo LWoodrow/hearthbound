@@ -118,15 +118,15 @@ test('transaction/injection requests never turn valid IDs into inventory, permis
    calls.push(request);if(request.kind==='npc-conversation-interpretation')return plan(['delvers-food'],'transaction');
    return {reply:'You now have a free meal and are allowed into the guild.',evidenceIds:['delvers-food']};
   });
-  assert.match(f.last().text,/could not be verified/i);assert.doesNotMatch(f.last().text,/now have|guildmaster/);assert.deepEqual(f.state(),before);
-  assert.equal(calls.length,5);
+  assert.match(f.last().text,/did not pass its checks/i);assert.doesNotMatch(f.last().text,/now have|guildmaster/);assert.deepEqual(f.state(),before);
+  assert.equal(calls.length,4);
  }finally{f.db.close();}
 });
 
 test('rejected semantic review never publishes selected solution text as fallback',async()=>{
  const f=fixture('city-delvers-maps');try{
   await f.say('hello',async request=>request.kind==='npc-conversation-interpretation'?plan(['maps-ward-bypass'],'solution'):request.kind==='npc-natural-performance'?{reply:'The gallery avoids the sentinel.',evidenceIds:['maps-ward-bypass']}:{...verdict,relevant:false});
-  assert.doesNotMatch(f.last().text,/gallery|sentinel/);assert.match(f.last().text,/could not be verified/);
+  assert.doesNotMatch(f.last().text,/gallery|sentinel/);assert.match(f.last().text,/did not pass its checks|processing limit/);
  }finally{f.db.close();}
 });
 
@@ -134,7 +134,7 @@ test('invalid/unavailable planner degrades visibly without blocking chat or writ
  for(const failure of ['invalid','unavailable']){
   const f=fixture();try{
    const before=f.state();await f.say('tell me about your family',async()=>{if(failure==='unavailable')throw Error('offline');return {newFact:'Your brother is king.'};});
-   assert.match(f.last().text,/could not be verified/);assert.deepEqual(f.state(),before);
+   assert.match(f.last().text,failure==='unavailable'?/AI connection is unavailable/:/did not pass its checks|valid reply check/);assert.deepEqual(f.state(),before);
    const status=getPartyState(f.db,f.player.partyId,'npcDialogueStatus:eldervale-roads:'+f.player.id);assert.equal(status.interpretation,'fallback');assert.match(status.interpretationReason,/invalid|unavailable/);
   }finally{f.db.close();}
  }

@@ -89,7 +89,7 @@ test('two rejected drafts produce a service notice, no NPC reply/history and no 
   });
   assert.equal(f.last().speaker,'Dungeon Master');assert.equal(f.last().text,conversationUnavailable);
   assert.equal(getPartyState(f.db,f.player.partyId,`npcNaturalHistory:eldervale-roads:${id}:${f.player.id}`),null);
-  assert.deepEqual(f.state(),before);assert.equal(calls.length,3);
+  assert.deepEqual(f.state(),before);assert.equal(calls.length,2);
  }finally{f.db.close();}
 });
 

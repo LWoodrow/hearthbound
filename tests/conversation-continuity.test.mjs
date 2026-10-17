@@ -83,7 +83,7 @@ test('personal experience is not licensed by a relative or restaurant fact, incl
    if(request.kind==='npc-claim-review')return {decision:'revise',feedback:'No personal visit or absence of visits is established. Be honestly uncertain without changing the topic.',claims:[claim(statement)],lookupIds:[]};
    repairs++;return {reply:statement,evidenceIds:['family']};
   }});
-  assert.equal(result.unavailable,true);assert.equal(result.reply,conversationUnavailable);assert.equal(repairs,2);
+  assert.equal(result.unavailable,true);assert.equal(result.reply,conversationUnavailable);assert.equal(repairs,1);
  }
 });
 
@@ -97,7 +97,7 @@ test('knowledge and repair budgets fail closed and never run an unbounded agent 
  const tooLarge=await naturalNpcReply({packet:{focusVersion:2,evidence:[],newestSpeech:'hello'},assessed:true,availableKnowledge:Array.from({length:81},(_,i)=>({id:String(i),tier:'everyday',text:'Fact',subjects:[]})),generate:async()=>{calls++;}});
  assert.equal(tooLarge.reason,'knowledge-budget');assert.equal(calls,0);
  const bounded=await naturalNpcReply({packet:{focusVersion:2,npc:{name:'Someone'},evidence:[],newestSpeech:'hello'},assessed:true,generate:async request=>{calls++;return request.kind==='npc-claim-review'?{decision:'revise',feedback:'Try again.',claims:[],lookupIds:[]}:{reply:'Hello.',evidenceIds:[]};}});
- assert.equal(bounded.unavailable,true);assert.equal(calls,6);
+ assert.equal(bounded.unavailable,true);assert.equal(calls,4);
 });
 
 test('a valid read request survives an unsolicited ungrounded draft, but that draft never becomes a reply',async()=>{

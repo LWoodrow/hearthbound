@@ -17,8 +17,8 @@ export function validNaturalReply(output,packet) {
 }
 
 // Injectable transport makes the actual live orchestration adversarially testable.
-export async function naturalNpcReply({packet,fallback,generate,initialCandidate,assessed=false,availableKnowledge=[]}) {
- if(assessed&&packet.focusVersion===2)return groundedConversation({packet,generate,initialCandidate,availableKnowledge,schema:naturalReplySchema,validateCandidate:validNaturalReply});
+export async function naturalNpcReply({packet,fallback,generate,initialCandidate,assessed=false,availableKnowledge=[],canRepair}) {
+ if(assessed&&packet.focusVersion===2)return groundedConversation({packet,generate,initialCandidate,availableKnowledge,canRepair,schema:naturalReplySchema,validateCandidate:validNaturalReply});
  const safeFallback=assessed?conversationUnavailable:fallback;
  let failure='structure-or-claim';
  try{

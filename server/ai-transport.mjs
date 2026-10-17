@@ -1,11 +1,11 @@
 import { parseModelJson } from "./model-output.mjs";
 
-export async function aiRequest(profile, path, { body, timeoutMs = 2500, fetchImpl = fetch } = {}) {
+export async function aiRequest(profile, path, { body, timeoutMs = 2500, signal, fetchImpl = fetch } = {}) {
   let response;
   try {
     response = await fetchImpl(`${profile.baseUrl || profile.ollamaUrl}${path}`, {
       method:body ? "POST" : "GET", headers:{ "Content-Type":"application/json", ...(profile.apiKey ? { Authorization:`Bearer ${profile.apiKey}` } : {}) },
-      ...(body ? { body:JSON.stringify(body) } : {}), signal:AbortSignal.timeout(timeoutMs),
+      ...(body ? { body:JSON.stringify(body) } : {}), signal:signal?AbortSignal.any([signal,AbortSignal.timeout(timeoutMs)]):AbortSignal.timeout(timeoutMs),
     });
   } catch (error) { throw new Error(["TimeoutError", "AbortError"].includes(error?.name) ? "The AI response timed out. The model may still be loading; wait, then test again." : "Cannot reach the AI server. Check its address and that it is running."); }
   if (!response.ok) throw new Error(response.status === 401 || response.status === 403 ? "The AI server rejected the API key." : response.status === 503 ? "The AI server is still loading or unavailable." : `The AI server returned HTTP ${response.status}.`);
@@ -21,7 +21,7 @@ export async function generateStructured(profile, messages, schema, generation =
     model:profile.model, messages, stream:false, temperature:generation.temperature ?? .62, max_tokens:maxTokens,
     response_format:{ type:"json_object", schema }, chat_template_kwargs:{ enable_thinking:profile.think === true },
   };
-  const result = await aiRequest(profile, profile.provider === "ollama" ? "/api/chat" : "/v1/chat/completions", { body, timeoutMs:generation.timeoutMs ?? 150000, fetchImpl });
+  const result = await aiRequest(profile, profile.provider === "ollama" ? "/api/chat" : "/v1/chat/completions", { body, timeoutMs:generation.timeoutMs ?? 150000, signal:generation.signal, fetchImpl });
   const content = profile.provider === "ollama" ? result.message?.content : result.choices?.[0]?.message?.content;
   if (typeof content !== "string" || !content.trim()) throw new Error("The AI server did not return a structured answer.");
   return parseModelJson(content);

@@ -20,7 +20,7 @@ export function validClaimReview(review,evidence,catalogue){
 
 // The outgoing assessor can request a bounded read, not merely approve/reject.
 // No model-provided ID can escape the caller's current eligible catalogue.
-export async function groundedConversation({packet,generate,initialCandidate,schema,validateCandidate,availableKnowledge=[]}){
+export async function groundedConversation({packet,generate,initialCandidate,schema,validateCandidate,availableKnowledge=[],canRepair=()=>true}){
  let readable=availableKnowledge.filter(entry=>['everyday','advice'].includes(entry.tier));
  if(readable.length>80||new Set(readable.map(entry=>entry.id)).size!==readable.length||JSON.stringify(packet).length>24000)return {reply:conversationUnavailable,source:'authored-fallback',reason:'knowledge-budget',unavailable:true,evidenceIds:[],audits:[],lookupCount:0};
  let evidence=[...(packet.evidence || [])],candidate=initialCandidate,feedback='',repaired=false,lookupCount=0;
@@ -39,7 +39,11 @@ export async function groundedConversation({packet,generate,initialCandidate,sch
    // A social improvisation must not pre-empt the factual answerability plan.
    candidate=null;
   }
-  for(let attempt=0;attempt<3;attempt++){
+  // One repair only. The caller also shares one deadline across input,
+  // knowledge, generation and review; no stage starts a fresh turn budget.
+  for(let attempt=0;attempt<2;attempt++){
+   if(attempt&&!canRepair()){audits.push({stage:'repair',decision:'stopped',reason:'repair-budget'});break;}
+   if(attempt)repaired=true;
    if(!candidate){
     const generated=await generate({kind:attempt?'npc-natural-repair':'npc-natural-performance',schema,generation:{temperature:.4,numPredict:160,timeoutMs:60000},messages:[
      {role:'system',content:'Speak naturally as this NPC. Answer the NEWEST turn and resolved conversationFocus, not an old question. Prior dialogue supplies references, never factual authority. Do not carry an old apology or emotion into an unrelated new subject. Answer questions about the named places as those places, not automatically your workplace. Use current evidence for every concrete fact; do not embellish menu, ambience, visits, friends or family outings. An unrecorded experience is unknown, not proof it happened or never happened. If first-hand information is unavailable, be honest and relevant without mentioning game data or changing the subject. You may be warm, humorous and reassuring without facts/citations. Do not invent events, prices, routes, permission, state changes or other people. Facts are background, not a script. Usually one or two sentences; leave room for conversation. Return reply and evidenceIds. Apply any specific review feedback; never quote the review.'},
@@ -48,8 +52,9 @@ export async function groundedConversation({packet,generate,initialCandidate,sch
     candidate=generated.output || generated;
    }
    if(!validateCandidate(candidate,{...packet,evidence,allowUncitedSocial:true})){
+    audits.push({stage:'candidate',decision:'revise',reason:'invalid-candidate'});
     feedback='The candidate had an invalid shape, unsupported citation, forbidden claim or invented time/number. Answer the current turn with supported facts only.';
-    candidate=null;repaired=true;continue;
+    candidate=null;continue;
    }
    const reviewSchema=structuredClone(claimReviewSchema);
    if(readable.length)reviewSchema.properties.lookupIds.items.enum=readable.map(entry=>entry.id);
@@ -81,8 +86,9 @@ export async function groundedConversation({packet,generate,initialCandidate,sch
    const personalValid=!packet.answerPlan||(['supported','acknowledges_unknown','unsupported'].includes(personalAnswer)&&personalAnswer!=='unsupported'&&(packet.answerPlan.knowledge!=='unknown'||personalAnswer==='acknowledges_unknown'));
    if(!validClaimReview(review,evidence,readable)||!personalValid){
     if(validClaimReview(review,evidence,readable)&&!personalValid)audits.push({...review,decision:'revise',personalAnswer,answerPlan:packet.answerPlan,rejectedPersonalAnswer:true});
+    else audits.push({stage:'review',decision:'revise',reason:'invalid-review'});
     feedback=validClaimReview(review,evidence,readable)&&!personalValid?(review.feedback || 'No personal experience is established. Acknowledge that you cannot vouch firsthand; do not assert any personal action, habit or its absence.'):'The outgoing assessment was invalid or accepted a concrete claim without supporting evidence. Remove unsupported claims and answer the current question directly.';
-    candidate=null;repaired=true;continue;
+    candidate=null;continue;
    }
    audits.push({decision:review.decision,feedback:review.feedback,claims:review.claims,lookupIds:review.lookupIds,...(packet.answerPlan?{personalAnswer,answerPlan:packet.answerPlan}:{})});
    if(review.decision==='accept')return {reply:candidate.reply.trim(),source:'ai-reviewed',reason:'',repaired,lookupCount,...(packet.answerPlan?{answerKnowledge:packet.answerPlan.knowledge}:{}),
@@ -92,8 +98,8 @@ export async function groundedConversation({packet,generate,initialCandidate,sch
     const requested=readable.filter(entry=>review.lookupIds.includes(entry.id));
     evidence=[...new Map([...evidence,...requested].map(entry=>[entry.id,entry])).values()];lookupCount++;
    }
-   candidate=null;repaired=true;
+   candidate=null;
   }
-  return {reply:conversationUnavailable,source:'authored-fallback',reason:'claim-review-not-accepted',unavailable:true,evidenceIds:[],audits,lookupCount};
- }catch(error){return {reply:conversationUnavailable,source:'authored-fallback',reason:/timed out|timeout/i.test(error?.message || '')?'assessment-timeout':error instanceof SyntaxError?'assessment-output-invalid':'assessment-unavailable',unavailable:true,evidenceIds:[],audits,lookupCount};}
+  return {reply:conversationUnavailable,source:'authored-fallback',reason:audits.at(-1)?.reason || 'claim-review-not-accepted',unavailable:true,repaired,evidenceIds:[],audits,lookupCount};
+ }catch(error){return {reply:conversationUnavailable,source:'authored-fallback',reason:error?.code || (/timed out|timeout/i.test(error?.message || '')?'assessment-timeout':error instanceof SyntaxError?'assessment-output-invalid':'assessment-unavailable'),unavailable:true,repaired,evidenceIds:[],audits,lookupCount};}
 }

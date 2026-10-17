@@ -1,6 +1,7 @@
 import { createServer as createHttpServer } from "node:http";
 import { aftermathView } from "./aftermath.mjs";
 import {movementForPlayer} from './movement-view.mjs';
+import {conversationProgress} from './npc-conversation-session.mjs';
 import {regionalAtlasView,changeRegionalJourney,regionalTravelCommand,carriageTravelCommand} from "./regional-atlas.mjs";
 import { createServer as createHttpsServer } from "node:https";
 import { spawn } from "node:child_process";
@@ -231,6 +232,7 @@ export async function handleApi(request, response, url) {
         guidance,
         movement:movementForPlayer(db,player),
         dialogue:getPartyState(db,player.partyId,`npcDialogueStatus:${structuredAdventureId}:${player.id}`) || null,
+        conversationProgress:conversationProgress(player.partyId,player.id),
         ai: { ...ai, promptInspectorEnabled:promptInspectorEnabled() },
         speech: { transcriptionConfigured: Boolean(process.env.WHISPER_URL) },
         art: { imageConfigured: Boolean(process.env.HEARTHBOUND_IMAGE_API_URL) },
