@@ -8,13 +8,23 @@ import {currentModelProfile} from '../server/model-runtime.mjs';
 import {generateStructured} from '../server/ai-transport.mjs';
 import {buildPromptPacket} from '../server/prompt-packets.mjs';
 import {pathToFileURL} from 'node:url';
+import {mkdirSync,writeFileSync} from 'node:fs';
+import {dirname,resolve} from 'node:path';
 import {anchoredEvaluationRequest} from './probe-dialogue-format.mjs';
 import {knowledgePlanRequest,excerptPlanRequest,nativeConversationRequest} from './lib/dialogue-knowledge-plan.mjs';
 import {createPersonalStoryProbe} from './lib/personal-story-probe.mjs';
 import {createPreparedStoryProbe} from './lib/prepared-story-probe.mjs';
 import {threadAgreementRequest} from './lib/thread-agreement.mjs';
-import {threadFirstRequest} from './lib/thread-first.mjs';
+import {threadFirstRequest,taskIsolatedRequest} from './lib/thread-first.mjs';
 export const scenarios={
+ 'nima-brass-seeded':{location:'city-delvers-memorial',history:[
+  {speech:'Grand sweep.',reply:"I could tell you of the time Maren and I found a button that fit nothing and we argued over it for an hour, but I fear you'd rather hear of heroes. Do you care for such small, useful things, or do you want the grand sweep of it all?",evidenceIds:[]},
+  {speech:'hi nima',reply:"Nigel, if you're looking for a grand tale, I've got one about how Maren and I spent an entire afternoon trying to fit a single button into a shirt that was already too tight, but I fear that's too small a matter for you. Do you care for such trivial mending, or shall I weave you a story of the brass itself?",evidenceIds:[]},
+  {speech:'the brass please',reply:"The brass, you say? That's a fine subject; it's the only thing in this hall that remembers exactly how it felt when first polished. I could tell you how the light catches the rim of the plaque nearest your knee, or perhaps I'll just let you see if it feels warm to the touch.",evidenceIds:[]},
+ ],turns:['tell away','Was that an imagined tale or something that really happened to you?','Enough stories. Where can I get food nearby?']},
+ 'nima-brass':{location:'city-delvers-memorial',history:[{speech:'Grand sweep.',reply:"I could tell you of the time Maren and I found a button that fit nothing and we argued over it for an hour, but I fear you'd rather hear of heroes. Do you care for such small, useful things, or do you want the grand sweep of it all?",evidenceIds:[],authority:'dialogue-only'}],turns:[
+  'hi nima', 'the brass please', 'tell away', 'Was that an imagined tale or something that really happened to you?', 'Enough stories. Where can I get food nearby?',
+ ]},
  'nima-fiction':{location:'city-delvers-memorial',turns:[
   'Tell me a story.', 'A tale of romance.', 'Your choice.', 'Grand sweep.',
   'Did that really happen to you and Maren?',
@@ -182,7 +192,7 @@ async function main(){
  if(compareHistory&&!scenario.history)throw Error('History comparison needs a seeded scenario such as nima-memory.');
  const variants=compareHistory?[{name:'clean',scenario:{...scenario,history:undefined}},{name:'seeded',scenario}]:[{name:'default',scenario}];
  const layoutProbe=option('layout-probe','production');
- if(!['production','thread-agreement','thread-first','chat-anchored','knowledge-plan','excerpt-plan','native-chat','personal-stories','prepared-stories'].includes(layoutProbe))throw Error('Unknown layout probe.');
+ if(!['production','task-isolated','thread-agreement','thread-first','chat-anchored','knowledge-plan','excerpt-plan','native-chat','personal-stories','prepared-stories'].includes(layoutProbe))throw Error('Unknown layout probe.');
  if(['personal-stories','prepared-stories'].includes(layoutProbe)&&!selected.startsWith('nima'))throw Error('Personal-story pilot is Nima only.');
  const profile=currentModelProfile();console.log(JSON.stringify({model:profile.displayName,scenario:selected,repeat,variants:variants.map(variant=>variant.name),layoutProbe,mode:'memory-only; no settings changes',semanticReviewRequired:true}));
  const transforms={'thread-agreement':threadAgreementRequest,'chat-anchored':anchoredEvaluationRequest,'knowledge-plan':knowledgePlanRequest,'excerpt-plan':excerptPlanRequest,'native-chat':nativeConversationRequest};
@@ -197,6 +207,9 @@ async function main(){
   if(layoutProbe==='prepared-stories')return createPreparedStoryProbe({...options,stories:[{personId:'sister',placeId:'city-delvers-last',activity:'talked',impression:'amusing',topic:'mending'}]});
   return createPersonalStoryProbe(options);
  }:undefined;
- for(let run=1;run<=repeat;run++)for(const variant of variants)await evaluateDialogue({profile,scenario:variant.scenario,limit,run:compareHistory?`${run}:${variant.name}`:run,transformRequest:transforms[layoutProbe],requestPipeline:layoutProbe==='thread-first'?threadFirstRequest:undefined,harnessFactory});
+ const reports=[];
+ for(let run=1;run<=repeat;run++)for(const variant of variants)reports.push(await evaluateDialogue({profile,scenario:variant.scenario,limit,run:compareHistory?`${run}:${variant.name}`:run,transformRequest:transforms[layoutProbe],requestPipeline:layoutProbe==='thread-first'?threadFirstRequest:layoutProbe==='task-isolated'?taskIsolatedRequest:undefined,harnessFactory}));
+ const report=option('report','');
+ if(report){const destination=resolve(report);if(!destination.endsWith('.json'))throw Error('Report must be a .json file.');mkdirSync(dirname(destination),{recursive:true});writeFileSync(destination,JSON.stringify({model:profile.displayName,scenario:selected,layoutProbe,mode:'memory-only',semanticReviewRequired:true,reports},null,2),{flag:'wx'});console.log(JSON.stringify({report:destination}));}
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)await main();

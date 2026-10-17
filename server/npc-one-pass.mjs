@@ -18,6 +18,7 @@ export function onePassContext({npc,personality,projection,catalogue,history,pla
   player:{name:player?.name || 'the traveller',role:'The person speaking to you. Do not confuse them with anyone named in your biography.'},
   place:{name:projection.scene?.name,description:projection.scene?.description},
   facts:publicFacts.map(({text})=>text),
+  factSubjects:publicFacts.map(({subjects,domain})=>({subjects:subjects || [],...(domain?{domain}:{})})),
   practicalKnowledge:practicalKnowledgeCoverage(publicFacts),
   // Only eligible labels, never hidden text, appear in the first generation.
   reads:readable.map((entry,index)=>({id:'k'+index,subjects:entry.subjects,tier:entry.tier})),
