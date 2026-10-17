@@ -1,5 +1,11 @@
 # Hearthbound handoff
 
+## User-authorized latest-package release (2026-10-17)
+
+User explicitly requests "push all to git, get me on the latest version" after being told the conversation experiments still fail semantic checks. Integrate the complete current conversation package into main and push to origin; do not merge unrelated historical worktrees. This includes typed one-pass request/choices/provenance and its bounded repeat repair in the normal Nima path. The separate latest-first/task-isolated/story-contract harnesses remain diagnostic-only and are not silently enabled in gameplay. Known naturalness/fiction/ownership failures remain; this is an explicitly requested playtest integration, not a declaration of semantic acceptance. Re-run suite/build/validators, preserve settings and saves, restart only usual app4173, verify running main commit and ready configured model. No new feature work or model selection/settings changes in this release.
+
+Release checks passed:542 tests, Vite build/typecheck,36 portrait asset checks and all4 adventure validators. Working branch otherwise clean; fetched origin/maina8c0c2a. Current host selected Huihui, ready, full settings fingerprint483c85afaa67c1d448a43d709cfdc036e652ccbc37971bb9c541d2ad9cc297b1. Merge/push/restart execution and verified running commit are reported in the release response. Prior "not deployed" sections describe historical evaluations; this explicit user authorization permits integrating their code while retaining diagnostic-only default boundaries and recording unresolved semantic defects.
+
 ## Approved configured-model start and story-contract live tests — completed, gate FAILED (2026-10-17)
 
 User explicitly approved starting the currently selected model unchanged for live verification. Used the existing host POST /api/ai/start, not load/settings or a separate terminal/server. Huihui-Qwen3.5-9B-abliterated.Q5_K_M became ready. Full settings SHA256 before and after matched483c85afaa67c1d448a43d709cfdc036e652ccbc37971bb9c541d2ad9cc297b1. Model left running ready; maina8c0c2a clean, app4173 unchanged. No real-save gameplay or model selection/settings writes.
