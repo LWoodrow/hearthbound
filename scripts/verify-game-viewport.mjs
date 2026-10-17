@@ -18,12 +18,17 @@ try {
     const context=await browser.newContext({viewport:{width,height},hasTouch:touch});const page=await context.newPage();
     for(const tab of ['adventure','map','character'])for(const expanded of tab==='adventure'?[false,true]:[false]){
       await page.setContent(`<style>${css}</style>${fixture(tab,expanded)}`);
+      if(tab==='adventure')await page.locator('.story-feed').evaluate(feed=>{
+        feed.insertAdjacentHTML('beforeend','<article class="player-event"><p>A player asks about the city.</p></article><article class="narration"><p>'+ 'The keeper describes the busy streets and returning travellers. '.repeat(15)+'</p></article>');
+      });
       const geometry=await page.evaluate(()=>{
         const surface=document.querySelector('.story-feed')||document.querySelector('.game-view');
         const composer=document.querySelector('.composer');
         surface.scrollTop=surface.scrollHeight;
         const rect=composer?.getBoundingClientRect();
-        return {outerHeight:document.documentElement.scrollHeight,outerWidth:document.documentElement.scrollWidth,
+        const npc=document.querySelector('.narration:last-child'),player=document.querySelector('.player-event');
+        const alignment=npc&&player?{npc:npc.getBoundingClientRect().left,player:player.getBoundingClientRect().left,npcText:npc.querySelector('p').getBoundingClientRect().left,playerText:player.querySelector('p').getBoundingClientRect().left,proseWidth:npc.querySelector('p').getBoundingClientRect().width}:null;
+        return {alignment,outerHeight:document.documentElement.scrollHeight,outerWidth:document.documentElement.scrollWidth,
           height:innerHeight,width:innerWidth,scroll:surface.scrollTop,composer:rect&&{top:rect.top,bottom:rect.bottom,width:rect.width},feed:surface.clientHeight};
       });
       const label=`${width}x${height} ${tab} expanded=${expanded}`;
@@ -31,6 +36,9 @@ try {
       assert.ok(geometry.outerWidth<=width+1,`${label}: outer horizontal overflow`);
       assert.ok(geometry.scroll>0,`${label}: content must remain scrollable`);
       if(tab==='adventure'){
+        assert.ok(Math.abs(geometry.alignment.npc-geometry.alignment.player)<2,`${label}: speaker cards must share a left rail`);
+        assert.ok(Math.abs(geometry.alignment.npcText-geometry.alignment.playerText)<2,`${label}: paragraph starts must align`);
+        if(width>=1366)assert.ok(geometry.alignment.proseWidth>760,`${label}: prose should not use small container-font ch units`);
         assert.ok(geometry.feed>=70,`${label}: feed must retain useful height`);
         assert.ok(geometry.composer.top>=0&&geometry.composer.bottom<=height+1,`${label}: composer must stay visible`);
         if(width>=1366)assert.ok(geometry.composer.width>width*.65,`${label}: use more desktop width`);

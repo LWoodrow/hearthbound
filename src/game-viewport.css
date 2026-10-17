@@ -29,8 +29,10 @@
 .game-view .scene-heading { width:100%; max-width:none; padding-top:20px; }
 .game-view .story-feed > .level-up-launch,.game-view .story-feed > .level-up-panel,
 .game-view .aftermath-panel { width:100%; max-width:none; }
-.game-view .narration { max-width:78ch; }
-.game-view .player-event { max-width:min(72%,78ch); }
+/* One transcript rail, not opposing chat bubbles. Measure prose in its own font. */
+.game-view .narration { width:100%; max-width:none; padding:18px 17px; }
+.game-view .narration p { max-width:84ch; }
+.game-view .player-event { width:100%; max-width:none; margin:12px 0; }
 .game-view,.game-view .story-feed,.game-view .composer {
   scrollbar-color:#786546 #191611;
   scrollbar-width:thin;
