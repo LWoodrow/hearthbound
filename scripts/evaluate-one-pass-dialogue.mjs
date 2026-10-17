@@ -9,6 +9,8 @@ import {generateStructured} from '../server/ai-transport.mjs';
 import {buildPromptPacket} from '../server/prompt-packets.mjs';
 import {pathToFileURL} from 'node:url';
 import {anchoredEvaluationRequest} from './probe-dialogue-format.mjs';
+import {knowledgePlanRequest,excerptPlanRequest,nativeConversationRequest} from './lib/dialogue-knowledge-plan.mjs';
+import {createPersonalStoryProbe} from './lib/personal-story-probe.mjs';
 export const scenarios={
  nima:{location:'city-delvers-memorial',turns:[
   'hi nima',
@@ -30,6 +32,33 @@ export const scenarios={
  selka:{location:'city-delvers-last',turns:['Hello Selka! Is this a good place for a conversation?',"What makes you smile about your work?","I bet you've heard some terrible boasts.","Could I persuade you to share your own expedition story?"]},
  dorrik:{location:'city-delvers-board',turns:['Hello Dorrik. You look busy.',"You don't sound like a man who enjoys a long boast.","What do you enjoy about the work, then?",'Would you vouch for our crew? I would like to persuade you.']},
  lethriel:{location:'city-delvers-maps',turns:['Hello Lethriel.','Please give me exact directions to the Surveyors’ Refuge.','Could I convince you to let me read your unfinished working notes?']},
+ 'nima-boundaries':{location:'city-delvers-memorial',turns:[
+  'Hello. I do not need a job or directions, just a bit of company.',
+  'Tell me about a little thing you decided was worth keeping.',
+  'Has Maren ever disagreed with you about keeping things?',
+  'Someone told me she is an innkeeper. Is that right?',
+  'Do you have a brother as well? What is his name?',
+  'What is your sister’s favourite dish at the Last Lantern?',
+  'No need to sell me anything. I was just curious about your life.',
+  'Thanks for talking. I will let you get back to what you were doing.',
+ ]},
+ 'nima-stories':{location:'city-delvers-memorial',turns:[
+  'Hello Nima. I have a little time to talk.',
+  'Where in the city would you send someone who is hungry?',
+  'Have you ever spent time at one of those places with Maren?',
+  'What was it like, and what were you talking about?',
+  'What does your sister do for work?',
+  'What do you think makes someone brave?',
+  'Tell me about a small thing you repaired.',
+  'Do you and your sister ever disagree about what is worth keeping?',
+  'I enjoy a good story more than a grand boast.',
+  'What do you like about looking after this place?',
+  'Is there something you would like to do more often?',
+  'Back to that visit with Maren you told me about earlier: where was it and what did you talk about?',
+  'Who was with you, and how did you feel about that visit?',
+  'Does your visit give us permission to descend or get equipment?',
+  'Thank you. I will stop by for another chat.',
+ ]},
  'nima-everyday':{location:'city-delvers-memorial',turns:[
   'Hello. I am not after a job or directions, just a bit of company.',
   'What do you like doing when you can put work aside?',
@@ -71,29 +100,37 @@ export function summarizeDialogueRun(turns){
   canonicalChanges:turns.filter(turn=>!turn.canonicalUnchanged).length,
   pendingChecks:turns.filter(turn=>turn.pendingCheck).length,
   largestEstimatedInputTokens:Math.max(0,...turns.flatMap(turn=>turn.prompts.map(prompt=>prompt.estimatedInputTokens))),
+  ...(turns.at(-1)?.personalMemory?{
+   personalStories:turns.at(-1).personalMemory.stories,
+   softMemoryCommits:turns.filter(turn=>turn.personalMemory?.committed).length,
+   ignoredSoftMemoryConflicts:turns.filter(turn=>turn.personalMemory?.reason==='story-conflict').length,
+  }:{}),
   semanticQuality:'Requires human reading of replies; call counts and unchanged state do not prove consistency, relevance or naturalness.',
  };
 }
-export async function evaluateDialogue({profile,scenario,limit=99,run=1,generate=generateStructured,transformRequest=request=>request,emit=value=>console.log(JSON.stringify(value))}){
+export async function evaluateDialogue({profile,scenario,limit=99,run=1,generate=generateStructured,transformRequest=request=>request,harnessFactory,emit=value=>console.log(JSON.stringify(value))}){
  const db=createDatabase(':memory:');const turns=[];
  try{
  const player=createPlayer(db,{partyId:'party-first-company',name:'Nigel',species:'Human',className:'Fighter'});
  selectAdventure(db,player.partyId,getParty(db,player.partyId).worldId+'-eldervale-roads');
  setPartyState(db,player.partyId,'world:eldervale-roads',createCanonicalState(roads,{currentLocation:scenario.location}));
+ const harness=harnessFactory?.({partyId:player.partyId,adventureId:'eldervale-roads',playerId:player.id});
  if(scenario.history)setPartyState(db,player.partyId,`npcNaturalHistory:eldervale-roads:city-delvers-memorial-resident:${player.id}`,structuredClone(scenario.history));
  for(const text of scenario.turns.slice(0,limit)){
   const before=getPartyState(db,player.partyId,'world:eldervale-roads'),start=Date.now(),prompts=[];let calls=0;
   await resolveAction(db,getPlayer(db,player.id),'speak',text,{npcDialogueMode:'one-pass',npcGenerate:async request=>{
-   request=transformRequest(request);
+   request=(harness?.transformRequest || transformRequest)(request);
    calls++;const packet=buildPromptPacket({kind:request.kind,profile,responseTokens:request.generation.numPredict,sections:request.messages.map((message,index)=>({...message,id:'dialogue-'+index,visibility:'private',required:true}))});
-   prompts.push({kind:request.kind,estimatedInputTokens:packet.estimatedInputTokens,inputBudget:packet.inputBudget});
+   const prompt={kind:request.kind,estimatedInputTokens:packet.estimatedInputTokens,inputBudget:packet.inputBudget,responseTokens:request.generation.numPredict};prompts.push(prompt);
    if(packet.overBudget)throw Error('Context budget exceeded.');
    const output=await generate(profile,packet.messages,request.schema,request.generation);
+   if(request.audit)prompt.selection=request.audit(output);
    return request.decode?request.decode(output):output;
   }});
   const elapsedMs=Date.now()-start;
   const event=listVisibleEvents(db,player).at(-1),status=getPartyState(db,player.partyId,'npcDialogueStatus:eldervale-roads:'+player.id),pending=getPartyState(db,player.partyId,'pendingCheck:'+player.id);
   const turn={run,text,speaker:event.speaker,reply:event.text,calls,elapsedMs,status,prompts,canonicalUnchanged:JSON.stringify(before)===JSON.stringify(getPartyState(db,player.partyId,'world:eldervale-roads')),pendingCheck:pending?{skill:pending.skill,dc:pending.dc}:null};
+  if(harness?.afterTurn)turn.personalMemory=harness.afterTurn(turn);
   turns.push(turn);emit(turn);
  }
  const summary=summarizeDialogueRun(turns);emit({run,...summary});return {turns,summary};
@@ -109,8 +146,17 @@ async function main(){
  if(compareHistory&&!scenario.history)throw Error('History comparison needs a seeded scenario such as nima-memory.');
  const variants=compareHistory?[{name:'clean',scenario:{...scenario,history:undefined}},{name:'seeded',scenario}]:[{name:'default',scenario}];
  const layoutProbe=option('layout-probe','production');
- if(!['production','chat-anchored'].includes(layoutProbe))throw Error('Unknown layout probe.');
+ if(!['production','chat-anchored','knowledge-plan','excerpt-plan','native-chat','personal-stories'].includes(layoutProbe))throw Error('Unknown layout probe.');
+ if(layoutProbe==='personal-stories'&&!selected.startsWith('nima'))throw Error('Personal-story pilot is Nima only.');
  const profile=currentModelProfile();console.log(JSON.stringify({model:profile.displayName,scenario:selected,repeat,variants:variants.map(variant=>variant.name),layoutProbe,mode:'memory-only; no settings changes',semanticReviewRequired:true}));
- for(let run=1;run<=repeat;run++)for(const variant of variants)await evaluateDialogue({profile,scenario:variant.scenario,limit,run:compareHistory?`${run}:${variant.name}`:run,transformRequest:layoutProbe==='chat-anchored'?anchoredEvaluationRequest:undefined});
+ const transforms={'chat-anchored':anchoredEvaluationRequest,'knowledge-plan':knowledgePlanRequest,'excerpt-plan':excerptPlanRequest,'native-chat':nativeConversationRequest};
+ const harnessFactory=layoutProbe==='personal-stories'?({partyId,adventureId,playerId})=>{
+  // Explicitly reviewed public geography and an already authored relative;
+  // never infer new people/places from generated chat or player assertions.
+  const npcId='city-delvers-memorial-resident',npc=roads.story.npcs[npcId];
+  const policy={ownerName:npc.name,people:[{id:'sister',name:npc.conversation.life.family.sister.name}],places:['city-delvers-last','city-exchange-food','city-lantern-bakery'].map(id=>({id,name:roads.locations[id].name})),limit:8};
+  return createPersonalStoryProbe({scope:{partyId,adventureId,npcId},playerId,policy});
+ }:undefined;
+ for(let run=1;run<=repeat;run++)for(const variant of variants)await evaluateDialogue({profile,scenario:variant.scenario,limit,run:compareHistory?`${run}:${variant.name}`:run,transformRequest:transforms[layoutProbe],harnessFactory});
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)await main();

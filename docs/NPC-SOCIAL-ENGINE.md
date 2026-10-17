@@ -1,5 +1,9 @@
 # Natural NPC and social engine
 
+## Latest pilot and experimental personal memory
+
+Nima's deployed ordinary conversation uses the explicitly approved one-pass path, not the historical reviewer stack below. The user has now separately approved a **prototype** of bounded harmless personal anecdotes involving known companions/public places. This is an isolated memory-only experiment, not a change to world.social, verified episodes or real saved biographies. Its typed ledger cannot grant quests/items/permissions, and optional soft-memory conflicts do not block conversation. Live prose still drifts; no rollout or semantic-quality pass is claimed. See the latest sections of [AI-LED-CONVERSATION.md](AI-LED-CONVERSATION.md) and HANDOFF for policy, test evidence and production transaction/concurrency gaps. The historical "model-created durable memories deferred" rule remains in force outside this explicitly scoped prototype.
+
 ## Current deployment: AI-led interpretation
 
 The live opt-in path now uses semantic AI planning over current eligible knowledge before performance and independent review. Keyword everyday/topic/social matching is degraded-mode compatibility, not the primary conversational interpreter. AI can select relevant public facts from unfamiliar wording, use recent references, combine ordinary topics and propose one authored social goal/approach. Code validates IDs/disclosure/conditions and retains all consequential authority. See [AI-LED-CONVERSATION.md](AI-LED-CONVERSATION.md) for the complete decision, contracts, privacy, failure modes, budgets, tests and deployment checklist. Historical descriptions of bounded lexical retrieval below describe the fallback/previous stage, not the new normal live path.
