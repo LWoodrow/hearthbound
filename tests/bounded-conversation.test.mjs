@@ -62,7 +62,7 @@ function fixture(){
 test('reported eat-before-descent turn stops at the shared deadline and saves failure diagnostics, not NPC history',async()=>{
  const f=fixture();let clock=0,calls=0;
  try{
-  await resolveAction(f.db,getPlayer(f.db,f.player.id),'speak',"just intrigued nima, we're planning to journey down but wanted to eat first",{npcSessionOptions:{now:()=>clock},npcGenerate:async input=>{
+  await resolveAction(f.db,getPlayer(f.db,f.player.id),'speak',"just intrigued nima, we're planning to journey down but wanted to eat first",{npcDialogueMode:'legacy',npcSessionOptions:{now:()=>clock},npcGenerate:async input=>{
    calls++;clock+=30000;
    if(input.kind==='npc-conversation-input')return {tool:'respond_social',scope:'social',focus:'Acknowledge eating before the descent.',reply:'The inn has free stew.'};
    if(input.kind==='npc-claim-review')return reject;
@@ -79,7 +79,7 @@ test('reported eat-before-descent turn stops at the shared deadline and saves fa
 test('exhausted verification attempts retain both review failures and truthful repair status',async()=>{
  const f=fixture();let calls=0;
  try{
-  await resolveAction(f.db,getPlayer(f.db,f.player.id),'speak','hi nima',{npcGenerate:async input=>{
+  await resolveAction(f.db,getPlayer(f.db,f.player.id),'speak','hi nima',{npcDialogueMode:'legacy',npcGenerate:async input=>{
    calls++;if(input.kind==='npc-conversation-input')return {tool:'respond_social',reply:'Hello.'};
    if(input.kind==='npc-claim-review')return reject;return {reply:'Hello again.',evidenceIds:[]};
   }});
@@ -92,7 +92,7 @@ test('exhausted verification attempts retain both review failures and truthful r
 test('a personal plan cannot start a repair without enough calls for its independent review',async()=>{
  const f=fixture();let calls=0;
  try{
-  await resolveAction(f.db,getPlayer(f.db,f.player.id),'speak','nima have you visited with family?',{npcGenerate:async input=>{
+  await resolveAction(f.db,getPlayer(f.db,f.player.id),'speak','nima have you visited with family?',{npcDialogueMode:'legacy',npcGenerate:async input=>{
    calls++;
    if(input.kind==='npc-conversation-input')return {tool:'read_knowledge',scope:'personal_experience',focus:'Has Nima visited with family?',reply:''};
    if(input.kind==='npc-answer-plan')return {question:'Has Nima visited with family?',knowledge:'unknown',supportIds:[],unknown:'No visit is established.'};

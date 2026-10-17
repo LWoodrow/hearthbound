@@ -12,11 +12,21 @@ export function addDelversEveryday(npcs,ids) {
   npc.conversation.knowledge.push({id:id+'-wellbeing',tier:'everyday',subjects:['everyday:wellbeing'],text:`“There is always something to interest me with ${npc.personality.interests.join(' and ')}. How are you getting on?”`});
  }
  const nima=npcs['city-delvers-memorial-resident'];
+ nima.conversation.mode='one-pass';
+ nima.conversation.life={
+  present:'Tending the public slate and polishing brass while making room for ordinary conversation, not conducting a solemn ceremony.',
+  motivations:['Help people feel welcome before and after a descent.','Make useful things and care for people without prying.'],
+  pleasures:['Mending small household things.','Listening to ordinary stories rather than expedition boasting.','Unhurried company and gentle teasing with her sister.'],
+  worries:['Bravery being mistaken for refusing help.','Being treated only as the keeper of a solemn wall rather than as a neighbour.'],
+  ambitions:['Make the Wall welcoming for ordinary visits as well as return promises.','Keep time for making useful things with Maren.'],
+  boundaries:['Happy to talk about Maren and her own life; unwilling to gossip about another person’s grief.'],
+  family:{sister:{name:'Maren',relationship:'younger sister',occupation:'mends clothes',bond:'Close; she teases Nima about polishing brass while thinking.'},upbringing:'Their parents taught them to repair things before throwing them away.'},
+ };
  nima.conversation.knowledge.push(
   {id:'nima-family',tier:'everyday',subjects:['everyday:family','family','sister','Maren','parents','upbringing','occupation'],text:'Nima has a younger sister named Maren. Maren mends clothes. Their parents taught them to repair things before throwing them away.'},
   {id:'nima-family-bond',tier:'everyday',subjects:['everyday:family','Maren','sister','relationship'],text:'Nima and Maren are close. Maren teases Nima for polishing brass while thinking. Both sisters enjoy making useful things with their hands.'},
-  {id:'nima-work',tier:'everyday',subjects:['everyday:capabilities','work','arrange','help','promise','slate'],text:'“I care for the Returners’ Wall and its slate. You can leave a return promise here, or simply sit and talk. I can listen and point you towards public places; I cannot book a room or fetch a meal for you.”'},
+  {id:'nima-work',tier:'everyday',subjects:['everyday:capabilities','work','arrange','help','promise','slate'],text:'Nima cares for the Returners’ Wall and public slate. Visitors may leave a return promise, sit or talk. She offers public directions and company, not room bookings or meal delivery.'},
  );
  const wellbeing=nima.conversation.knowledge.find(entry=>entry.id==='city-delvers-memorial-resident-wellbeing');
- wellbeing.text='“Quite settled, thank you. I like having something small to tend to while people find their words. How are you getting on?”';
+ wellbeing.text='Nima is settled and enjoys tending small practical tasks while people find their words; quiet ordinary conversation is welcome.';
 }

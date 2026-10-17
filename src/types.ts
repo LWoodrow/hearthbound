@@ -159,7 +159,7 @@ export type GameView = {
   };
   guidanceMode: "guided" | "standard" | "classic";
   conversationProgress?:null|{stage:string;startedAt:number;elapsedMs:number;budgetMs:number;calls:number};
-  dialogue?:null|{npcId:string;source:'ai-reviewed'|'authored-fallback'|'rules';reason:string;interpretation?:'ai'|'fallback';interpretationReason?:string;inputTool?:string;repaired?:boolean;unavailable?:boolean;lookupCount?:number;claimCount?:number;answerKnowledge?:'supported'|'partial'|'unknown';elapsedMs?:number;calls?:number;failureKind?:string;failedStage?:string};
+  dialogue?:null|{npcId:string;source:'ai-dialogue'|'ai-reviewed'|'authored-fallback'|'rules';protocol?:string;reason:string;interpretation?:'ai'|'fallback';interpretationReason?:string;inputTool?:string;repaired?:boolean;unavailable?:boolean;lookupCount?:number;claimCount?:number;answerKnowledge?:'supported'|'partial'|'unknown';elapsedMs?:number;calls?:number;failureKind?:string;failedStage?:string};
   movement: {locationId:string;locationName:string;reason:string;options:Array<{id:string;label:string;text:string;detail:string}>};
   guidance: Array<{ label: string; text: string; mode: "act" | "speak" | "ask"; reason: string }>;
   ai: {

@@ -19,6 +19,7 @@ import { interpretSceneTurn } from "./turn-interpretation.mjs";
 import { generateStructured } from "./ai-transport.mjs";
 import {npcRelationship,npcPersonality,conversationEvidence,naturalConversationFallback,planSocialAttempt,resolveSocialAttempt} from './npc-social-engine.mjs';
 import {naturalNpcReply} from './npc-natural-dialogue.mjs';
+import {onePassNpcDialogue} from './npc-one-pass.mjs';
 import {createConversationSession,conversationFailureMessage} from './npc-conversation-session.mjs';
 import {interpretNpcConversation,plannedConversationFallback,conversationCatalogue,currentConversationHistory} from './npc-conversation-planner.mjs';
 import {assessNpcInput,conversationUnavailable} from './npc-conversation-tools.mjs';
@@ -983,7 +984,7 @@ async function resolveNpcConversation(db, player, adventure, dmState, mode, acti
       const statusKey=`npcDialogueStatus:${definition.id}:${player.id}`;
       const status=getPartyState(db,player.partyId,statusKey) || {};
       const failedStage=summary.stages.findLast(stage=>stage.status==='failed')?.kind;
-      setPartyState(db,player.partyId,statusKey,{...status,elapsedMs:summary.elapsedMs,calls:summary.calls,repaired:summary.stages.some(stage=>stage.kind==='npc-natural-repair'),failureKind:status.unavailable?(summary.failure || diagnostics.reason || status.reason):'',...(failedStage?{failedStage}:{})});
+      setPartyState(db,player.partyId,statusKey,{...status,elapsedMs:summary.elapsedMs,calls:summary.calls,repaired:summary.stages.some(stage=>['npc-natural-repair','npc-dialogue-repair'].includes(stage.kind)),failureKind:status.unavailable?(summary.failure || diagnostics.reason || status.reason):'',...(failedStage?{failedStage}:{})});
       setPartyState(db,player.partyId,`npcDialogueDiagnostics:${definition.id}:${player.id}`,{...diagnostics,...summary});
     }
   }
@@ -1031,10 +1032,17 @@ async function resolveNpcConversationTurn(db, player, adventure, dmState, mode, 
   const catalogue=conversationCatalogue(npc,projection,world);
   const publicKnowledge=catalogue.entries.filter(entry=>['everyday','advice'].includes(entry.tier));
   const recent=currentConversationHistory(catalogue,naturalHistory);
-  const assessment=naturalLive?await assessNpcInput({npc,personality,scene:projection.scene,speech:action,history:recent,generate}):{source:'fallback',reason:'input-assessment-offline'};
+  const useOnePass=naturalLive&&services.npcDialogueMode!=='legacy'&&(npc.conversation.mode==='one-pass'||services.npcDialogueMode==='one-pass');
+  // Existing authored action dispatch retains first refusal for explicit
+  // consequential requests. This is not a greeting/topic classifier and adds
+  // no new phrase list; unfamiliar paraphrases can still propose a goal.
+  const authoredSocial=useOnePass?planSocialAttempt({npc,npcId,playerId:player.id,world,action}):null;
+  const directReply=useOnePass?(authoredSocial?{source:'rules',protocol:'one-pass',reply:''}:await onePassNpcDialogue({npc,personality,projection,catalogue,history:naturalHistory,speech:action,generate,player:{name:player.name}})):null;
+  const assessment=useOnePass?{source:directReply.unavailable?'fallback':'ai',tool:directReply.social?'consider_social_goal':'direct_conversation'}:naturalLive?await assessNpcInput({npc,personality,scene:projection.scene,speech:action,history:recent,generate}):{source:'fallback',reason:'input-assessment-offline'};
   const directSocial=assessment.source==='ai'&&['respond_social','clarify'].includes(assessment.tool);
   const directKnowledge=assessment.source==='ai'&&assessment.tool==='read_knowledge'&&!catalogue.entries.some(entry=>['detail','solution'].includes(entry.tier));
-  const interpreted=directSocial?{source:'ai',reason:'',plan:{goals:[{kind:'chat',evidenceIds:[]}],challengeId:'',approach:''},evidence:[],history:recent}:
+  const interpreted=useOnePass?{source:directReply.unavailable?'fallback':'ai',reason:directReply.reason || '',plan:{goals:[{kind:'chat',evidenceIds:[]}],challengeId:directReply.social?.challengeId || '',approach:directReply.social?.approach || ''},evidence:[],history:recent}:
+    directSocial?{source:'ai',reason:'',plan:{goals:[{kind:'chat',evidenceIds:[]}],challengeId:'',approach:''},evidence:[],history:recent}:
     directKnowledge?{source:'ai',reason:'',plan:{goals:[{kind:'advice',evidenceIds:[]}],challengeId:'',approach:''},evidence:publicKnowledge,history:recent}:
     naturalLive?await interpretNpcConversation({npc,personality,projection,world,speech:action,focus:assessment.focus,history:recent,generate}):{source:'fallback',reason:'interpretation-offline-or-test'};
   const contextChanged=()=>{
@@ -1046,9 +1054,9 @@ async function resolveNpcConversationTurn(db, player, adventure, dmState, mode, 
     return {source:'rules',rule:'conversation-context-changed',accepted:false};
   };
   if(naturalLive&&contextChanged())return changedReply();
-  const socialPlan=heardOnly||(assessment.source==='ai'&&assessment.tool!=='consider_social_goal')?null:planSocialAttempt({npc,npcId,playerId:player.id,world,action,...(interpreted.source==='ai'?{interpretation:interpreted.plan}:{})});
+  const socialPlan=authoredSocial || (heardOnly||(useOnePass&&!directReply.social)||(assessment.source==='ai'&&assessment.tool!=='consider_social_goal')?null:planSocialAttempt({npc,npcId,playerId:player.id,world,action,...(interpreted.source==='ai'?{interpretation:interpreted.plan}:{})}));
   if(socialPlan){
-    const socialStatus={npcId,source:'rules',reason:'authored-social-'+socialPlan.kind,interpretation:interpreted.source==='ai'?'ai':'fallback',interpretationReason:interpreted.reason,inputTool:assessment.tool || 'unavailable'};
+    const socialStatus={npcId,source:'rules',reason:'authored-social-'+socialPlan.kind,...(authoredSocial?{}:{interpretation:interpreted.source==='ai'?'ai':'fallback',interpretationReason:interpreted.reason,inputTool:assessment.tool || 'unavailable'})};
     setPartyState(db,player.partyId,`npcDialogueStatus:${definition.id}:${player.id}`,socialStatus);
     if(socialPlan.kind==='blocked'){
       setPartyState(db,player.partyId,`npcDialogueStatus:${definition.id}:${player.id}`,{...socialStatus,reason:'social-request-blocked'});
@@ -1096,16 +1104,16 @@ async function resolveNpcConversationTurn(db, player, adventure, dmState, mode, 
       ...(semantic?{conversationGoals:interpreted.plan.goals.map(goal=>({kind:goal.kind,evidenceIds:goal.evidenceIds}))}:{}),
       ...(naturalLive?{allowUncitedSocial:true,focusVersion:2,conversationFocus:assessment.focus || action,answerScope:assessment.scope || 'unspecified'}:{}),
       instructions:'History is conversation, not current evidence. Do not repeat a previous answer word for word.'};
-    let result=naturalLive?await naturalNpcReply({packet,fallback,generate,availableKnowledge:publicKnowledge,canRepair:()=>services.npcSession.canRun(2,1000),assessed:true,...(directSocial?{initialCandidate:{reply:assessment.reply,evidenceIds:[]}}:{})}):{reply:fallback,source:'authored-fallback',reason:'model-unavailable-or-test'};
+    let result=useOnePass?directReply:naturalLive?await naturalNpcReply({packet,fallback,generate,availableKnowledge:publicKnowledge,canRepair:()=>services.npcSession.canRun(2,1000),assessed:true,...(directSocial?{initialCandidate:{reply:assessment.reply,evidenceIds:[]}}:{})}):{reply:fallback,source:'authored-fallback',reason:'model-unavailable-or-test'};
     if(naturalLive){
       const failure=services.npcSession.snapshot().failure;
       if(result.unavailable)result={...result,reason:failure || result.reason,reply:conversationFailureMessage(failure || result.reason)};
       Object.assign(services.npcDiagnostics,{reason:result.reason,unavailable:!!result.unavailable,audits:(result.audits || []).slice(-2)});
     }
     if(naturalLive&&contextChanged())return changedReply();
-    reply=result.reply;naturalSource={source:result.source,reason:result.reason,interpretation:semantic?'ai':'fallback',interpretationReason:interpreted.reason,inputTool:assessment.tool || 'unavailable',repaired:!!result.repaired,unavailable:!!result.unavailable,lookupCount:result.lookupCount || 0,claimCount:result.claims?.length || 0,...(result.answerKnowledge?{answerKnowledge:result.answerKnowledge}:{})};
+    reply=result.reply;naturalSource={source:result.source,reason:result.reason || '',protocol:result.protocol || 'legacy',interpretation:semantic?'ai':'fallback',interpretationReason:interpreted.reason,inputTool:assessment.tool || 'unavailable',repaired:!!result.repaired,unavailable:!!result.unavailable,lookupCount:result.lookupCount || 0,claimCount:result.claims?.length || 0,...(result.answerKnowledge?{answerKnowledge:result.answerKnowledge}:{})};
     const topicKind=topicReply?.topicKind || (npcConversationTopic(action)==='follow-up'?naturalHistory.at(-1)?.topicKind:npcConversationTopic(action));
-    if(!result.unavailable)setPartyState(db,player.partyId,naturalKey,[...naturalHistory,{speech:String(action).slice(0,500),reply,topicKind,evidenceIds:result.evidenceIds || evidence.map(entry=>entry.id),...(naturalLive?{focus:packet.conversationFocus,review:{claims:result.claims || [],audits:result.audits || []}}:{})}].slice(-8));
+    if(!result.unavailable)setPartyState(db,player.partyId,naturalKey,[...naturalHistory,{speech:String(action).slice(0,500),reply,topicKind,evidenceIds:result.evidenceIds || evidence.map(entry=>entry.id),...(useOnePass?{protocol:'one-pass',authority:'dialogue-only',disclosureIds:result.disclosureIds || []}:naturalLive?{focus:packet.conversationFocus,review:{claims:result.claims || [],audits:result.audits || []}}:{})}].slice(-8));
   } else if (topicReply) {
     reply=topicReply.reply;
   } else if (isSimpleNpcSpeech(action)) {

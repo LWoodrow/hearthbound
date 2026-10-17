@@ -1,5 +1,7 @@
 const running=new Map();
 const stageNames={
+ 'npc-dialogue':'writing',
+ 'npc-dialogue-repair':'repairing',
  'npc-conversation-input':'understanding',
  'npc-conversation-interpretation':'knowledge',
  'npc-answer-plan':'background',

@@ -3,10 +3,14 @@ import {groundedConversation} from './npc-grounded-conversation.mjs';
 export const naturalReplySchema={type:'object',properties:{reply:{type:'string'},evidenceIds:{type:'array',items:{type:'string'}}},required:['reply','evidenceIds'],additionalProperties:false};
 const reviewSchema={type:'object',properties:{grounded:{type:'boolean'},relevant:{type:'boolean'},inCharacter:{type:'boolean'},noConsequences:{type:'boolean'}},required:['grounded','relevant','inCharacter','noConsequences'],additionalProperties:false};
 const consequenceClaim=/\b(?:i(?:'ll| will) (?:give|bring|lead|take|escort|sell)|you (?:now have|receive|gain|are allowed)|(?:door|gate|passage) (?:opens|is now open)|quest (?:is )?complete|roll (?:a |the )?d20)\b/i;
+export function safeNpcSpeech(reply){
+ return typeof reply==='string'&&!!reply.trim()&&reply.length<=1000
+  &&!(/\b(?:playable|implemented|backend|schema|campaign levels?|inventory updated|system prompt|factIds|trust score|respect score|fear score|relationship score)\b|<\|/i.test(reply)||consequenceClaim.test(reply));
+}
 export function validNaturalReply(output,packet) {
  if(!output||Object.keys(output).some(key=>!['reply','evidenceIds'].includes(key))||typeof output.reply!=='string'||!output.reply.trim()||output.reply.length>1000
    ||!Array.isArray(output.evidenceIds)||output.evidenceIds.some(id=>!packet.evidence.some(entry=>entry.id===id))||new Set(output.evidenceIds).size!==output.evidenceIds.length)return false;
- if(/\b(?:playable|implemented|backend|schema|campaign levels?|inventory updated|system prompt|factIds|trust score|respect score|fear score|relationship score)\b|<\|/i.test(output.reply)||consequenceClaim.test(output.reply))return false;
+ if(!safeNpcSpeech(output.reply))return false;
  if(packet.evidence.length&&!output.evidenceIds.length&&!packet.allowUncitedSocial)return false;
  // New numbers are particularly easy to disguise as prices, DCs or directions.
  const permitted=packet.evidence.map(entry=>entry.text).join(' ');

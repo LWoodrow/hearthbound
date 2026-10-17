@@ -51,7 +51,7 @@ export function plannedConversationFallback(plan,evidence) {
 export function currentConversationHistory(catalogue,history=[]) {
  const available=new Set(catalogue.entries.map(entry=>entry.id));
  return history.slice(-6).map(entry=>({speech:String(entry.speech || '').slice(0,500),
-  reply:(entry.evidenceIds || []).some(id=>!available.has(id))?'[Earlier knowledge is no longer available.]':String(entry.reply || '').slice(0,1000),
+  reply:[...(entry.evidenceIds || []),...(entry.disclosureIds || [])].some(id=>!available.has(id))?'[Earlier knowledge is no longer available.]':String(entry.reply || '').slice(0,1000),
   evidenceIds:(entry.evidenceIds || []).filter(id=>available.has(id)),authority:'Context only; prior claims without current evidence are not facts.'}));
 }
 export async function interpretNpcConversation({npc,personality,projection,world,speech,focus,history=[],generate}) {

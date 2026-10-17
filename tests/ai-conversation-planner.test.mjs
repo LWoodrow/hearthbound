@@ -19,7 +19,7 @@ const verdict={grounded:true,relevant:true,inCharacter:true,noConsequences:true}
 function fixture(location='city-delvers-memorial'){
  const db=createDatabase(':memory:'),player=createPlayer(db,{partyId:'party-first-company',name:'Nigel',species:'Human',className:'Fighter'});
  selectAdventure(db,player.partyId,getParty(db,player.partyId).worldId+'-eldervale-roads');setPartyState(db,player.partyId,'world:eldervale-roads',world(location));
- return {db,player,say:(text,npcGenerate)=>resolveAction(db,getPlayer(db,player.id),'speak',text,{npcGenerate}),state:()=>getPartyState(db,player.partyId,'world:eldervale-roads'),last:()=>listVisibleEvents(db,player).at(-1)};
+ return {db,player,say:(text,npcGenerate)=>resolveAction(db,getPlayer(db,player.id),'speak',text,{npcGenerate,npcDialogueMode:'legacy'}),state:()=>getPartyState(db,player.partyId,'world:eldervale-roads'),last:()=>listVisibleEvents(db,player).at(-1)};
 }
 function transport(interpretation,reply,calls=[]){return async request=>{calls.push(request);const ids=[...new Set(interpretation.goals.flatMap(goal=>goal.evidenceIds))];return {output:request.kind==='npc-conversation-input'?{tool:interpretation.challengeId?'consider_social_goal':'read_knowledge',reply:''}:request.kind==='npc-conversation-interpretation'?interpretation:request.kind==='npc-natural-performance'?{reply,evidenceIds:ids}:request.kind==='npc-claim-review'?{decision:'accept',feedback:'',claims:ids.length?[{text:reply,evidenceIds:ids}]:[],lookupIds:[]}:verdict};};}
 
@@ -176,4 +176,6 @@ test('actual model-menu status distinguishes AI understanding, generated reply a
  assert.match(render({source:'ai-reviewed',interpretation:'ai',inputTool:'respond_social'}),/no knowledge lookup/);
  assert.match(render({source:'ai-reviewed',interpretation:'ai',repaired:true}),/repaired the reply/);
  assert.match(render({source:'authored-fallback',unavailable:true}),/Reply not published/);
+ assert.match(render({source:'ai-dialogue',protocol:'one-pass',calls:1,elapsedMs:1000}),/direct character response.*no automatic AI reviewer/s);
+ assert.doesNotMatch(render({source:'ai-dialogue',protocol:'one-pass',calls:1}),/grounding and relevance checked/);
 });
