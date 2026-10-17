@@ -2,6 +2,14 @@
 
 ## Decision
 
+### Prepared-story control (2026-10-17; evaluation only)
+
+`--layout-probe=prepared-stories --scenario=nima-stories` is now a separate control: a single explicit typed fixture is prepared before the conversation, and the ordinary model produces only `{reply}` at240 output tokens. The fixture is Maren/Last Lantern/talked/mending/amusing, NOT a new authored fact about the real Nima. This isolates stable-note use from the earlier360-token inline creation/recall protocol; it is not a single-variable speed comparison. No AI preparation call, extra judge, inferred hearing receipt or production settings flag is added. A future automatic preparation generator remains unimplemented.
+
+The ledger's atomic `prepare` batch supports stories with no listeners. Snapshot restore now supports those untouched hearing lists, preserving private per-player disclosure semantics instead of inventing a fake seed listener. A bad later proposal, conflict, capacity violation or unknown reference leaves the entire prior memory unchanged. Prepared notes retain before-this-adventure/improvised-personal/verified:false provenance; authored biography and canonical world state remain higher authority. The read-only adapter never creates/updates a story or audience marker during speech. This deliberately makes no claim that fluent prose proves which story was actually told.
+
+Automated tests cover preparation/restore, atomic failure, no fake listeners, strict capability scope, nine actual dispatched turns beyond the recent-chat window and one mocked AI call per turn. A deliberately structurally valid false workplace answer documents that reply format is NOT a semantic verifier. Real-model quality/latency for this control is NOT measured: the user requested the game stopped, and the AI server was also found stopped afterward. Leave both off; no model restart, save migration, live deployment, merge or push in this slice. Run sustained and held-out human-reviewed live comparisons before deciding whether this control is better.
+
 ### Approved bounded personal anecdotes (2026-10-17; prototype only, NOT deployed)
 
 The user explicitly chose “Prototype bounded personal anecdotes”: residents may improvise/remember harmless personal episodes involving known people and public places, but cannot invent quests, rewards, services or world changes. This supersedes the earlier blanket no-new-personal-lore rule ONLY for the separately tested prototype. Authored biography, locations, permissions and verified events remain higher authority. No existing NPC has been opted into this at runtime, and no real-save schema/settings was changed.

@@ -39,6 +39,23 @@ export function createPersonalStoryLedger(){
  };
  return {
   preview,
+  prepare(scope,policy,proposals){
+   // Explicit off-turn preparation: no invented listener or hearing receipt.
+   // Stage the whole batch so a later conflict cannot leave partial memory.
+   if(!Array.isArray(proposals)||proposals.length>12)fail('Invalid prepared personal stories.');
+   const state=get(scope,policy),stories=structuredClone(state.stories);
+   for(const proposal of proposals){
+    const safe=canonicalProposal(state.policy,proposal),old=stories.find(story=>pairKey(story)===pairKey(safe));
+    if(old&&!sameStory(old,safe))fail('Existing personal story cannot be overwritten.','story-conflict');
+    if(old)continue;
+    if(stories.length>=state.policy.limit)fail('Personal-story memory is full.','story-capacity');
+    stories.push({id:'s'+(stories.length+1),...safe,era:'before-this-adventure',provenance:'improvised-personal',verified:false,heardBy:[]});
+   }
+   if(stories.length){
+    if(!entries.has(state.key)&&entries.size>=100)fail('Personal-story scope limit reached.');
+    entries.set(state.key,{scope:structuredClone(scope),policy:state.policy,stories});
+   }
+  },
   commit(scope,policy,proposal,playerId){
    if(!string(playerId))fail('Invalid personal-story audience.');
    const checked=preview(scope,policy,proposal),state=get(scope,policy);
@@ -74,7 +91,9 @@ export function createPersonalStoryLedger(){
     const key=scopeKey(entry.scope);if(seen.has(key))fail('Duplicate personal-story scope.');seen.add(key);
     validatePolicy(entry.policy);
     for(const [index,story] of entry.stories.entries()){
-     if(!exact(story,['id','personId','placeId','activity','impression','topic','era','provenance','verified','heardBy'])||story.id!=='s'+(index+1)||story.era!=='before-this-adventure'||story.provenance!=='improvised-personal'||story.verified!==false||!Array.isArray(story.heardBy)||!story.heardBy.length||story.heardBy.length>100||!story.heardBy.every(string)||new Set(story.heardBy).size!==story.heardBy.length)fail('Invalid personal-story snapshot record.');
+     if(!exact(story,['id','personId','placeId','activity','impression','topic','era','provenance','verified','heardBy'])||story.id!=='s'+(index+1)||story.era!=='before-this-adventure'||story.provenance!=='improvised-personal'||story.verified!==false||!Array.isArray(story.heardBy)||story.heardBy.length>100||!story.heardBy.every(string)||new Set(story.heardBy).size!==story.heardBy.length)fail('Invalid personal-story snapshot record.');
+     candidate.prepare(entry.scope,entry.policy,[storyProposal(story)]);
+     if(candidate.snapshot().find(item=>scopeKey(item.scope)===key).stories.length!==index+1)fail('Duplicate personal-story identity.');
      for(const player of story.heardBy)if(candidate.commit(entry.scope,entry.policy,storyProposal(story),player).id!==story.id)fail('Duplicate personal-story identity.');
     }
    }

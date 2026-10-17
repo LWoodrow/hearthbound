@@ -11,6 +11,7 @@ import {pathToFileURL} from 'node:url';
 import {anchoredEvaluationRequest} from './probe-dialogue-format.mjs';
 import {knowledgePlanRequest,excerptPlanRequest,nativeConversationRequest} from './lib/dialogue-knowledge-plan.mjs';
 import {createPersonalStoryProbe} from './lib/personal-story-probe.mjs';
+import {createPreparedStoryProbe} from './lib/prepared-story-probe.mjs';
 export const scenarios={
  nima:{location:'city-delvers-memorial',turns:[
   'hi nima',
@@ -146,16 +147,20 @@ async function main(){
  if(compareHistory&&!scenario.history)throw Error('History comparison needs a seeded scenario such as nima-memory.');
  const variants=compareHistory?[{name:'clean',scenario:{...scenario,history:undefined}},{name:'seeded',scenario}]:[{name:'default',scenario}];
  const layoutProbe=option('layout-probe','production');
- if(!['production','chat-anchored','knowledge-plan','excerpt-plan','native-chat','personal-stories'].includes(layoutProbe))throw Error('Unknown layout probe.');
- if(layoutProbe==='personal-stories'&&!selected.startsWith('nima'))throw Error('Personal-story pilot is Nima only.');
+ if(!['production','chat-anchored','knowledge-plan','excerpt-plan','native-chat','personal-stories','prepared-stories'].includes(layoutProbe))throw Error('Unknown layout probe.');
+ if(['personal-stories','prepared-stories'].includes(layoutProbe)&&!selected.startsWith('nima'))throw Error('Personal-story pilot is Nima only.');
  const profile=currentModelProfile();console.log(JSON.stringify({model:profile.displayName,scenario:selected,repeat,variants:variants.map(variant=>variant.name),layoutProbe,mode:'memory-only; no settings changes',semanticReviewRequired:true}));
  const transforms={'chat-anchored':anchoredEvaluationRequest,'knowledge-plan':knowledgePlanRequest,'excerpt-plan':excerptPlanRequest,'native-chat':nativeConversationRequest};
- const harnessFactory=layoutProbe==='personal-stories'?({partyId,adventureId,playerId})=>{
+ const harnessFactory=['personal-stories','prepared-stories'].includes(layoutProbe)?({partyId,adventureId,playerId})=>{
   // Explicitly reviewed public geography and an already authored relative;
   // never infer new people/places from generated chat or player assertions.
   const npcId='city-delvers-memorial-resident',npc=roads.story.npcs[npcId];
   const policy={ownerName:npc.name,people:[{id:'sister',name:npc.conversation.life.family.sister.name}],places:['city-delvers-last','city-exchange-food','city-lantern-bakery'].map(id=>({id,name:roads.locations[id].name})),limit:8};
-  return createPersonalStoryProbe({scope:{partyId,adventureId,npcId},playerId,policy});
+  const options={scope:{partyId,adventureId,npcId},playerId,policy};
+  // One explicit diagnostic fixture, NOT a new canonical restaurant history.
+  // Isolate stable memory use from per-turn memory selection; no seed AI call.
+  if(layoutProbe==='prepared-stories')return createPreparedStoryProbe({...options,stories:[{personId:'sister',placeId:'city-delvers-last',activity:'talked',impression:'amusing',topic:'mending'}]});
+  return createPersonalStoryProbe(options);
  }:undefined;
  for(let run=1;run<=repeat;run++)for(const variant of variants)await evaluateDialogue({profile,scenario:variant.scenario,limit,run:compareHistory?`${run}:${variant.name}`:run,transformRequest:transforms[layoutProbe],harnessFactory});
 }
