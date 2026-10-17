@@ -873,6 +873,7 @@ export function buildLobby(db) {
 export function selectAdventure(db, partyId, adventureId) {
   const adventure = db.prepare("SELECT a.* FROM adventures a JOIN parties p ON p.world_id = a.world_id WHERE p.id = ? AND a.id = ?").get(partyId, adventureId);
   if (!adventure) throw new Error("That adventure does not belong to this world.");
+  setPartyState(db,partyId,'adventureEpoch',Number(getPartyState(db,partyId,'adventureEpoch') || 0)+1);
   const previousAdventureId = db.prepare("SELECT active_adventure_id FROM parties WHERE id = ?").get(partyId)?.active_adventure_id;
   const enteringWorkshop = String(adventureId).endsWith("combat-workshop") && !String(previousAdventureId || "").endsWith("combat-workshop");
   const leavingWorkshop = String(previousAdventureId || "").endsWith("combat-workshop") && !String(adventureId).endsWith("combat-workshop");
@@ -969,7 +970,13 @@ export function addEvent(db, event) {
 
 export function listVisibleEvents(db, player) {
   const adventureId = db.prepare("SELECT active_adventure_id FROM parties WHERE id = ?").get(player.partyId)?.active_adventure_id;
-  return db.prepare("SELECT id, visibility, player_id, kind, speaker, text, payload_json, created_at FROM events WHERE party_id = ? AND adventure_id = ? AND (visibility = 'public' OR (visibility = 'player' AND player_id = ?)) ORDER BY id ASC LIMIT 250").all(player.partyId, adventureId, player.id).map((row) => ({ id: row.id, visibility: row.visibility, playerId: row.player_id, kind: row.kind, speaker: row.speaker, text: row.text, payload:JSON.parse(row.payload_json || "{}"), createdAt: row.created_at }));
+  return db.prepare("SELECT * FROM (SELECT id, visibility, player_id, kind, speaker, text, payload_json, created_at FROM events WHERE party_id = ? AND adventure_id = ? AND (visibility = 'public' OR (visibility = 'player' AND player_id = ?)) ORDER BY id DESC LIMIT 250) ORDER BY id ASC").all(player.partyId, adventureId, player.id).map((row) => ({ id: row.id, visibility: row.visibility, playerId: row.player_id, kind: row.kind, speaker: row.speaker, text: row.text, payload:JSON.parse(row.payload_json || "{}"), createdAt: row.created_at }));
+}
+
+// Encounter disclosure must not disappear when old chat leaves the UI window.
+export function listEncounteredSpeakers(db,player){
+  const adventureId=getActiveAdventure(db,player.partyId)?.id;
+  return db.prepare("SELECT DISTINCT speaker FROM events WHERE party_id=? AND adventure_id=? AND (visibility='public' OR (visibility='player' AND player_id=?))").all(player.partyId,adventureId,player.id).map(row=>({speaker:row.speaker}));
 }
 
 export function listRecentEventsForDm(db, partyId, limit = 36) {
@@ -1069,6 +1076,7 @@ export function resetPartyStory(db, partyId) {
   const adventure = party.active_adventure_id ? db.prepare("SELECT * FROM adventures WHERE id = ?").get(party.active_adventure_id) : null;
   db.exec("BEGIN IMMEDIATE");
   try {
+    setPartyState(db,partyId,'adventureEpoch',Number(getPartyState(db,partyId,'adventureEpoch') || 0)+1);
     db.prepare("DELETE FROM events WHERE party_id = ? AND adventure_id = ?").run(partyId, party.active_adventure_id);
     db.prepare("DELETE FROM party_state WHERE party_id = ? AND (key IN ('dm', 'knownLocations', 'combat', 'pendingLevelUps', 'cotton') OR key LIKE 'pendingCheck:%' OR key LIKE 'guidance:%' OR key LIKE 'turnTraces:%' OR key LIKE 'turnRevision:%' OR key LIKE 'npcConversation:%' OR key LIKE 'conversationOffer:%' OR key LIKE 'sceneEntry:%')").run(partyId);
     const structuredAdventureId = adventureDefinition(party.active_adventure_id)?.id || String(party.active_adventure_id || "");

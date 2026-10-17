@@ -24,6 +24,9 @@ import {createConversationSession,conversationFailureMessage} from './npc-conver
 import {interpretNpcConversation,plannedConversationFallback,conversationCatalogue,currentConversationHistory} from './npc-conversation-planner.mjs';
 import {assessNpcInput,conversationUnavailable} from './npc-conversation-tools.mjs';
 import {compactNpcRequest} from './npc-wire-format.mjs';
+import {getPlayer} from './database.mjs';
+
+const npcTurns=new WeakMap();
 
 function socialTransaction(db,operation){
   db.exec('SAVEPOINT npc_social_turn');
@@ -974,6 +977,19 @@ export function groundedNpcReply(reply, authoredOffer, fallback) {
 }
 
 async function resolveNpcConversation(db, player, adventure, dmState, mode, action, services={}) {
+  if(mode!=='speak')return false;
+  let active=npcTurns.get(db);if(!active){active=new Set();npcTurns.set(db,active);}
+  const key=JSON.stringify([player.partyId,player.id]);
+  if(active.has(key)){
+    addEvent(db,{partyId:player.partyId,adventureId:adventure.id,playerId:player.id,visibility:'player',kind:'system',speaker:'Dungeon Master',text:'A conversation reply is already being prepared. Wait for it before speaking again.'});
+    return {source:'rules',rule:'conversation-in-progress',accepted:false};
+  }
+  active.add(key);
+  try{return await runNpcConversation(db,player,adventure,dmState,mode,action,services);}
+  finally{active.delete(key);if(!active.size)npcTurns.delete(db);}
+}
+
+async function runNpcConversation(db, player, adventure, dmState, mode, action, services={}) {
   const session=createConversationSession({...services.npcSessionOptions,partyId:player.partyId,playerId:player.id});
   const diagnostics={};
   try{return await resolveNpcConversationTurn(db,player,adventure,dmState,mode,action,{...services,npcSession:session,npcDiagnostics:diagnostics});}
@@ -994,6 +1010,7 @@ async function resolveNpcConversationTurn(db, player, adventure, dmState, mode, 
   if (mode !== "speak") return false;
   const definition=adventureDefinition(adventure);
   if (!definition) return false;
+  const adventureEpoch=getPartyState(db,player.partyId,'adventureEpoch');
   const saved=getPartyState(db,player.partyId,`world:${definition.id}`);
   const world=createCanonicalState(definition,saved || {currentLocation:dmState.currentLocationKey || definition.startLocation});
   if (absentNpcAddress(definition,action,npc=>npcCanHear(definition,world,npc))) return false;
@@ -1046,14 +1063,15 @@ async function resolveNpcConversationTurn(db, player, adventure, dmState, mode, 
     directKnowledge?{source:'ai',reason:'',plan:{goals:[{kind:'advice',evidenceIds:[]}],challengeId:'',approach:''},evidence:publicKnowledge,history:recent}:
     naturalLive?await interpretNpcConversation({npc,personality,projection,world,speech:action,focus:assessment.focus,history:recent,generate}):{source:'fallback',reason:'interpretation-offline-or-test'};
   const contextChanged=()=>{
+    if(getActiveAdventure(db,player.partyId)?.id!==adventure.id||getPlayer(db,player.id)?.partyId!==player.partyId||getPartyState(db,player.partyId,'adventureEpoch')!==adventureEpoch)return true;
     const current=createCanonicalState(definition,getPartyState(db,player.partyId,`world:${definition.id}`)||{currentLocation:dmState.currentLocationKey || definition.startLocation});
     return current.revision!==world.revision||current.currentLocation!==world.currentLocation||!npcCanHear(definition,current,npc);
   };
   const changedReply=()=>{
-    addEvent(db,{partyId:player.partyId,playerId:player.id,visibility:'public',kind:'narration',speaker:'Dungeon Master',text:'The situation changed while you were speaking. Please speak again in the current scene.'});
+    addEvent(db,{partyId:player.partyId,adventureId:adventure.id,playerId:player.id,visibility:'player',kind:'narration',speaker:'Dungeon Master',text:'The situation changed while you were speaking. Please speak again in the current scene.'});
     return {source:'rules',rule:'conversation-context-changed',accepted:false};
   };
-  if(naturalLive&&contextChanged())return changedReply();
+  if(contextChanged())return changedReply();
   const socialPlan=authoredSocial || (heardOnly||(useOnePass&&!directReply.social)||(assessment.source==='ai'&&assessment.tool!=='consider_social_goal')?null:planSocialAttempt({npc,npcId,playerId:player.id,world,action,...(interpreted.source==='ai'?{interpretation:interpreted.plan}:{})}));
   if(socialPlan){
     const socialStatus={npcId,source:'rules',reason:'authored-social-'+socialPlan.kind,...(authoredSocial?{}:{interpretation:interpreted.source==='ai'?'ai':'fallback',interpretationReason:interpreted.reason,inputTool:assessment.tool || 'unavailable'})};
@@ -1088,6 +1106,7 @@ async function resolveNpcConversationTurn(db, player, adventure, dmState, mode, 
   let packetId;
   const topicReply=heardOnly?null:authoredNpcConversation(projection,action,memory);
   let naturalSource=null;
+  let nextNaturalHistory=null;
   if (heardOnly && npc.callResponse && requirementsMet(world,npc.callResponse.requires || [])) {
     reply=npc.callResponse.text;
   } else if (heardOnly) {
@@ -1110,10 +1129,10 @@ async function resolveNpcConversationTurn(db, player, adventure, dmState, mode, 
       if(result.unavailable)result={...result,reason:failure || result.reason,reply:conversationFailureMessage(failure || result.reason)};
       Object.assign(services.npcDiagnostics,{reason:result.reason,unavailable:!!result.unavailable,audits:(result.audits || []).slice(-2)});
     }
-    if(naturalLive&&contextChanged())return changedReply();
+    if(contextChanged())return changedReply();
     reply=result.reply;naturalSource={source:result.source,reason:result.reason || '',protocol:result.protocol || 'legacy',interpretation:semantic?'ai':'fallback',interpretationReason:interpreted.reason,inputTool:assessment.tool || 'unavailable',repaired:!!result.repaired,unavailable:!!result.unavailable,lookupCount:result.lookupCount || 0,claimCount:result.claims?.length || 0,...(result.answerKnowledge?{answerKnowledge:result.answerKnowledge}:{})};
     const topicKind=topicReply?.topicKind || (npcConversationTopic(action)==='follow-up'?naturalHistory.at(-1)?.topicKind:npcConversationTopic(action));
-    if(!result.unavailable)setPartyState(db,player.partyId,naturalKey,[...naturalHistory,{speech:String(action).slice(0,500),reply,topicKind,evidenceIds:result.evidenceIds || evidence.map(entry=>entry.id),...(useOnePass?{protocol:'one-pass',authority:'dialogue-only',disclosureIds:result.disclosureIds || []}:naturalLive?{focus:packet.conversationFocus,review:{claims:result.claims || [],audits:result.audits || []}}:{})}].slice(-8));
+    if(!result.unavailable)nextNaturalHistory=[...naturalHistory,{speech:String(action).slice(0,500),reply,topicKind,evidenceIds:result.evidenceIds || evidence.map(entry=>entry.id),...(useOnePass?{protocol:'one-pass',authority:'dialogue-only',disclosureIds:result.disclosureIds || []}:naturalLive?{focus:packet.conversationFocus,review:{claims:result.claims || [],audits:result.audits || []}}:{})}].slice(-8);
   } else if (topicReply) {
     reply=topicReply.reply;
   } else if (isSimpleNpcSpeech(action)) {
@@ -1138,9 +1157,14 @@ async function resolveNpcConversationTurn(db, player, adventure, dmState, mode, 
   }
   if (!reply) reply=fallbackNpcReply(npc,action,facts);
   const guardedReply=groundedNpcReply(reply,authoredOffer,groundedFallback || fallbackNpcReply(npc,action,facts));
-  if(guardedReply!==reply&&naturalLive){naturalSource={...naturalSource,source:'authored-fallback',reason:'physical-offer-claim',unavailable:true};setPartyState(db,player.partyId,naturalKey,naturalHistory);}
+  if(guardedReply!==reply&&naturalLive){naturalSource={...naturalSource,source:'authored-fallback',reason:'physical-offer-claim',unavailable:true};nextNaturalHistory=null;}
   reply=guardedReply;
-  const nextMemory=[...memory,{worldRevision:world.revision,player:player.name,speech:String(action).slice(0,500),npc:npc.name,reply,...(topicReply?.reply===reply?{topicId:topicReply.topicId,topicKind:topicReply.topicKind}:{})}].slice(-8);
+  if(contextChanged())return changedReply();
+  return socialTransaction(db,()=>{
+  const latestMemory=getPartyState(db,player.partyId,memoryKey);
+  const currentMemory=Array.isArray(latestMemory)?latestMemory.filter(entry=>entry.worldRevision===world.revision):[];
+  const nextMemory=[...currentMemory,{worldRevision:world.revision,player:player.name,speech:String(action).slice(0,500),npc:npc.name,reply,...(topicReply?.reply===reply?{topicId:topicReply.topicId,topicKind:topicReply.topicKind}:{})}].slice(-8);
+  if(nextNaturalHistory)setPartyState(db,player.partyId,naturalKey,nextNaturalHistory);
   setPartyState(db,player.partyId,`npcDialogueStatus:${definition.id}:${player.id}`,{npcId,...(naturalSource || {source:'rules',reason:'authored-dialogue'})});
   setPartyState(db,player.partyId,memoryKey,nextMemory);
   setPartyState(db,player.partyId,activeKey,{npcId,locationId:world.currentLocation,worldRevision:Number(world.revision || 0)});
@@ -1151,6 +1175,7 @@ async function resolveNpcConversationTurn(db, player, adventure, dmState, mode, 
   });
   addEvent(db,{partyId:player.partyId,adventureId:adventure.id,visibility:"public",playerId:player.id,kind:"narration",speaker:naturalSource?.unavailable?'Dungeon Master':npc.name,text:reply,payload:{npcId,conversation:!naturalSource?.unavailable}});
   return {source:packetId?"ai":"rules",rule:"npc-conversation",narration:reply,promptPacketIds:packetId?[packetId]:[]};
+  });
 }
 
 function addLocationEntryBeats(db,player,adventure,definition,locationId) {
@@ -1338,12 +1363,6 @@ function resolveUnsupportedConjuration(db, player, mode, action) {
   const words = String(action || "").toLowerCase();
   if (!/\b(magically|magic|spell|conjure|summon|create)\w*\b/.test(words) || !/\b(appear|make|create|conjure|summon)\w*\b/.test(words)) return false;
   addEvent(db, { partyId:player.partyId, visibility:"public", kind:"narration", speaker:"Dungeon Master", text:`${player.name} attempts to produce the requested effect, but no recorded spell, item, or class feature on the character sheet can create it. Nothing appears and the scene does not change; choose a feature the character possesses or ask the DM which options apply.` });
-  return true;
-}
-
-function resolveLanternSpeech(db, player, adventure, dmState, mode) {
-  if (mode !== "speak" || !String(adventure?.id || "").endsWith("lantern-below") || Number(dmState.clueStage || 0) < 8) return false;
-  addEvent(db, { partyId:player.partyId, visibility:"public", kind:"narration", speaker:"Dungeon Master", text:`${player.name}'s words carry through the stone chamber. Mara can hear the voice beyond the loose stones, but the words reveal no new feature or change in the chamber.` });
   return true;
 }
 
@@ -1868,7 +1887,6 @@ export async function resolveAction(db, player, mode, action, services={}) {
   const roomState = getPartyState(db, player.partyId, "dm") || dmState;
   if (!canonicalSaveIsActive && resolveAuthoredRoomMovement(db,player,adventure,roomState,mode,action)) return {source:"rules",rule:"authored-room-movement"};
   if (!canonicalSaveIsActive && resolveOutOfRoomFeatureAction(db,player,adventure,roomState,mode,action)) return {source:"rules",rule:"out-of-room-feature"};
-  if (resolveLanternSpeech(db, player, adventure, dmState, mode)) return { source:"rules",rule:"lantern-speech" };
   if (!canonicalSaveIsActive && resolvePersistentContainerInteraction(db, player, adventure, mode, action, recentHistory)) return { source:"rules",rule:"persistent-container-interaction" };
   if (!canonicalSaveIsActive && offerLanternRescueCheck(db, player, adventure, dmState, mode, action)) return { source:"rules",rule:"lantern-rescue-check" };
   if (!canonicalSaveIsActive && offerLanternSafetyCheck(db, player, adventure, dmState, mode, action)) return { source:"rules",rule:"lantern-safety-check" };
@@ -1999,5 +2017,3 @@ function demoResolution(db, player, mode, action, dmState) {
   setPartyState(db, player.partyId, "dm", { ...dmState, dangerClock: (dmState.dangerClock || 0) + 1 });
   return { source: "demo" };
 }
-
-export const currentDmModelProfile = currentModelProfile;

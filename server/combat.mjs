@@ -560,18 +560,23 @@ export function resolveCombatRoll(db, player, sides, suppliedRoll) {
       return { kind:"attack", natural, total, hit:false, critical:false };
     }
     combat.pendingRoll = { kind:"damage", playerId:player.id, targetId:enemy.id, weapon:pending.weapon, diceCount:pending.weapon.dice[0] * (critical ? 2 : 1), dieSides:pending.weapon.dice[1], modifier:pending.weapon.damageModifier, critical, remainingBeams:pending.remainingBeams, totalBeams:pending.totalBeams, beamNumber:pending.beamNumber };
+    if(combat.pendingRoll.diceCount===0){
+      saveCombat(db,player.partyId,combat);
+      const resolved=resolveCombatRoll(db,player,combat.pendingRoll.dieSides,0);
+      return {kind:'attack',natural,total,hit:true,critical,fixedDamage:resolved.damage};
+    }
     addEvent(db, { partyId:player.partyId, visibility:"public", kind:"narration", speaker:"Dungeon Master", text:`The attack connects. Roll ${combat.pendingRoll.diceCount}d${combat.pendingRoll.dieSides}${combat.pendingRoll.modifier ? signed(combat.pendingRoll.modifier) : ""} damage.` });
     saveCombat(db, player.partyId, combat);
     return { kind:"attack", natural, total, hit:true, critical };
   }
   if (pending.kind === "damage" && Number(sides) === Number(pending.dieSides)) {
-    const rolls = [Number(suppliedRoll)];
+    const rolls = pending.diceCount===0?[]:[Number(suppliedRoll)];
     while (rolls.length < pending.diceCount) rolls.push(rollDie(pending.dieSides));
-    const rawDamage = rolls.reduce((sum,value) => sum + value, 0) + Number(pending.modifier || 0);
+    const rawDamage = pending.diceCount===0?Math.max(1,1+Number(pending.modifier || 0)):rolls.reduce((sum,value) => sum + value, 0) + Number(pending.modifier || 0);
     const damage = Math.max(1, Math.floor(rawDamage * Number(pending.damageMultiplier ?? 1)));
     const enemy = combat.enemies.find((item) => item.id === pending.targetId);
     enemy.hp = Math.max(0, enemy.hp - damage);
-    addEvent(db, { partyId:player.partyId, visibility:"public", playerId:player.id, kind:"roll", speaker:"Combat", text:`${player.name} rolls ${rolls.join(" + ")}${pending.modifier ? ` ${signed(pending.modifier)}` : ""} = ${damage} ${pending.weapon.name} damage. The ${enemy.name.toLowerCase()} is ${healthDescription(enemy).toLowerCase()}.` });
+    addEvent(db, { partyId:player.partyId, visibility:"public", playerId:player.id, kind:"roll", speaker:"Combat", text:pending.diceCount===0?`${player.name} deals ${damage} fixed ${pending.weapon.name} damage. The ${enemy.name.toLowerCase()} is ${healthDescription(enemy).toLowerCase()}.`:`${player.name} rolls ${rolls.join(" + ")}${pending.modifier ? ` ${signed(pending.modifier)}` : ""} = ${damage} ${pending.weapon.name} damage. The ${enemy.name.toLowerCase()} is ${healthDescription(enemy).toLowerCase()}.` });
     if (enemy.hp <= 0) finishGuardianVictory(db, player, combat, "damage");
     else if (Number(pending.remainingBeams || 1) > 1) {
       combat.pendingRoll={kind:"attack",playerId:player.id,targetId:enemy.id,weapon:pending.weapon,source:"spell",remainingBeams:pending.remainingBeams-1,totalBeams:pending.totalBeams,beamNumber:pending.beamNumber+1};

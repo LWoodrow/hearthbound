@@ -1,4 +1,5 @@
 import { createServer as createHttpServer } from "node:http";
+import {listEncounteredSpeakers} from './database.mjs';
 import { aftermathView } from "./aftermath.mjs";
 import {movementForPlayer} from './movement-view.mjs';
 import {conversationProgress} from './npc-conversation-session.mjs';
@@ -78,6 +79,10 @@ function currentTurnState(player, adventure = getActiveAdventure(db, player.part
 
 export async function handleApi(request, response, url) {
   try {
+    const hostMutation=(request.method==='POST'&&['/api/system/restart','/api/adventures/select','/api/adventure/restart','/api/test/reset-story'].includes(url.pathname))
+      ||(request.method==='POST'&&/^\/api\/players\/[^/]+\/move$/.test(url.pathname))
+      ||(request.method==='DELETE'&&url.pathname.startsWith('/api/players/'));
+    if(hostMutation&&!canManageAi(request))return json(response,403,{error:'Manage characters, reset stories, select adventures and restart Hearthbound from the host computer using its localhost address.'});
     if (url.pathname.startsWith("/api/ai/")) {
       if (!canManageAi(request)) return json(response, 403, { error:"Open AI connection settings on the host computer using http://127.0.0.1:" + port + "." });
       try {
@@ -195,7 +200,8 @@ export async function handleApi(request, response, url) {
       const humanParty = listPlayers(db, player.partyId);
       const dmState = getPartyState(db, player.partyId, "dm") || {};
       const structuredAdventureId = adventureDefinition(adventure)?.id || String(adventure?.id || "");
-      const npcPortraits = visibleNpcPortraits(adventureDefinition(adventure), events);
+      const encounters=listEncounteredSpeakers(db,player);
+      const npcPortraits = visibleNpcPortraits(adventureDefinition(adventure), encounters);
       const worldState = getPartyState(db, player.partyId, `world:${structuredAdventureId}`) || {};
       const roomAuthority = authoredRouteContext(adventure?.id, dmState, worldState);
       // Guided cards are a projection of the current canonical scene, not a
@@ -217,7 +223,7 @@ export async function handleApi(request, response, url) {
         player,
         party: [...humanParty, cottonForParty(db, player.partyId)],
         npcPortraits,
-        npcProfiles: visibleNpcProfiles(adventureDefinition(adventure), events),
+        npcProfiles: visibleNpcProfiles(adventureDefinition(adventure), encounters),
         events,
         knownLocations,
         recap:buildAuthoritativeRecap({ campaign:{ title:adventure?.title, scene:adventure?.scene }, events, knownLocations, party:humanParty, roomAuthority, pendingCheck }),
@@ -379,11 +385,13 @@ export async function handleApi(request, response, url) {
       const player = authenticatedPlayer(request);
       if (!player) return json(response, 401, { error: "Your character session has expired." });
       const sides = Number(body.sides);
-      if (![4, 6, 8, 10, 12, 20, 100].includes(sides)) return json(response, 400, { error: "That die is not available." });
+      const savedCombat=getPartyState(db,player.partyId,'combat'),savedDamage=savedCombat?.pendingRoll;
+      const fixedDamage=sides===1&&savedCombat?.active&&savedDamage?.kind==='damage'&&savedDamage.diceCount===0&&savedDamage.playerId===player.id;
+      if (!fixedDamage&&![4, 6, 8, 10, 12, 20, 100].includes(sides)) return json(response, 400, { error: "That die is not available." });
       const pendingBeforeRoll = sides === 20 ? getPartyState(db, player.partyId, `pendingCheck:${player.id}`) : null;
       const adventure = pendingBeforeRoll ? getActiveAdventure(db, player.partyId) : null;
       const trace = pendingBeforeRoll ? createTurnTrace({ adventureId:adventure?.id, playerId:player.id, mode:"act", audience:"nearby", text:`resolve ${pendingBeforeRoll.ability} (${pendingBeforeRoll.skill}) check`, before:currentTurnState(player, adventure), modelProfile:currentModelProfile().id }) : null;
-      const result = Math.floor(Math.random() * sides) + 1;
+      const result = fixedDamage?0:Math.floor(Math.random() * sides) + 1;
       const combatRoll = resolveCombatRoll(db, player, sides, result);
       const check = combatRoll ? null : sides === 20 ? await resolvePendingCheck(db, player, result) : null;
       if (trace && check) appendTurnTrace(db, player.partyId, adventure?.id, completeTurnTrace(trace, {

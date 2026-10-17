@@ -23,7 +23,7 @@ async function generateCompletion(profile, messages, schema, generation = {}, fe
   };
   const result = await aiRequest(profile, profile.provider === "ollama" ? "/api/chat" : "/v1/chat/completions", { body, timeoutMs:generation.timeoutMs ?? 150000, signal:generation.signal, fetchImpl });
   const content = profile.provider === "ollama" ? result.message?.content : result.choices?.[0]?.message?.content;
-  if (typeof content !== "string" || !content.trim()) throw new Error(schema?"The AI server did not return a structured answer.":"The AI server did not return an answer.");
+  if (typeof content !== "string" || !content.trim()) throw Object.assign(new Error(schema?"The AI server did not return a structured answer.":"The AI server did not return an answer."),{code:'invalid-output'});
   return content;
 }
 

@@ -2,6 +2,16 @@
 
 ## Decision
 
+### Review reliability package (2026-10-17; candidate only)
+
+The live conversation path now stages accepted natural history until a short synchronous SQLite savepoint publishes the visible reply together with private history, shared topic memory, active partner, offer and status. No transaction is held across model inference. A per-database/per-party/player in-flight guard rejects a second NPC turn explicitly without starting another generation or overwriting the first progress record. Distinct players can converse concurrently; shared topic history is reloaded at publication so both entries survive. This is single-process app protection, not a distributed turn queue. Failure diagnostics remain separate from accepted narrative memory.
+
+Delayed replies also check current party membership, active adventure and a persisted adventure epoch changed on adventure selection/reset, in addition to canonical location/revision/hearing. Switching away and back or resetting to the same location cannot make an old draft current again. Guarded or stale drafts do not enter accepted history. The experimental personal-story store remains unconnected: this package atomically saves the EXISTING dialogue history, not improvised biography.
+
+Related review fixes: visible chat selects the newest250 entries then restores chronological order; encounter/portrait disclosure uses all eligible speaker encounters independently of that display window and retains private-event filtering. Host-only controls cover character deletion/move, library adventure selection, story resets and application restart, using the same loopback/Host/Origin boundary as AI administration; ordinary LAN login/play remain available. Empty successful provider content is classified invalid-output. Unarmed attacks resolve fixed damage without an impossible0d1 request, including recovery of older pending zero-dice rolls.
+
+Removed only the unreachable resolveLanternSpeech handler, unused currentDmModelProfile alias and unused SkipModelWarmup launcher switch. The legacy assessor/planner/reviewer remains necessary for NPCs not opted into one-pass. Failed prompt variants remain explicit diagnostic baselines under scripts, not runtime imports or default modes. No new AI judge, model switch, runtime anecdote rollout or claim of improved prose quality is included.
+
 ### Experimental transactional memory store (2026-10-17; NOT runtime integration)
 
 `scripts/lib/personal-story-store.mjs` is an explicitly constructed SQLite adapter tested only on temporary databases. Nothing imports it into the game dispatcher/startup and no real-save migration is run. Separate prototype tables store scoped typed ledger snapshots with revisions and publication-id receipts. A trusted caller supplies a previously accepted reply and validated memory intent; this adapter does not semantically assess prose or extract memories from it. It fixes event authority/owner and player-only visibility, so hearing markers do not falsely imply every player heard a personal story.

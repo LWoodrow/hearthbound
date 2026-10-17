@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$NoBrowser, [switch]$SkipModelWarmup)
+param([switch]$NoBrowser)
 
 $ErrorActionPreference = "Stop"
 $projectDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
